@@ -260,6 +260,35 @@ class IssueViewViewSet(BaseViewSet):
     def perform_create(self, serializer):
         serializer.save(project_id=self.kwargs.get("project_id"), owned_by=self.request.user)
 
+    def _is_project_admin_or_workspace_admin_member(self, request, slug, project_id):
+        project_member_qs = ProjectMember.objects.filter(
+            workspace__slug=slug,
+            project_id=project_id,
+            member=request.user,
+            is_active=True,
+        )
+        return project_member_qs.filter(role=ROLE.ADMIN.value).exists() or (
+            project_member_qs.exists()
+            and WorkspaceMember.objects.filter(
+                workspace__slug=slug,
+                member=request.user,
+                role=ROLE.ADMIN.value,
+                is_active=True,
+            ).exists()
+        )
+
+    def _is_public_to_private_transition(self, issue_view, request_data):
+        requested_access = request_data.get("access", None)
+        if requested_access is None:
+            return False
+
+        try:
+            requested_access = int(requested_access)
+        except (TypeError, ValueError):
+            return False
+
+        return issue_view.access == 1 and requested_access == 0
+
     def get_queryset(self):
         subquery = UserFavorite.objects.filter(
             user=self.request.user,
@@ -308,6 +337,9 @@ class IssueViewViewSet(BaseViewSet):
     @allow_permission(allowed_roles=[ROLE.ADMIN, ROLE.MEMBER, ROLE.GUEST])
     def retrieve(self, request, slug, project_id, pk):
         issue_view = self.get_queryset().filter(pk=pk, project_id=project_id).first()
+        if issue_view is None:
+            return Response({"error": "The required object does not exist."}, status=status.HTTP_404_NOT_FOUND)
+
         project = Project.objects.get(id=project_id)
         """
         if the role is guest and guest_view_all_features is false and owned by is not 
@@ -355,6 +387,12 @@ class IssueViewViewSet(BaseViewSet):
                     status=status.HTTP_400_BAD_REQUEST,
                 )
 
+            if self._is_public_to_private_transition(issue_view, request.data):
+                return Response(
+                    {"error": "Public views cannot be changed to private."},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
             serializer = IssueViewSerializer(issue_view, data=request.data, partial=True)
 
             if serializer.is_valid():
@@ -365,16 +403,13 @@ class IssueViewViewSet(BaseViewSet):
     @allow_permission(allowed_roles=[ROLE.ADMIN], creator=True, model=IssueView)
     def destroy(self, request, slug, project_id, pk):
         project_view = IssueView.objects.get(pk=pk, project_id=project_id, workspace__slug=slug)
-        if (
-            ProjectMember.objects.filter(
-                workspace__slug=slug,
-                project_id=project_id,
-                member=request.user,
-                role=20,
-                is_active=True,
-            ).exists()
-            or project_view.owned_by_id == request.user.id
-        ):
+        is_owner = project_view.owned_by_id == request.user.id
+        can_admin_delete = project_view.access == 1 and self._is_project_admin_or_workspace_admin_member(
+            request,
+            slug,
+            project_id,
+        )
+        if is_owner or can_admin_delete:
             project_view.delete()
             # Delete the user favorite view
             UserFavorite.objects.filter(
