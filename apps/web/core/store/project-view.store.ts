@@ -235,6 +235,10 @@ export class ProjectViewStore implements IProjectViewStore {
 
     const response = await this.viewService.patchView(workspaceSlug, projectId, viewId, data);
 
+    runInAction(() => {
+      set(this.viewMap, [viewId], response);
+    });
+
     return response;
   }
 
@@ -246,11 +250,11 @@ export class ProjectViewStore implements IProjectViewStore {
    * @returns
    */
   deleteView = async (workspaceSlug: string, projectId: string, viewId: string): Promise<any> => {
-    await this.viewService.deleteView(workspaceSlug, projectId, viewId).then(() => {
-      runInAction(() => {
-        delete this.viewMap[viewId];
-        if (this.rootStore.favorite.entityMap[viewId]) this.rootStore.favorite.removeFavoriteFromStore(viewId);
-      });
+    await this.viewService.deleteView(workspaceSlug, projectId, viewId);
+
+    runInAction(() => {
+      delete this.viewMap[viewId];
+      if (this.rootStore.favorite.entityMap[viewId]) this.rootStore.favorite.removeFavoriteFromStore(viewId);
     });
   };
 
