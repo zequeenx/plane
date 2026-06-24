@@ -25,6 +25,7 @@
 ## Task 1: Backend Contract Tests
 
 **Files:**
+
 - Create: `apps/api/plane/tests/contract/app/test_project_view_app.py`
 
 - [ ] **Step 1: Write the failing tests**
@@ -158,7 +159,7 @@ class TestProjectViewAPI(TestProjectViewBase):
             format="json",
         )
 
-        assert response.status_code == status.HTTP_400_BAD_REQUEST
+        assert response.status_code == status.HTTP_403_FORBIDDEN
         public_view.refresh_from_db()
         assert public_view.name == "Public"
 
@@ -263,6 +264,7 @@ git commit -m "test: cover project view visibility permissions"
 ## Task 2: Backend API Enforcement
 
 **Files:**
+
 - Modify: `apps/api/plane/app/serializers/view.py`
 - Modify: `apps/api/plane/app/views/view/base.py`
 - Test: `apps/api/plane/tests/contract/app/test_project_view_app.py`
@@ -380,6 +382,7 @@ git commit -m "fix: enforce project view visibility permissions"
 ## Task 3: Frontend Access Selector
 
 **Files:**
+
 - Modify: `apps/web/ce/components/views/access-controller.tsx`
 - Modify: `apps/web/core/components/views/form.tsx`
 
@@ -408,7 +411,8 @@ export function AccessController(props: Props) {
       control={control}
       name="access"
       render={({ field: { value, onChange } }) => {
-        const selectedAccess = VIEW_ACCESS_SPECIFIERS.find((option) => option.key === value) ?? VIEW_ACCESS_SPECIFIERS[0];
+        const selectedAccess =
+          VIEW_ACCESS_SPECIFIERS.find((option) => option.key === value) ?? VIEW_ACCESS_SPECIFIERS[0];
 
         return (
           <CustomSelect
@@ -476,6 +480,7 @@ git commit -m "feat: add project view access selector"
 ## Task 4: Frontend Delete Rule and Store Sync
 
 **Files:**
+
 - Modify: `apps/web/core/components/common/quick-actions-helper.tsx`
 - Modify: `apps/web/core/components/views/quick-actions.tsx`
 - Modify: `apps/web/core/store/project-view.store.ts`
@@ -561,6 +566,7 @@ git commit -m "fix: align project view actions with visibility rules"
 ## Task 5: End-to-End Local Verification
 
 **Files:**
+
 - No source files expected.
 
 - [ ] **Step 1: Run focused backend test once more**
