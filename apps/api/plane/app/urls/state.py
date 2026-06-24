@@ -5,7 +5,7 @@
 from django.urls import path
 
 
-from plane.app.views import StateViewSet, IntakeStateEndpoint
+from plane.app.views import StateViewSet, SubStateViewSet, IntakeStateEndpoint
 
 
 urlpatterns = [
@@ -18,6 +18,16 @@ urlpatterns = [
         "workspaces/<str:slug>/projects/<uuid:project_id>/states/<uuid:pk>/",
         StateViewSet.as_view({"get": "retrieve", "patch": "partial_update", "delete": "destroy"}),
         name="project-state",
+    ),
+    path(
+        "workspaces/<str:slug>/projects/<uuid:project_id>/states/<uuid:state_id>/sub-states/",
+        SubStateViewSet.as_view({"get": "list", "post": "create"}),
+        name="project-state-sub-states",
+    ),
+    path(
+        "workspaces/<str:slug>/projects/<uuid:project_id>/states/<uuid:state_id>/sub-states/<uuid:pk>/",
+        SubStateViewSet.as_view({"get": "retrieve", "patch": "partial_update", "delete": "destroy"}),
+        name="project-state-sub-state",
     ),
     path(
         "workspaces/<str:slug>/projects/<uuid:project_id>/intake-state/",

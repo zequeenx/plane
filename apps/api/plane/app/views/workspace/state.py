@@ -25,7 +25,7 @@ class WorkspaceStatesEndpoint(BaseAPIView):
             project__project_projectmember__is_active=True,
             project__archived_at__isnull=True,
             is_triage=False,
-        )
+        ).prefetch_related("state_sub_states")
 
         grouped_states = defaultdict(list)
         for state in states:

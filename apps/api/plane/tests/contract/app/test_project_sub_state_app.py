@@ -229,3 +229,5 @@ class TestProjectSubStateAPI(TestProjectSubStateBase):
         state_payload = next(item for item in response.json() if item["id"] == str(state.id))
         assert state_payload["sub_states"][0]["id"] == created["id"]
         assert state_payload["sub_states"][0]["state_id"] == str(state.id)
+        assert state_payload["sub_states"][0]["project_id"] == str(project.id)
+        assert state_payload["sub_states"][0]["workspace_id"] == str(workspace.id)
