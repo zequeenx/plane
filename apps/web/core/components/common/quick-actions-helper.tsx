@@ -41,7 +41,7 @@ interface UseModuleMenuItemsProps {
 
 interface UseViewMenuItemsProps {
   isOwner: boolean;
-  isAdmin: boolean;
+  canDelete: boolean;
   workspaceSlug: string;
   projectId?: string;
   view: IProjectView | IWorkspaceView;
@@ -115,7 +115,7 @@ export const useModuleMenuItems = (props: UseModuleMenuItemsProps): MenuResult =
 
 export const useViewMenuItems = (props: UseViewMenuItemsProps): MenuResult => {
   const factory = useQuickActionsFactory();
-  const { workspaceSlug, isOwner, isAdmin, projectId, view, ...handlers } = props;
+  const { isOwner, canDelete, view, ...handlers } = props;
 
   if (!view) return { items: [], modals: null };
 
@@ -124,7 +124,7 @@ export const useViewMenuItems = (props: UseViewMenuItemsProps): MenuResult => {
     factory.createEditMenuItem(handlers.handleEdit, isOwner),
     factory.createOpenInNewTabMenuItem(handlers.handleOpenInNewTab),
     factory.createCopyLinkMenuItem(handlers.handleCopyLink),
-    factory.createDeleteMenuItem(handlers.handleDelete, isOwner || isAdmin),
+    factory.createDeleteMenuItem(handlers.handleDelete, canDelete),
   ].filter((item) => item.shouldRender !== false);
 
   return { items, modals: null };

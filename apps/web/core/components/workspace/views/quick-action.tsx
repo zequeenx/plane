@@ -36,6 +36,7 @@ export const WorkspaceViewQuickActions = observer(function WorkspaceViewQuickAct
   // auth
   const isOwner = view?.owned_by === data?.id;
   const isAdmin = allowPermissions([EUserPermissions.ADMIN], EUserPermissionsLevel.WORKSPACE);
+  const canDelete = isOwner || isAdmin;
 
   const viewLink = `${workspaceSlug}/workspace-views/${view.id}`;
   const handleCopyText = async () => {
@@ -51,7 +52,7 @@ export const WorkspaceViewQuickActions = observer(function WorkspaceViewQuickAct
 
   const MENU_ITEMS = useViewMenuItems({
     isOwner,
-    isAdmin,
+    canDelete,
     handleDelete: () => setDeleteViewModal(true),
     handleEdit: () => setUpdateViewModal(true),
     handleOpenInNewTab,

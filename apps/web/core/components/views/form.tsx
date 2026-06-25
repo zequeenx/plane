@@ -130,17 +130,17 @@ export const ProjectViewForm = observer(function ProjectViewForm(props: Props) {
               }
               // TODO: fix types
               onChange={(val: any) => {
-                let logoValue = {};
+                let updatedLogoValue = {};
 
                 if (val?.type === "emoji")
-                  logoValue = {
+                  updatedLogoValue = {
                     value: val.value,
                   };
-                else if (val?.type === "icon") logoValue = val.value;
+                else if (val?.type === "icon") updatedLogoValue = val.value;
 
                 setValue("logo_props", {
                   in_use: val?.type,
-                  [val?.type]: logoValue,
+                  [val?.type]: updatedLogoValue,
                 });
                 setIsOpen(false);
               }}
@@ -173,6 +173,7 @@ export const ProjectViewForm = observer(function ProjectViewForm(props: Props) {
                     placeholder={t("common.title")}
                     className="w-full text-14"
                     tabIndex={getIndex("name")}
+                    // eslint-disable-next-line jsx-a11y/no-autofocus
                     autoFocus
                   />
                 )}
@@ -199,7 +200,10 @@ export const ProjectViewForm = observer(function ProjectViewForm(props: Props) {
             />
           </div>
           <div className="flex gap-2">
-            <AccessController control={control} />
+            <AccessController
+              control={control}
+              disabledAccesses={data?.access === EViewAccess.PUBLIC ? [EViewAccess.PRIVATE] : undefined}
+            />
             <Controller
               control={control}
               name="display_filters"
