@@ -232,18 +232,24 @@ export const SPREADSHEET_PROPERTY_LIST: (keyof IIssueDisplayProperties)[] = [
   "sub_issue_count",
 ];
 
+type TSortableSpreadsheetPropertyDetails = {
+  i18n_title: string;
+  ascendingOrderKey: TIssueOrderByOptions;
+  ascendingOrderTitle: string;
+  descendingOrderKey: TIssueOrderByOptions;
+  descendingOrderTitle: string;
+  icon: string;
+  isSortable?: true;
+};
+
+type TNonSortableSpreadsheetPropertyDetails = {
+  i18n_title: string;
+  icon: string;
+  isSortable: false;
+};
+
 export const SPREADSHEET_PROPERTY_DETAILS: Partial<
-  Record<
-    keyof IIssueDisplayProperties,
-    {
-      i18n_title: string;
-      ascendingOrderKey: TIssueOrderByOptions;
-      ascendingOrderTitle: string;
-      descendingOrderKey: TIssueOrderByOptions;
-      descendingOrderTitle: string;
-      icon: string;
-    }
-  >
+  Record<keyof IIssueDisplayProperties, TSortableSpreadsheetPropertyDetails | TNonSortableSpreadsheetPropertyDetails>
 > = {
   assignee: {
     i18n_title: "common.assignees",
@@ -324,6 +330,11 @@ export const SPREADSHEET_PROPERTY_DETAILS: Partial<
     descendingOrderKey: "-state__name",
     descendingOrderTitle: "Z",
     icon: "StatePropertyIcon",
+  },
+  sub_state: {
+    i18n_title: "common.sub_state",
+    icon: "SubStateIcon",
+    isSortable: false,
   },
   updated_on: {
     i18n_title: "common.sort.updated_on",

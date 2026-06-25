@@ -69,10 +69,6 @@ const WorkItemFilterRoot = observer(function WorkItemFilterRoot(props: TWorkItem
   );
   // memoize initial values to prevent re-computations when reference changes
   const initialUserFilters = useMemo(() => initialWorkItemFilters.richFilters, [initialWorkItemFilters]);
-  const workItemFiltersConfig = useWorkItemFiltersConfig({
-    allowedFilters: filtersToShowByLayout ? filtersToShowByLayout : [],
-    ...entityConfigProps,
-  });
   // get or create filter instance
   const workItemLayoutFilter = useMemo(
     () =>
@@ -90,6 +86,14 @@ const WorkItemFilterRoot = observer(function WorkItemFilterRoot(props: TWorkItem
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [entityType, workItemEntityID, saveViewOptions, updateViewOptions, updateFilters]
   );
+  const currentRichFilters = workItemLayoutFilter.expression
+    ? workItemLayoutFilter.adapter.toExternal(workItemLayoutFilter.expression)
+    : {};
+  const workItemFiltersConfig = useWorkItemFiltersConfig({
+    allowedFilters: filtersToShowByLayout ? filtersToShowByLayout : [],
+    richFilters: currentRichFilters,
+    ...entityConfigProps,
+  });
 
   // delete filter instance when component unmounts
   useEffect(
