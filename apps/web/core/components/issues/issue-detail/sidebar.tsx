@@ -111,7 +111,7 @@ export const IssueDetailsSidebar = observer(function IssueDetailsSidebar(props: 
               />
             </SidebarPropertyListItem>
 
-            <SidebarPropertyListItem icon={StatePropertyIcon} label="Sub-state">
+            <SidebarPropertyListItem icon={StatePropertyIcon} label={t("common.sub_state")}>
               <SubStateDropdown
                 value={issue?.sub_state_id}
                 stateId={issue?.state_id}

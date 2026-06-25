@@ -105,7 +105,7 @@ export const PeekOverviewProperties = observer(function PeekOverviewProperties(p
           />
         </SidebarPropertyListItem>
 
-        <SidebarPropertyListItem icon={StatePropertyIcon} label="Sub-state">
+        <SidebarPropertyListItem icon={StatePropertyIcon} label={t("common.sub_state")}>
           <SubStateDropdown
             value={issue?.sub_state_id}
             stateId={issue?.state_id}

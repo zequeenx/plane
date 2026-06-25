@@ -73,8 +73,8 @@ export const SubStateDropdownBase = observer(function SubStateDropdownBase(props
 
   const selectedSubState = value ? getSubStateById(value) : undefined;
   const isDropdownDisabled = disabled || subStates.length === 0;
-  const placeholder = "Sub-state";
-  const noSubStateLabel = "No sub-state";
+  const placeholder = t("common.sub_state");
+  const noSubStateLabel = t("common.no_sub_state");
 
   // popper-js init
   const { styles, attributes } = usePopper(referenceElement, popperElement, {
