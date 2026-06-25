@@ -84,12 +84,14 @@ export type TUseWorkItemFiltersConfigProps = {
 
 export type TWorkItemFiltersConfig = {
   areAllConfigsInitialized: boolean;
+  canValidateSubStateFilters: boolean;
   configs: TFilterConfig<TWorkItemFilterProperty>[];
   configMap: {
     [key in TWorkItemFilterProperty]?: TFilterConfig<TWorkItemFilterProperty>;
   };
   isFilterEnabled: (key: TWorkItemFilterProperty) => boolean;
   members: IUserLite[];
+  subStateFilterOptionIds: string[];
 };
 
 const getFilterValues = (value: unknown): string[] => {
@@ -170,18 +172,27 @@ export const useWorkItemFiltersConfig = (props: TUseWorkItemFiltersConfigProps):
     [stateIds, getStateById]
   );
   const selectedStateIds = useMemo(() => getSelectedStateIds(richFilters), [richFilters]);
+  const selectedStates = useMemo(
+    () => selectedStateIds.map((stateId) => getStateById(stateId)),
+    [getStateById, selectedStateIds]
+  );
+  const canValidateSubStateFilters = useMemo(
+    () => selectedStateIds.length === 0 || selectedStates.every((state) => !!state),
+    [selectedStateIds.length, selectedStates]
+  );
   const subStateOptions = useMemo(
     () =>
-      selectedStateIds.flatMap((stateId) => {
-        const parentState = getStateById(stateId);
+      selectedStates.flatMap((parentState, index) => {
         if (!parentState) return [];
 
+        const stateId = selectedStateIds[index];
         return getSubStatesByStateId(stateId).map((subState): ISubState & { parentStateName: string } =>
           Object.assign({}, subState, { parentStateName: parentState.name })
         );
       }),
-    [getStateById, getSubStatesByStateId, selectedStateIds]
+    [getSubStatesByStateId, selectedStateIds, selectedStates]
   );
+  const subStateFilterOptionIds = useMemo(() => subStateOptions.map((subState) => subState.id), [subStateOptions]);
   const workItemLabels: IIssueLabel[] | undefined = useMemo(
     () =>
       labelIds
@@ -449,6 +460,7 @@ export const useWorkItemFiltersConfig = (props: TUseWorkItemFiltersConfigProps):
 
   return {
     areAllConfigsInitialized,
+    canValidateSubStateFilters,
     configs: [
       stateFilterConfig,
       subStateFilterConfig,
@@ -487,5 +499,6 @@ export const useWorkItemFiltersConfig = (props: TUseWorkItemFiltersConfigProps):
     },
     isFilterEnabled,
     members: members ?? [],
+    subStateFilterOptionIds,
   };
 };

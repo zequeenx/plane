@@ -19,6 +19,13 @@ import { useWorkItemFiltersConfig } from "@/plane-web/hooks/work-item-filters/us
 // local imports
 import type { TSharedWorkItemFiltersHOCProps, TSharedWorkItemFiltersProps } from "./shared";
 
+const getFilterValueStrings = (value: unknown): string[] => {
+  if (Array.isArray(value)) return value.flatMap(getFilterValueStrings);
+  if (typeof value === "string") return value.split(",").map((item) => item.trim());
+  if (typeof value === "number" || typeof value === "boolean") return [String(value)];
+  return [];
+};
+
 type TAdditionalWorkItemFiltersProps = {
   saveViewOptions?: TSaveViewOptions<TWorkItemFilterExpression>;
   updateViewOptions?: TUpdateViewOptions<TWorkItemFilterExpression>;
@@ -111,6 +118,31 @@ const WorkItemFilterRoot = observer(function WorkItemFilterRoot(props: TWorkItem
     workItemFiltersConfig.configs,
     workItemLayoutFilter.configManager,
   ]);
+
+  const subStateFilterOptionIdsKey = workItemFiltersConfig.subStateFilterOptionIds.join(",");
+
+  useEffect(() => {
+    if (!workItemFiltersConfig.canValidateSubStateFilters) return;
+
+    const validSubStateIds = new Set(subStateFilterOptionIdsKey ? subStateFilterOptionIdsKey.split(",") : []);
+    const subStateConditions = workItemLayoutFilter.allConditions.filter(
+      (condition) => condition.property === "sub_state_id"
+    );
+
+    subStateConditions.forEach((condition) => {
+      const currentValues = getFilterValueStrings(condition.value).filter(Boolean);
+      const validValues = currentValues.filter((value) => validSubStateIds.has(value));
+
+      if (currentValues.length > 0 && currentValues.length === validValues.length) return;
+
+      if (validValues.length === 0) {
+        workItemLayoutFilter.removeCondition(condition.id);
+        return;
+      }
+
+      workItemLayoutFilter.updateConditionValue(condition.id, validValues, true);
+    });
+  }, [subStateFilterOptionIdsKey, workItemFiltersConfig.canValidateSubStateFilters, workItemLayoutFilter]);
 
   return <>{typeof children === "function" ? children({ filter: workItemLayoutFilter }) : children}</>;
 });
