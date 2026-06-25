@@ -499,11 +499,14 @@ export const IssueFormRoot = observer(function IssueFormRoot(props: IssueFormPro
                   projectId={projectId}
                   workspaceSlug={workspaceSlug?.toString()}
                   selectedParentIssue={selectedParentIssue}
+                  stateId={watch("state_id")}
+                  subStateId={watch("sub_state_id")}
                   startDate={watch("start_date")}
                   targetDate={watch("target_date")}
                   parentId={watch("parent_id")}
                   isDraft={isDraft}
                   handleFormChange={handleFormChange}
+                  setValue={setValue}
                   setSelectedParentIssue={setSelectedParentIssue}
                 />
               </div>
