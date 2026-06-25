@@ -24,6 +24,7 @@ from plane.db.models import (
     Label,
     ProjectMember,
     State,
+    SubState,
     User,
     EstimatePoint,
 )
@@ -65,6 +66,15 @@ class IssueSerializer(BaseSerializer):
     )
     type_id = serializers.PrimaryKeyRelatedField(
         source="type", queryset=IssueType.objects.all(), required=False, allow_null=True
+    )
+    state_id = serializers.PrimaryKeyRelatedField(
+        source="state", queryset=State.objects.all(), required=False, allow_null=True
+    )
+    sub_state_id = serializers.PrimaryKeyRelatedField(
+        source="sub_state",
+        queryset=SubState.objects.all(),
+        required=False,
+        allow_null=True,
     )
 
     class Meta:
@@ -124,6 +134,31 @@ class IssueSerializer(BaseSerializer):
             and not State.objects.filter(project_id=self.context.get("project_id"), pk=data.get("state").id).exists()
         ):
             raise serializers.ValidationError("State is not valid please pass a valid state_id")
+
+        state_was_sent = "state" in data
+        sub_state_was_sent = "sub_state" in data
+        state = data.get("state", getattr(self.instance, "state", None))
+        sub_state = data.get("sub_state", getattr(self.instance, "sub_state", None))
+
+        if sub_state is not None and state is None:
+            raise serializers.ValidationError({"sub_state_id": "A state_id is required when sub_state_id is provided"})
+
+        if (
+            self.instance
+            and state_was_sent
+            and not sub_state_was_sent
+            and sub_state is not None
+            and state is not None
+            and sub_state.state_id != state.id
+        ):
+            raise serializers.ValidationError(
+                {"sub_state_id": "Clear sub_state_id when changing to a state that does not own it"}
+            )
+
+        if sub_state is not None and (
+            sub_state.project_id != self.context.get("project_id") or sub_state.state_id != state.id
+        ):
+            raise serializers.ValidationError({"sub_state_id": "Sub-state is not valid for the selected state"})
 
         # Check parent issue is from workspace as it can be cross workspace
         if (
@@ -594,6 +629,7 @@ class IssueRelationSerializer(BaseSerializer):
     name = serializers.CharField(source="related_issue.name", read_only=True)
     relation_type = serializers.CharField(read_only=True)
     state_id = serializers.UUIDField(source="related_issue.state.id", read_only=True)
+    sub_state_id = serializers.UUIDField(source="related_issue.sub_state_id", read_only=True)
     priority = serializers.CharField(source="related_issue.priority", read_only=True)
 
     class Meta:
@@ -605,6 +641,7 @@ class IssueRelationSerializer(BaseSerializer):
             "relation_type",
             "name",
             "state_id",
+            "sub_state_id",
             "priority",
             "created_by",
             "created_at",
@@ -637,6 +674,7 @@ class RelatedIssueSerializer(BaseSerializer):
     relation_type = serializers.CharField(read_only=True)
     is_epic = serializers.BooleanField(source="issue.type.is_epic", read_only=True)
     state_id = serializers.UUIDField(source="issue.state.id", read_only=True)
+    sub_state_id = serializers.UUIDField(source="issue.sub_state_id", read_only=True)
     priority = serializers.CharField(source="issue.priority", read_only=True)
 
     class Meta:
@@ -650,6 +688,7 @@ class RelatedIssueSerializer(BaseSerializer):
             "type_id",
             "is_epic",
             "state_id",
+            "sub_state_id",
             "priority",
             "created_by",
             "created_at",

@@ -35,6 +35,7 @@ def get_default_properties():
         "key": True,
         "priority": True,
         "state": True,
+        "sub_state": False,
         "sub_issue_count": True,
         "link": True,
         "attachment_count": True,
@@ -48,6 +49,7 @@ def get_default_filters():
     return {
         "priority": None,
         "state": None,
+        "sub_state": None,
         "state_group": None,
         "assignees": None,
         "created_by": None,
@@ -83,6 +85,7 @@ def get_default_display_properties():
         "priority": True,
         "start_date": True,
         "state": True,
+        "sub_state": False,
         "sub_issue_count": True,
         "updated_on": True,
     }
@@ -102,7 +105,7 @@ class IssueManager(SoftDeletionManager):
 
 
 class Issue(ChangeTrackerMixin, ProjectBaseModel):
-    TRACKED_FIELDS = ["state_id"]
+    TRACKED_FIELDS = ["state_id", "sub_state_id"]
 
     PRIORITY_CHOICES = (
         ("urgent", "Urgent"),
@@ -124,6 +127,13 @@ class Issue(ChangeTrackerMixin, ProjectBaseModel):
         null=True,
         blank=True,
         related_name="state_issue",
+    )
+    sub_state = models.ForeignKey(
+        "db.SubState",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="sub_state_issue",
     )
     point = models.IntegerField(validators=[MinValueValidator(0), MaxValueValidator(12)], null=True, blank=True)
     estimate_point = models.ForeignKey(

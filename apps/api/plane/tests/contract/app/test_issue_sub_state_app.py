@@ -3,7 +3,7 @@ import uuid
 import pytest
 from rest_framework import status
 
-from plane.db.models import Issue, Project, ProjectMember, State, StateGroup, SubState
+from plane.db.models import Intake, IntakeIssue, Issue, Project, ProjectMember, State, StateGroup, SubState
 
 
 class TestIssueSubStateBase:
@@ -48,6 +48,18 @@ class TestIssueSubStateBase:
     def issues_url(self, workspace_slug: str, project_id: uuid.UUID, issue_id: uuid.UUID | None = None) -> str:
         base_url = f"/api/workspaces/{workspace_slug}/projects/{project_id}/issues/"
         return f"{base_url}{issue_id}/" if issue_id else base_url
+
+    def workspace_issues_url(self, workspace_slug: str) -> str:
+        return f"/api/workspaces/{workspace_slug}/issues/"
+
+    def entity_search_url(self, workspace_slug: str) -> str:
+        return f"/api/workspaces/{workspace_slug}/entity-search/"
+
+    def public_intake_issue_url(self, workspace_slug: str, project_id: uuid.UUID, issue_id: uuid.UUID) -> str:
+        return f"/api/v1/workspaces/{workspace_slug}/projects/{project_id}/intake-issues/{issue_id}/"
+
+    def public_relation_url(self, workspace_slug: str, project_id: uuid.UUID, issue_id: uuid.UUID) -> str:
+        return f"/api/v1/workspaces/{workspace_slug}/projects/{project_id}/work-items/{issue_id}/relations/"
 
 
 @pytest.mark.contract
@@ -166,3 +178,128 @@ class TestIssueSubStateAPI(TestIssueSubStateBase):
         result_ids = {issue["id"] for issue in response.json()["results"]}
         assert str(included.id) in result_ids
         assert str(excluded.id) not in result_ids
+
+    @pytest.mark.django_db
+    def test_workspace_issue_view_rows_include_sub_state_id(self, session_client, workspace, create_user):
+        project, todo, _, todo_ready, _ = self.create_project_state_data(workspace, create_user)
+        issue = Issue.objects.create(
+            project=project,
+            workspace=workspace,
+            name="View row sub-state",
+            state=todo,
+            sub_state=todo_ready,
+        )
+
+        response = session_client.get(
+            self.workspace_issues_url(workspace.slug),
+            {"sub_state_id": str(todo_ready.id)},
+        )
+
+        assert response.status_code == status.HTTP_200_OK
+        row = next(item for item in response.json()["results"] if item["id"] == str(issue.id))
+        assert row["state_id"] == str(todo.id)
+        assert row["sub_state_id"] == str(todo_ready.id)
+
+    @pytest.mark.django_db
+    def test_entity_search_issue_rows_include_sub_state_id(self, session_client, workspace, create_user):
+        project, todo, _, todo_ready, _ = self.create_project_state_data(workspace, create_user)
+        issue = Issue.objects.create(
+            project=project,
+            workspace=workspace,
+            name="Searchable sub-state issue",
+            state=todo,
+            sub_state=todo_ready,
+        )
+
+        project_response = session_client.get(
+            self.entity_search_url(workspace.slug),
+            {
+                "query": "Searchable sub-state issue",
+                "query_type": "issue",
+                "project_id": str(project.id),
+                "count": 5,
+            },
+        )
+        workspace_response = session_client.get(
+            self.entity_search_url(workspace.slug),
+            {
+                "query": "Searchable sub-state issue",
+                "query_type": "issue",
+                "count": 5,
+            },
+        )
+
+        assert project_response.status_code == status.HTTP_200_OK
+        assert workspace_response.status_code == status.HTTP_200_OK
+
+        project_row = next(item for item in project_response.json()["issue"] if item["id"] == str(issue.id))
+        workspace_row = next(item for item in workspace_response.json()["issue"] if item["id"] == str(issue.id))
+        assert project_row["state_id"] == str(todo.id)
+        assert workspace_row["state_id"] == str(todo.id)
+        assert project_row["sub_state_id"] == str(todo_ready.id)
+        assert workspace_row["sub_state_id"] == str(todo_ready.id)
+
+    @pytest.mark.django_db
+    def test_public_intake_issue_update_keeps_existing_sub_state(
+        self, api_key_client, workspace, create_user, monkeypatch
+    ):
+        project, todo, _, todo_ready, _ = self.create_project_state_data(workspace, create_user)
+        project.intake_view = True
+        project.save(update_fields=["intake_view"])
+        intake = Intake.objects.create(workspace=workspace, project=project, name="Triage")
+        issue = Issue.objects.create(
+            project=project,
+            workspace=workspace,
+            name="Intake issue",
+            state=todo,
+            sub_state=todo_ready,
+        )
+        IntakeIssue.objects.create(workspace=workspace, project=project, intake=intake, issue=issue)
+        monkeypatch.setattr("plane.api.views.intake.issue_activity.delay", lambda *args, **kwargs: None)
+
+        response = api_key_client.patch(
+            self.public_intake_issue_url(workspace.slug, project.id, issue.id),
+            {"issue": {"name": "Renamed intake issue"}},
+            format="json",
+        )
+
+        assert response.status_code == status.HTTP_200_OK
+        issue.refresh_from_db()
+        assert issue.name == "Renamed intake issue"
+        assert issue.sub_state_id == todo_ready.id
+
+    @pytest.mark.django_db
+    def test_public_relation_create_returns_sub_state_id_for_nullable_related_issues(
+        self, api_key_client, workspace, create_user, monkeypatch
+    ):
+        project, todo, _, todo_ready, _ = self.create_project_state_data(workspace, create_user)
+        source = Issue.objects.create(project=project, workspace=workspace, name="Source", state=todo)
+        without_sub_state = Issue.objects.create(
+            project=project,
+            workspace=workspace,
+            name="No sub-state relation target",
+            state=todo,
+            sub_state=None,
+        )
+        with_sub_state = Issue.objects.create(
+            project=project,
+            workspace=workspace,
+            name="Sub-state relation target",
+            state=todo,
+            sub_state=todo_ready,
+        )
+        monkeypatch.setattr("plane.api.views.issue.issue_activity.delay", lambda *args, **kwargs: None)
+
+        response = api_key_client.post(
+            self.public_relation_url(workspace.slug, project.id, source.id),
+            {
+                "relation_type": "relates_to",
+                "issues": [str(without_sub_state.id), str(with_sub_state.id)],
+            },
+            format="json",
+        )
+
+        assert response.status_code == status.HTTP_201_CREATED
+        rows = {item["id"]: item for item in response.json()}
+        assert rows[str(without_sub_state.id)]["sub_state_id"] is None
+        assert rows[str(with_sub_state.id)]["sub_state_id"] == str(todo_ready.id)

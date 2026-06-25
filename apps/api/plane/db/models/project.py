@@ -41,6 +41,7 @@ def get_default_props():
         "filters": {
             "priority": None,
             "state": None,
+            "sub_state": None,
             "state_group": None,
             "assignees": None,
             "created_by": None,

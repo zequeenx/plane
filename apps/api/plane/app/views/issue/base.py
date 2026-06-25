@@ -164,6 +164,7 @@ class IssueListEndpoint(BaseAPIView):
                 "id",
                 "name",
                 "state_id",
+                "sub_state_id",
                 "sort_order",
                 "completed_at",
                 "estimate_point",
@@ -429,6 +430,7 @@ class IssueViewSet(BaseViewSet):
                     "id",
                     "name",
                     "state_id",
+                    "sub_state_id",
                     "sort_order",
                     "completed_at",
                     "estimate_point",
@@ -698,6 +700,8 @@ class IssueViewSet(BaseViewSet):
                     issue_id=str(serializer.data.get("id", None)),
                     user_id=request.user.id,
                 )
+            if "sub_state_id" in request.data:
+                return Response(serializer.data, status=status.HTTP_200_OK)
             return Response(status=status.HTTP_204_NO_CONTENT)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
@@ -860,6 +864,7 @@ class IssuePaginatedViewSet(BaseViewSet):
             "id",
             "name",
             "state_id",
+            "sub_state_id",
             "state__group",
             "sort_order",
             "completed_at",
