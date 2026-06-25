@@ -49,6 +49,7 @@ export type TBaseIssue = {
   sort_order: number;
 
   state_id: string | null;
+  sub_state_id: string | null;
   priority: TIssuePriorities | null;
   label_ids: string[];
   assignee_ids: string[];

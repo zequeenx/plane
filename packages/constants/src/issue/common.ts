@@ -24,20 +24,21 @@ export type TIssueFilterPriorityObject = {
   icon: string;
 };
 
-export enum EIssueGroupByToServerOptions {
-  "state" = "state_id",
-  "priority" = "priority",
-  "labels" = "labels__id",
-  "state_detail.group" = "state__group",
-  "assignees" = "assignees__id",
-  "cycle" = "cycle_id",
-  "module" = "issue_module__module_id",
-  "target_date" = "target_date",
-  "project" = "project_id",
-  "created_by" = "created_by",
-  // eslint-disable-next-line @typescript-eslint/no-duplicate-enum-values
-  "team_project" = "project_id",
-}
+export const EIssueGroupByToServerOptions = {
+  state: "state_id",
+  priority: "priority",
+  labels: "labels__id",
+  "state_detail.group": "state__group",
+  assignees: "assignees__id",
+  cycle: "cycle_id",
+  module: "issue_module__module_id",
+  target_date: "target_date",
+  project: "project_id",
+  created_by: "created_by",
+  team_project: "project_id",
+} as const;
+export type EIssueGroupByToServerOptions =
+  (typeof EIssueGroupByToServerOptions)[keyof typeof EIssueGroupByToServerOptions];
 
 export enum EIssueGroupBYServerToProperty {
   "state_id" = "state_id",
@@ -147,6 +148,7 @@ export const ISSUE_DISPLAY_PROPERTIES_KEYS: (keyof IIssueDisplayProperties)[] = 
   "key",
   "priority",
   "state",
+  "sub_state",
   "sub_issue_count",
   "link",
   "attachment_count",
@@ -165,6 +167,7 @@ export const SUB_ISSUES_DISPLAY_PROPERTIES_KEYS: (keyof IIssueDisplayProperties)
   "due_date",
   "priority",
   "state",
+  "sub_state",
 ];
 
 export const ISSUE_DISPLAY_PROPERTIES: {
@@ -193,6 +196,7 @@ export const ISSUE_DISPLAY_PROPERTIES: {
     titleTranslationKey: "common.priority",
   },
   { key: "state", titleTranslationKey: "common.state" },
+  { key: "sub_state", titleTranslationKey: "common.sub_state" },
   {
     key: "sub_issue_count",
     titleTranslationKey: "issue.display.properties.sub_issue_count",
@@ -212,6 +216,7 @@ export const ISSUE_DISPLAY_PROPERTIES: {
 
 export const SPREADSHEET_PROPERTY_LIST: (keyof IIssueDisplayProperties)[] = [
   "state",
+  "sub_state",
   "priority",
   "assignee",
   "labels",
@@ -227,16 +232,19 @@ export const SPREADSHEET_PROPERTY_LIST: (keyof IIssueDisplayProperties)[] = [
   "sub_issue_count",
 ];
 
-export const SPREADSHEET_PROPERTY_DETAILS: {
-  [key in keyof IIssueDisplayProperties]: {
-    i18n_title: string;
-    ascendingOrderKey: TIssueOrderByOptions;
-    ascendingOrderTitle: string;
-    descendingOrderKey: TIssueOrderByOptions;
-    descendingOrderTitle: string;
-    icon: string;
-  };
-} = {
+export const SPREADSHEET_PROPERTY_DETAILS: Partial<
+  Record<
+    keyof IIssueDisplayProperties,
+    {
+      i18n_title: string;
+      ascendingOrderKey: TIssueOrderByOptions;
+      ascendingOrderTitle: string;
+      descendingOrderKey: TIssueOrderByOptions;
+      descendingOrderTitle: string;
+      icon: string;
+    }
+  >
+> = {
   assignee: {
     i18n_title: "common.assignees",
     ascendingOrderKey: "assignees__first_name",
@@ -361,6 +369,7 @@ export const FILTER_TO_ISSUE_MAP: Partial<Record<keyof IIssueFilterOptions, keyo
   module: "module_ids",
   project: "project_id",
   state: "state_id",
+  sub_state: "sub_state_id",
   issue_type: "type_id",
   state_group: "state__group",
 } as const;

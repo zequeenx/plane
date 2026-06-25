@@ -9,7 +9,7 @@ import { observer } from "mobx-react";
 import useSWR from "swr";
 // components
 import { EUserPermissionsLevel } from "@plane/constants";
-import type { IState, TStateOperationsCallbacks } from "@plane/types";
+import type { IState, ISubState, TStateOperationsCallbacks } from "@plane/types";
 import { EUserProjectRoles } from "@plane/types";
 import { ProjectStateLoader, GroupList } from "@/components/project-states";
 // hooks
@@ -31,6 +31,9 @@ export const ProjectStateRoot = observer(function ProjectStateRoot(props: TProje
     moveStatePosition,
     updateState,
     deleteState,
+    createSubState,
+    updateSubState,
+    deleteSubState,
     markStateAsDefault,
   } = useProjectState();
   const { allowPermissions } = useUserPermissions();
@@ -56,11 +59,28 @@ export const ProjectStateRoot = observer(function ProjectStateRoot(props: TProje
       updateState: async (stateId: string, data: Partial<IState>) =>
         updateState(workspaceSlug, projectId, stateId, data),
       deleteState: async (stateId: string) => deleteState(workspaceSlug, projectId, stateId),
+      createSubState: async (stateId: string, data: Partial<ISubState>) =>
+        createSubState(workspaceSlug, projectId, stateId, data),
+      updateSubState: async (stateId: string, subStateId: string, data: Partial<ISubState>) =>
+        updateSubState(workspaceSlug, projectId, stateId, subStateId, data),
+      deleteSubState: async (stateId: string, subStateId: string) =>
+        deleteSubState(workspaceSlug, projectId, stateId, subStateId),
       moveStatePosition: async (stateId: string, data: Partial<IState>) =>
         moveStatePosition(workspaceSlug, projectId, stateId, data),
       markStateAsDefault: async (stateId: string) => markStateAsDefault(workspaceSlug, projectId, stateId),
     }),
-    [workspaceSlug, projectId, createState, moveStatePosition, updateState, deleteState, markStateAsDefault]
+    [
+      workspaceSlug,
+      projectId,
+      createState,
+      createSubState,
+      moveStatePosition,
+      updateState,
+      updateSubState,
+      deleteState,
+      deleteSubState,
+      markStateAsDefault,
+    ]
   );
 
   // Loader

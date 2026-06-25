@@ -6,7 +6,7 @@
 
 // services
 import { API_BASE_URL } from "@plane/constants";
-import type { IIntakeState, IState } from "@plane/types";
+import type { IIntakeState, IState, ISubState } from "@plane/types";
 import { APIService } from "@/services/api.service";
 // helpers
 // types
@@ -75,6 +75,46 @@ export class ProjectStateService extends APIService {
   async deleteState(workspaceSlug: string, projectId: string, stateId: string): Promise<any> {
     return this.delete(`/api/workspaces/${workspaceSlug}/projects/${projectId}/states/${stateId}/`)
       .then((response) => response?.data)
+      .catch((error) => {
+        throw error?.response;
+      });
+  }
+
+  async createSubState(
+    workspaceSlug: string,
+    projectId: string,
+    stateId: string,
+    data: Partial<ISubState>
+  ): Promise<ISubState> {
+    return this.post(`/api/workspaces/${workspaceSlug}/projects/${projectId}/states/${stateId}/sub-states/`, data)
+      .then((response) => response?.data)
+      .catch((error) => {
+        throw error?.response;
+      });
+  }
+
+  async patchSubState(
+    workspaceSlug: string,
+    projectId: string,
+    stateId: string,
+    subStateId: string,
+    data: Partial<ISubState>
+  ): Promise<ISubState> {
+    return this.patch(
+      `/api/workspaces/${workspaceSlug}/projects/${projectId}/states/${stateId}/sub-states/${subStateId}/`,
+      data
+    )
+      .then((response) => response?.data)
+      .catch((error) => {
+        throw error?.response?.data;
+      });
+  }
+
+  async deleteSubState(workspaceSlug: string, projectId: string, stateId: string, subStateId: string): Promise<void> {
+    return this.delete(
+      `/api/workspaces/${workspaceSlug}/projects/${projectId}/states/${stateId}/sub-states/${subStateId}/`
+    )
+      .then(() => undefined)
       .catch((error) => {
         throw error?.response;
       });
