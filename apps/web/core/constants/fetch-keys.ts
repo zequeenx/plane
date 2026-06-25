@@ -9,6 +9,7 @@ import type { EUserPermissions, IJiraMetadata } from "@plane/types";
 const paramsToKey = (params: any) => {
   const {
     state,
+    sub_state,
     state_group,
     priority,
     mentions,
@@ -25,6 +26,7 @@ const paramsToKey = (params: any) => {
 
   let projectKey = project ? project.split(",") : [];
   let stateKey = state ? state.split(",") : [];
+  let subStateKey = sub_state ? sub_state.split(",") : [];
   let stateGroupKey = state_group ? state_group.split(",") : [];
   let priorityKey = priority ? priority.split(",") : [];
   let mentionsKey = mentions ? mentions.split(",") : [];
@@ -40,8 +42,10 @@ const paramsToKey = (params: any) => {
   const layoutKey = layout ? layout.toUpperCase() : "";
 
   // sorting each keys in ascending order
+  // oxlint-disable unicorn/no-array-sort -- These arrays are freshly split and toSorted is not runtime-safe here.
   projectKey = projectKey.sort().join("_");
   stateKey = stateKey.sort().join("_");
+  subStateKey = subStateKey.sort().join("_");
   stateGroupKey = stateGroupKey.sort().join("_");
   priorityKey = priorityKey.sort().join("_");
   assigneesKey = assigneesKey.sort().join("_");
@@ -49,8 +53,9 @@ const paramsToKey = (params: any) => {
   createdByKey = createdByKey.sort().join("_");
   labelsKey = labelsKey.sort().join("_");
   subscriberKey = subscriberKey.sort().join("_");
+  // oxlint-enable unicorn/no-array-sort
 
-  return `${layoutKey}_${projectKey}_${stateGroupKey}_${stateKey}_${priorityKey}_${assigneesKey}_${mentionsKey}_${createdByKey}_${type}_${groupBy}_${orderBy}_${labelsKey}_${startDateKey}_${targetDateKey}_${sub_issue}_${subscriberKey}`;
+  return `${layoutKey}_${projectKey}_${stateGroupKey}_${stateKey}_${subStateKey}_${priorityKey}_${assigneesKey}_${mentionsKey}_${createdByKey}_${type}_${groupBy}_${orderBy}_${labelsKey}_${startDateKey}_${targetDateKey}_${sub_issue}_${subscriberKey}`;
 };
 
 export const USER_WORKSPACES_LIST = "USER_WORKSPACES_LIST";

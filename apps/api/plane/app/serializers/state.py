@@ -6,11 +6,26 @@
 from .base import BaseSerializer
 from rest_framework import serializers
 
-from plane.db.models import State, StateGroup
+from plane.db.models import State, StateGroup, SubState
+
+
+class SubStateLiteSerializer(BaseSerializer):
+    class Meta:
+        model = SubState
+        fields = ["id", "state_id", "project_id", "workspace_id", "name", "color", "icon", "sequence"]
+        read_only_fields = fields
+
+
+class SubStateSerializer(BaseSerializer):
+    class Meta:
+        model = SubState
+        fields = ["id", "project_id", "workspace_id", "state_id", "name", "color", "icon", "sequence"]
+        read_only_fields = ["project_id", "workspace_id", "state_id"]
 
 
 class StateSerializer(BaseSerializer):
     order = serializers.FloatField(required=False)
+    sub_states = SubStateLiteSerializer(source="state_sub_states", many=True, read_only=True)
 
     class Meta:
         model = State
@@ -25,6 +40,7 @@ class StateSerializer(BaseSerializer):
             "description",
             "sequence",
             "order",
+            "sub_states",
         ]
         read_only_fields = ["workspace", "project"]
 

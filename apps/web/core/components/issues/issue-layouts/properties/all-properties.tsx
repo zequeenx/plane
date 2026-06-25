@@ -33,6 +33,7 @@ import { MemberDropdown } from "@/components/dropdowns/member/dropdown";
 import { ModuleDropdown } from "@/components/dropdowns/module/dropdown";
 import { PriorityDropdown } from "@/components/dropdowns/priority";
 import { StateDropdown } from "@/components/dropdowns/state/dropdown";
+import { SubStateDropdown } from "@/components/dropdowns/sub-state";
 // hooks
 import { useProjectEstimates } from "@/hooks/store/estimates";
 import { useIssues } from "@/hooks/store/use-issues";
@@ -73,7 +74,7 @@ export const IssueProperties = observer(function IssueProperties(props: IIssuePr
     issues: { addCycleToIssue, removeCycleFromIssue },
   } = useIssues(storeType);
   const { areEstimateEnabledByProjectId } = useProjectEstimates();
-  const { getStateById } = useProjectState();
+  const { getStateById, getSubStateById } = useProjectState();
   const { isMobile } = usePlatformOS();
   const projectDetails = getProjectById(issue.project_id);
 
@@ -107,8 +108,19 @@ export const IssueProperties = observer(function IssueProperties(props: IIssuePr
     [workspaceSlug, issue, changeModulesInIssue, addCycleToIssue, removeCycleFromIssue]
   );
 
+  const buildStatePayload = (stateId: string): Partial<TIssue> => {
+    const currentSubState = issue.sub_state_id ? getSubStateById(issue.sub_state_id) : undefined;
+    return currentSubState && currentSubState.state_id !== stateId
+      ? { state_id: stateId, sub_state_id: null }
+      : { state_id: stateId };
+  };
+
   const handleState = async (stateId: string) => {
-    if (updateIssue) await updateIssue(issue.project_id, issue.id, { state_id: stateId });
+    if (updateIssue) await updateIssue(issue.project_id, issue.id, buildStatePayload(stateId));
+  };
+
+  const handleSubState = async (subStateId: string | null) => {
+    if (updateIssue) await updateIssue(issue.project_id, issue.id, { sub_state_id: subStateId });
   };
 
   const handlePriority = async (value: TIssuePriorities) => {
@@ -201,6 +213,23 @@ export const IssueProperties = observer(function IssueProperties(props: IIssuePr
             buttonContainerClassName="truncate max-w-40"
             value={issue.state_id}
             onChange={handleState}
+            projectId={issue.project_id}
+            disabled={isReadOnly}
+            buttonVariant="border-with-text"
+            renderByDefault={isMobile}
+            showTooltip
+          />
+        </div>
+      </WithDisplayPropertiesHOC>
+
+      {/* sub-state */}
+      <WithDisplayPropertiesHOC displayProperties={displayProperties} displayPropertyKey="sub_state">
+        <div className="h-5" onFocus={handleEventPropagation} onClick={handleEventPropagation}>
+          <SubStateDropdown
+            buttonContainerClassName="truncate max-w-40"
+            value={issue.sub_state_id}
+            stateId={issue.state_id}
+            onChange={handleSubState}
             projectId={issue.project_id}
             disabled={isReadOnly}
             buttonVariant="border-with-text"

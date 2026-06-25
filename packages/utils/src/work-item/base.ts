@@ -154,6 +154,7 @@ export const createIssuePayload: (projectId: string, formData: Partial<TIssue>) 
     sub_issues_count: 0,
     attachment_count: 0,
     link_count: 0,
+    sub_state_id: null,
     // tempId is used for optimistic updates. It is not a part of the API response.
     tempId: uuidv4(),
     // to be overridden by the form data
@@ -300,6 +301,7 @@ export const getComputedDisplayProperties = (
   labels: displayProperties?.labels ?? true,
   priority: displayProperties?.priority ?? true,
   state: displayProperties?.state ?? true,
+  sub_state: displayProperties?.sub_state ?? true,
   sub_issue_count: displayProperties?.sub_issue_count ?? true,
   attachment_count: displayProperties?.attachment_count ?? true,
   link: displayProperties?.link ?? true,

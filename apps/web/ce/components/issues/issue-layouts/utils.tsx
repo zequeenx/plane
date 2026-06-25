@@ -42,6 +42,7 @@ import {
   SpreadsheetPriorityColumn,
   SpreadsheetStartDateColumn,
   SpreadsheetStateColumn,
+  SpreadsheetSubStateColumn,
   SpreadsheetSubIssueColumn,
   SpreadsheetUpdatedOnColumn,
 } from "@/components/issues/issue-layouts/spreadsheet/columns";
@@ -89,6 +90,7 @@ export const SpreadSheetPropertyIconMap: Record<string, FC<ISvgIcons>> = {
   PriorityPropertyIcon: PriorityPropertyIcon,
   StartDatePropertyIcon: StartDatePropertyIcon,
   StatePropertyIcon: StatePropertyIcon,
+  SubStateIcon: StatePropertyIcon,
   Link2: LinkIcon,
   Paperclip: Paperclip,
   LayersIcon: LayersIcon,
@@ -106,6 +108,7 @@ export const SPREADSHEET_COLUMNS: { [key in keyof IIssueDisplayProperties]: TSpr
   priority: SpreadsheetPriorityColumn,
   start_date: SpreadsheetStartDateColumn,
   state: SpreadsheetStateColumn,
+  sub_state: SpreadsheetSubStateColumn,
   sub_issue_count: SpreadsheetSubIssueColumn,
   updated_on: SpreadsheetUpdatedOnColumn,
   attachment_count: SpreadsheetAttachmentColumn,

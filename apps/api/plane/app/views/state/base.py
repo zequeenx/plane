@@ -15,9 +15,9 @@ from rest_framework import status
 
 # Module imports
 from .. import BaseViewSet, BaseAPIView
-from plane.app.serializers import StateSerializer
+from plane.app.serializers import StateSerializer, SubStateSerializer
 from plane.app.permissions import ROLE, allow_permission
-from plane.db.models import State, Issue
+from plane.db.models import State, SubState, Issue
 from plane.utils.cache import invalidate_cache
 
 
@@ -39,6 +39,7 @@ class StateViewSet(BaseViewSet):
             .filter(is_triage=False)
             .select_related("project")
             .select_related("workspace")
+            .prefetch_related("state_sub_states")
             .distinct()
         )
 
@@ -130,6 +131,99 @@ class StateViewSet(BaseViewSet):
             )
 
         state.delete()
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+class SubStateViewSet(BaseViewSet):
+    serializer_class = SubStateSerializer
+    model = SubState
+
+    def get_queryset(self):
+        return self.filter_queryset(
+            super()
+            .get_queryset()
+            .filter(workspace__slug=self.kwargs.get("slug"))
+            .filter(project_id=self.kwargs.get("project_id"))
+            .filter(state_id=self.kwargs.get("state_id"))
+            .filter(
+                project__project_projectmember__member=self.request.user,
+                project__project_projectmember__is_active=True,
+                project__archived_at__isnull=True,
+            )
+            .select_related("project", "workspace", "state")
+            .distinct()
+        )
+
+    def get_state(self):
+        return State.objects.get(
+            is_triage=False,
+            pk=self.kwargs.get("state_id"),
+            project_id=self.kwargs.get("project_id"),
+            workspace__slug=self.kwargs.get("slug"),
+            project__project_projectmember__member=self.request.user,
+            project__project_projectmember__is_active=True,
+            project__archived_at__isnull=True,
+        )
+
+    @allow_permission([ROLE.ADMIN, ROLE.MEMBER, ROLE.GUEST])
+    def list(self, request, slug, project_id, state_id):
+        return Response(SubStateSerializer(self.get_queryset(), many=True).data, status=status.HTTP_200_OK)
+
+    @allow_permission([ROLE.ADMIN, ROLE.MEMBER, ROLE.GUEST])
+    def retrieve(self, request, slug, project_id, state_id, pk):
+        sub_state = self.get_queryset().get(pk=pk)
+        return Response(SubStateSerializer(sub_state).data, status=status.HTTP_200_OK)
+
+    @invalidate_cache(path="workspaces/:slug/states/", url_params=True, user=False)
+    @allow_permission([ROLE.ADMIN])
+    def create(self, request, slug, project_id, state_id):
+        try:
+            state = self.get_state()
+            serializer = SubStateSerializer(data=request.data)
+            if serializer.is_valid():
+                serializer.save(project_id=project_id, state=state)
+                return Response(serializer.data, status=status.HTTP_200_OK)
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        except IntegrityError as e:
+            if "already exists" in str(e) or "duplicate key value" in str(e):
+                return Response(
+                    {"name": "The sub-state name is already taken"},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            raise
+
+    @invalidate_cache(path="workspaces/:slug/states/", url_params=True, user=False)
+    @allow_permission([ROLE.ADMIN])
+    def partial_update(self, request, slug, project_id, state_id, pk):
+        try:
+            sub_state = self.get_queryset().get(pk=pk)
+            serializer = SubStateSerializer(sub_state, data=request.data, partial=True)
+            if serializer.is_valid():
+                serializer.save()
+                return Response(serializer.data, status=status.HTTP_200_OK)
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        except IntegrityError as e:
+            if "already exists" in str(e) or "duplicate key value" in str(e):
+                return Response(
+                    {"name": "The sub-state name is already taken"},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            raise
+
+    @invalidate_cache(path="workspaces/:slug/states/", url_params=True, user=False)
+    @allow_permission([ROLE.ADMIN])
+    def destroy(self, request, slug, project_id, state_id, pk):
+        sub_state = self.get_queryset().get(pk=pk)
+
+        if any(field.name == "sub_state" for field in Issue._meta.get_fields()):
+            issue_exist = Issue.objects.filter(sub_state_id=pk).exists()
+            if issue_exist:
+                return Response(
+                    {"error": "The sub-state is not empty, only empty sub-states can be deleted"},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+        sub_state.delete()
         return Response(status=status.HTTP_204_NO_CONTENT)
 
 

@@ -38,6 +38,7 @@ from plane.db.models import (
     IssueVote,
     IssueRelation,
     State,
+    SubState,
     IssueVersion,
     IssueDescriptionVersion,
     ProjectMember,
@@ -83,6 +84,12 @@ class IssueCreateSerializer(BaseSerializer):
     # ids
     state_id = serializers.PrimaryKeyRelatedField(
         source="state", queryset=State.all_state_objects.all(), required=False, allow_null=True
+    )
+    sub_state_id = serializers.PrimaryKeyRelatedField(
+        source="sub_state",
+        queryset=SubState.objects.all(),
+        required=False,
+        allow_null=True,
     )
     parent_id = serializers.PrimaryKeyRelatedField(
         source="parent", queryset=Issue.objects.all(), required=False, allow_null=True
@@ -174,6 +181,31 @@ class IssueCreateSerializer(BaseSerializer):
             ).exists()
         ):
             raise serializers.ValidationError("State is not valid please pass a valid state_id")
+
+        state_was_sent = "state" in attrs
+        sub_state_was_sent = "sub_state" in attrs
+        state = attrs.get("state", getattr(self.instance, "state", None))
+        sub_state = attrs.get("sub_state", getattr(self.instance, "sub_state", None))
+
+        if sub_state is not None and state is None:
+            raise serializers.ValidationError({"sub_state_id": "A state_id is required when sub_state_id is provided"})
+
+        if (
+            self.instance
+            and state_was_sent
+            and not sub_state_was_sent
+            and sub_state is not None
+            and state is not None
+            and sub_state.state_id != state.id
+        ):
+            raise serializers.ValidationError(
+                {"sub_state_id": "Clear sub_state_id when changing to a state that does not own it"}
+            )
+
+        if sub_state is not None and (
+            sub_state.project_id != self.context.get("project_id") or sub_state.state_id != state.id
+        ):
+            raise serializers.ValidationError({"sub_state_id": "Sub-state is not valid for the selected state"})
 
         # Check parent issue is from workspace as it can be cross workspace
         if (
@@ -406,6 +438,7 @@ class IssueRelationSerializer(BaseSerializer):
     name = serializers.CharField(source="related_issue.name", read_only=True)
     relation_type = serializers.CharField(read_only=True)
     state_id = serializers.UUIDField(source="related_issue.state.id", read_only=True)
+    sub_state_id = serializers.UUIDField(source="related_issue.sub_state_id", read_only=True)
     priority = serializers.CharField(source="related_issue.priority", read_only=True)
     assignee_ids = serializers.ListField(
         child=serializers.PrimaryKeyRelatedField(queryset=User.objects.all()),
@@ -422,6 +455,7 @@ class IssueRelationSerializer(BaseSerializer):
             "relation_type",
             "name",
             "state_id",
+            "sub_state_id",
             "priority",
             "assignee_ids",
             "created_by",
@@ -446,6 +480,7 @@ class RelatedIssueSerializer(BaseSerializer):
     name = serializers.CharField(source="issue.name", read_only=True)
     relation_type = serializers.CharField(read_only=True)
     state_id = serializers.UUIDField(source="issue.state.id", read_only=True)
+    sub_state_id = serializers.UUIDField(source="issue.sub_state_id", read_only=True)
     priority = serializers.CharField(source="issue.priority", read_only=True)
     assignee_ids = serializers.ListField(
         child=serializers.PrimaryKeyRelatedField(queryset=User.objects.all()),
@@ -462,6 +497,7 @@ class RelatedIssueSerializer(BaseSerializer):
             "relation_type",
             "name",
             "state_id",
+            "sub_state_id",
             "priority",
             "assignee_ids",
             "created_by",
@@ -787,6 +823,7 @@ class IssueSerializer(DynamicBaseSerializer):
             "id",
             "name",
             "state_id",
+            "sub_state_id",
             "sort_order",
             "completed_at",
             "estimate_point",
@@ -844,6 +881,7 @@ class IssueListDetailSerializer(serializers.Serializer):
             "id": instance.id,
             "name": instance.name,
             "state_id": instance.state_id,
+            "sub_state_id": instance.sub_state_id,
             "sort_order": instance.sort_order,
             "completed_at": instance.completed_at,
             "estimate_point": instance.estimate_point_id,
@@ -887,6 +925,7 @@ class IssueListDetailSerializer(serializers.Serializer):
                             "name": related_issue.name,
                             "relation_type": relation.relation_type,
                             "state_id": related_issue.state_id,
+                            "sub_state_id": related_issue.sub_state_id,
                             "priority": related_issue.priority,
                             "created_by": related_issue.created_by_id,
                             "created_at": related_issue.created_at,
@@ -912,6 +951,7 @@ class IssueListDetailSerializer(serializers.Serializer):
                             "name": issue.name,
                             "relation_type": relation.relation_type,
                             "state_id": issue.state_id,
+                            "sub_state_id": issue.sub_state_id,
                             "priority": issue.priority,
                             "created_by": issue.created_by_id,
                             "created_at": issue.created_at,

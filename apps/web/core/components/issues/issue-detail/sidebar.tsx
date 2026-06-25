@@ -7,6 +7,7 @@
 import { observer } from "mobx-react";
 // i18n
 import { useTranslation } from "@plane/i18n";
+import type { TIssue } from "@plane/types";
 // ui
 import {
   CycleIcon,
@@ -29,6 +30,7 @@ import { ButtonAvatars } from "@/components/dropdowns/member/avatar";
 import { MemberDropdown } from "@/components/dropdowns/member/dropdown";
 import { PriorityDropdown } from "@/components/dropdowns/priority";
 import { StateDropdown } from "@/components/dropdowns/state/dropdown";
+import { SubStateDropdown } from "@/components/dropdowns/sub-state";
 // hooks
 import { useProjectEstimates } from "@/hooks/store/estimates";
 import { useIssueDetail } from "@/hooks/store/use-issue-detail";
@@ -66,7 +68,7 @@ export const IssueDetailsSidebar = observer(function IssueDetailsSidebar(props: 
     issue: { getIssueById },
   } = useIssueDetail();
   const { getUserDetails } = useMember();
-  const { getStateById } = useProjectState();
+  const { getStateById, getSubStateById } = useProjectState();
   const issue = getIssueById(issueId);
   if (!issue) return <></>;
 
@@ -75,6 +77,12 @@ export const IssueDetailsSidebar = observer(function IssueDetailsSidebar(props: 
   // derived values
   const projectDetails = getProjectById(issue.project_id);
   const stateDetails = getStateById(issue.state_id);
+  const buildStatePayload = (stateId: string): Partial<TIssue> => {
+    const currentSubState = issue.sub_state_id ? getSubStateById(issue.sub_state_id) : undefined;
+    return currentSubState && currentSubState.state_id !== stateId
+      ? { state_id: stateId, sub_state_id: null }
+      : { state_id: stateId };
+  };
 
   const minDate = issue.start_date ? getDate(issue.start_date) : null;
   minDate?.setDate(minDate.getDate());
@@ -91,13 +99,29 @@ export const IssueDetailsSidebar = observer(function IssueDetailsSidebar(props: 
             <SidebarPropertyListItem icon={StatePropertyIcon} label={t("common.state")}>
               <StateDropdown
                 value={issue?.state_id}
-                onChange={(val) => issueOperations.update(workspaceSlug, projectId, issueId, { state_id: val })}
+                onChange={(val) => issueOperations.update(workspaceSlug, projectId, issueId, buildStatePayload(val))}
                 projectId={projectId?.toString() ?? ""}
                 disabled={!isEditable}
                 buttonVariant="transparent-with-text"
                 className="group w-full grow"
                 buttonContainerClassName="w-full text-left h-7.5"
                 buttonClassName="text-body-xs-regular"
+                dropdownArrow
+                dropdownArrowClassName="h-3.5 w-3.5 hidden group-hover:inline"
+              />
+            </SidebarPropertyListItem>
+
+            <SidebarPropertyListItem icon={StatePropertyIcon} label={t("common.sub_state")}>
+              <SubStateDropdown
+                value={issue?.sub_state_id}
+                stateId={issue?.state_id}
+                onChange={(val) => issueOperations.update(workspaceSlug, projectId, issueId, { sub_state_id: val })}
+                projectId={projectId?.toString() ?? ""}
+                disabled={!isEditable}
+                buttonVariant="transparent-with-text"
+                className="group w-full grow"
+                buttonContainerClassName="w-full text-left h-7.5"
+                buttonClassName={`text-body-xs-regular ${issue?.sub_state_id ? "" : "text-placeholder"}`}
                 dropdownArrow
                 dropdownArrowClassName="h-3.5 w-3.5 hidden group-hover:inline"
               />

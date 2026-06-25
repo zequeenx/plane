@@ -17,6 +17,7 @@ def get_default_filters():
     return {
         "priority": None,
         "state": None,
+        "sub_state": None,
         "state_group": None,
         "assignees": None,
         "created_by": None,
@@ -52,6 +53,7 @@ def get_default_display_properties():
         "priority": True,
         "start_date": True,
         "state": True,
+        "sub_state": False,
         "sub_issue_count": True,
         "updated_on": True,
     }

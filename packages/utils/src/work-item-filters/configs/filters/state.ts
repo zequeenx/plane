@@ -6,7 +6,7 @@
 
 // plane imports
 import { STATE_GROUPS } from "@plane/constants";
-import type { IState, TFilterProperty, TStateGroups, TSupportedOperators } from "@plane/types";
+import type { IState, ISubState, TFilterProperty, TStateGroups, TSupportedOperators } from "@plane/types";
 import { COLLECTION_OPERATOR, EQUALITY_OPERATOR } from "@plane/types";
 // local imports
 import type { IFilterIconConfig, TCreateFilterConfig, TCreateFilterConfigParams } from "../../../rich-filters";
@@ -116,6 +116,53 @@ export const getStateFilterConfig =
       supportedOperatorConfigsMap: new Map([
         createOperatorConfigEntry(COLLECTION_OPERATOR.IN, params, (updatedParams) =>
           getStateMultiSelectConfig(updatedParams, EQUALITY_OPERATOR.EXACT)
+        ),
+      ]),
+    });
+
+// ------------ Sub-state filter ------------
+
+export type TSubStateFilterOption = ISubState & {
+  parentStateName: string;
+};
+
+export type TCreateSubStateFilterParams = TCreateFilterConfigParams &
+  IFilterIconConfig<TSubStateFilterOption> & {
+    subStates: TSubStateFilterOption[];
+  };
+
+export const getSubStateMultiSelectConfig = (
+  params: TCreateSubStateFilterParams,
+  singleValueOperator: TSupportedOperators
+) =>
+  getMultiSelectConfig<TSubStateFilterOption, string, TSubStateFilterOption>(
+    {
+      items: params.subStates,
+      getId: (subState) => subState.id,
+      getLabel: (subState) => `${subState.name} (${subState.parentStateName})`,
+      getValue: (subState) => subState.id,
+      getIconData: (subState) => subState,
+    },
+    {
+      singleValueOperator,
+      ...params,
+    },
+    {
+      ...params,
+    }
+  );
+
+export const getSubStateFilterConfig =
+  <P extends TFilterProperty>(key: P): TCreateFilterConfig<P, TCreateSubStateFilterParams> =>
+  (params: TCreateSubStateFilterParams) =>
+    createFilterConfig<P>({
+      id: key,
+      label: "Sub-state",
+      ...params,
+      icon: params.filterIcon,
+      supportedOperatorConfigsMap: new Map([
+        createOperatorConfigEntry(COLLECTION_OPERATOR.IN, params, (updatedParams) =>
+          getSubStateMultiSelectConfig(updatedParams, EQUALITY_OPERATOR.EXACT)
         ),
       ]),
     });

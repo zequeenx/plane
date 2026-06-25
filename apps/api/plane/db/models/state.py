@@ -4,6 +4,7 @@
 
 # Django imports
 from django.db import models
+from django.core.exceptions import ValidationError
 from django.template.defaultfilters import slugify
 from django.db.models import Q
 
@@ -120,6 +121,45 @@ class State(ProjectBaseModel):
             # Get the maximum sequence value from the database
             last_id = State.objects.filter(project=self.project).aggregate(largest=models.Max("sequence"))["largest"]
             # if last_id is not None
+            if last_id is not None:
+                self.sequence = last_id + 15000
+
+        return super().save(*args, **kwargs)
+
+
+class SubState(ProjectBaseModel):
+    state = models.ForeignKey(State, on_delete=models.CASCADE, related_name="state_sub_states")
+    name = models.CharField(max_length=255, verbose_name="Sub-State Name")
+    color = models.CharField(max_length=255, verbose_name="Sub-State Color")
+    icon = models.CharField(max_length=255, blank=True, null=True)
+    sequence = models.FloatField(default=65535)
+
+    def __str__(self):
+        """Return name of the sub-state"""
+        return f"{self.name} <{self.state.name}>"
+
+    class Meta:
+        unique_together = ["name", "state", "deleted_at"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["name", "state"],
+                condition=Q(deleted_at__isnull=True),
+                name="sub_state_unique_name_state_when_deleted_at_null",
+            )
+        ]
+        verbose_name = "Sub-State"
+        verbose_name_plural = "Sub-States"
+        db_table = "sub_states"
+        ordering = ("sequence",)
+
+    def save(self, *args, **kwargs):
+        if self.state_id and self.project_id and self.state.project_id != self.project_id:
+            raise ValidationError("Sub-state parent state must belong to the same project")
+
+        if self._state.adding and self.sequence == 65535:
+            last_id = SubState.objects.filter(state_id=self.state_id).aggregate(largest=models.Max("sequence"))[
+                "largest"
+            ]
             if last_id is not None:
                 self.sequence = last_id + 15000
 

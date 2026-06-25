@@ -64,6 +64,7 @@ export type TIssueParams =
   | "priority"
   | "state_group"
   | "state"
+  | "sub_state"
   | "assignees"
   | "mentions"
   | "created_by"
@@ -104,6 +105,7 @@ export const WORK_ITEM_FILTER_PROPERTY_KEYS = [
   "subscriber_id",
   "label_id",
   "state_id",
+  "sub_state_id",
   "cycle_id",
   "module_id",
   "project_id",
@@ -140,6 +142,7 @@ export interface IIssueFilterOptions {
   team_project?: string[] | null;
   start_date?: string[] | null;
   state?: string[] | null;
+  sub_state?: string[] | null;
   state_group?: string[] | null;
   subscriber?: string[] | null;
   target_date?: string[] | null;
@@ -166,6 +169,7 @@ export interface IIssueDisplayProperties {
   key?: boolean;
   priority?: boolean;
   state?: boolean;
+  sub_state?: boolean;
   sub_issue_count?: boolean;
   link?: boolean;
   attachment_count?: boolean;

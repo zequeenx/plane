@@ -93,6 +93,34 @@ def filter_state(params, issue_filter, method, prefix=""):
     return issue_filter
 
 
+def filter_sub_state(params, issue_filter, method, prefix=""):
+    if method == "GET":
+        sub_states = [item for item in params.get("sub_state").split(",") if item != "null"]
+        sub_states = filter_valid_uuids(sub_states)
+        if len(sub_states) and "" not in sub_states:
+            issue_filter[f"{prefix}sub_state__in"] = sub_states
+    else:
+        if params.get("sub_state", None) and len(params.get("sub_state")) and params.get("sub_state") != "null":
+            issue_filter[f"{prefix}sub_state__in"] = params.get("sub_state")
+    return issue_filter
+
+
+def filter_sub_state_id(params, issue_filter, method, prefix=""):
+    if method == "GET":
+        sub_states = [item for item in params.get("sub_state_id").split(",") if item != "null"]
+        sub_states = filter_valid_uuids(sub_states)
+        if len(sub_states) and "" not in sub_states:
+            issue_filter[f"{prefix}sub_state_id__in"] = sub_states
+    else:
+        if (
+            params.get("sub_state_id", None)
+            and len(params.get("sub_state_id"))
+            and params.get("sub_state_id") != "null"
+        ):
+            issue_filter[f"{prefix}sub_state_id__in"] = params.get("sub_state_id")
+    return issue_filter
+
+
 def filter_state_group(params, issue_filter, method, prefix=""):
     if method == "GET":
         state_group = [item for item in params.get("state_group").split(",") if item != "null"]
@@ -430,6 +458,8 @@ def issue_filters(query_params, method, prefix=""):
 
     ISSUE_FILTER = {
         "state": filter_state,
+        "sub_state": filter_sub_state,
+        "sub_state_id": filter_sub_state_id,
         "state_group": filter_state_group,
         "estimate_point": filter_estimate_point,
         "priority": filter_priority,

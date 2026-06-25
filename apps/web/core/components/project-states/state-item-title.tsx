@@ -4,7 +4,7 @@
  * See the LICENSE file for details.
  */
 
-import type { SetStateAction } from "react";
+import type { MutableRefObject, SetStateAction } from "react";
 import { observer } from "mobx-react";
 import { GripVertical } from "lucide-react";
 import { EIconSize, STATE_TRACKER_ELEMENTS } from "@plane/constants";
@@ -24,6 +24,7 @@ type TBaseStateItemTitleProps = {
 
 type TEnabledStateItemTitleProps = TBaseStateItemTitleProps & {
   disabled: false;
+  dragHandleRef?: MutableRefObject<HTMLDivElement | null>;
   stateOperationsCallbacks: Pick<TStateOperationsCallbacks, "markStateAsDefault" | "deleteState">;
   shouldTrackEvents: boolean;
 };
@@ -47,7 +48,10 @@ export const StateItemTitle = observer(function StateItemTitle(props: TStateItem
       <div className="flex items-center gap-1 px-1">
         {/* draggable indicator */}
         {!disabled && stateCount != 1 && (
-          <div className="absolute -left-1.5 hidden h-3 w-3 flex-shrink-0 cursor-pointer items-center justify-center rounded-xs bg-surface-2 text-secondary transition-colors group-hover:flex hover:text-primary">
+          <div
+            ref={props.dragHandleRef}
+            className="absolute -left-1.5 hidden h-3 w-3 flex-shrink-0 cursor-grab items-center justify-center rounded-xs bg-surface-2 text-secondary transition-colors group-hover:flex hover:text-primary"
+          >
             <GripVertical className="h-3 w-3" />
           </div>
         )}
@@ -67,7 +71,7 @@ export const StateItemTitle = observer(function StateItemTitle(props: TStateItem
           <div className="flex-shrink-0 text-11 transition-all">
             <StateMarksAsDefault
               stateId={state.id}
-              isDefault={state.default ? true : false}
+              isDefault={state.default}
               markStateAsDefaultCallback={props.stateOperationsCallbacks.markStateAsDefault}
             />
           </div>

@@ -26,11 +26,13 @@ import {
 import type {
   ICycle,
   IState,
+  ISubState,
   IUserLite,
   TFilterConfig,
   IIssueLabel,
   IModule,
   IProject,
+  TWorkItemFilterExpression,
   TWorkItemFilterProperty,
 } from "@plane/types";
 import { Avatar } from "@plane/ui";
@@ -48,6 +50,7 @@ import {
   getStartDateFilterConfig,
   getStateFilterConfig,
   getStateGroupFilterConfig,
+  getSubStateFilterConfig,
   getSubscriberFilterConfig,
   getTargetDateFilterConfig,
   getUpdatedAtFilterConfig,
@@ -76,27 +79,81 @@ export type TWorkItemFiltersEntityProps = {
 
 export type TUseWorkItemFiltersConfigProps = {
   allowedFilters: TWorkItemFilterProperty[];
+  richFilters?: TWorkItemFilterExpression;
 } & TWorkItemFiltersEntityProps;
 
 export type TWorkItemFiltersConfig = {
   areAllConfigsInitialized: boolean;
+  canValidateSubStateFilters: boolean;
   configs: TFilterConfig<TWorkItemFilterProperty>[];
   configMap: {
     [key in TWorkItemFilterProperty]?: TFilterConfig<TWorkItemFilterProperty>;
   };
   isFilterEnabled: (key: TWorkItemFilterProperty) => boolean;
   members: IUserLite[];
+  subStateFilterOptionIds: string[];
+};
+
+const getFilterValues = (value: unknown): string[] => {
+  if (Array.isArray(value)) return value.flatMap(getFilterValues);
+  if (typeof value === "string") return value.split(",").map((item) => item.trim());
+  if (typeof value === "number" || typeof value === "boolean") return [String(value)];
+  return [];
+};
+
+const getSelectedStateIds = (richFilters: TWorkItemFilterExpression | undefined): string[] => {
+  const values: string[] = [];
+
+  const walkExpression = (expression: unknown) => {
+    if (!expression || typeof expression !== "object") return;
+
+    const expressionRecord = expression as Record<string, unknown>;
+    if (
+      expressionRecord.property === "state_id" &&
+      (expressionRecord.operator === "in" || expressionRecord.operator === "exact")
+    ) {
+      values.push(...getFilterValues(expressionRecord.value));
+    }
+
+    Object.entries(expressionRecord).forEach(([key, value]) => {
+      if (key === "state_id__in" || key === "state_id__exact") {
+        values.push(...getFilterValues(value));
+        return;
+      }
+
+      if (Array.isArray(value)) {
+        value.forEach(walkExpression);
+        return;
+      }
+
+      walkExpression(value);
+    });
+  };
+
+  walkExpression(richFilters);
+
+  return Array.from(new Set(values.filter(Boolean)));
 };
 
 export const useWorkItemFiltersConfig = (props: TUseWorkItemFiltersConfigProps): TWorkItemFiltersConfig => {
-  const { allowedFilters, cycleIds, labelIds, memberIds, moduleIds, projectId, projectIds, stateIds, workspaceSlug } =
-    props;
+  const {
+    allowedFilters,
+    cycleIds,
+    labelIds,
+    memberIds,
+    moduleIds,
+    projectId,
+    projectIds,
+    richFilters,
+    stateIds,
+    workspaceSlug,
+  } = props;
   // store hooks
   const { loader: projectLoader, getProjectById } = useProject();
   const { getCycleById } = useCycle();
   const { getLabelById } = useLabel();
   const { getModuleById } = useModule();
-  const { getStateById } = useProjectState();
+  const { getStateById, getSubStatesByStateId } = useProjectState();
   const { getUserDetails } = useMember();
   // derived values
   const operatorConfigs = useFiltersOperatorConfigs({ workspaceSlug });
@@ -114,6 +171,28 @@ export const useWorkItemFiltersConfig = (props: TUseWorkItemFiltersConfigProps):
       stateIds ? (stateIds.map((stateId) => getStateById(stateId)).filter((state) => state) as IState[]) : undefined,
     [stateIds, getStateById]
   );
+  const selectedStateIds = useMemo(() => getSelectedStateIds(richFilters), [richFilters]);
+  const selectedStates = useMemo(
+    () => selectedStateIds.map((stateId) => getStateById(stateId)),
+    [getStateById, selectedStateIds]
+  );
+  const canValidateSubStateFilters = useMemo(
+    () => selectedStateIds.length === 0 || selectedStates.every((state) => !!state),
+    [selectedStateIds.length, selectedStates]
+  );
+  const subStateOptions = useMemo(
+    () =>
+      selectedStates.flatMap((parentState, index) => {
+        if (!parentState) return [];
+
+        const stateId = selectedStateIds[index];
+        return getSubStatesByStateId(stateId).map((subState): ISubState & { parentStateName: string } =>
+          Object.assign({}, subState, { parentStateName: parentState.name })
+        );
+      }),
+    [getSubStatesByStateId, selectedStateIds, selectedStates]
+  );
+  const subStateFilterOptionIds = useMemo(() => subStateOptions.map((subState) => subState.id), [subStateOptions]);
   const workItemLabels: IIssueLabel[] | undefined = useMemo(
     () =>
       labelIds
@@ -133,7 +212,9 @@ export const useWorkItemFiltersConfig = (props: TUseWorkItemFiltersConfigProps):
   const projects = useMemo(
     () =>
       projectIds
-        ? (projectIds.map((projectId) => getProjectById(projectId)).filter((project) => project) as IProject[])
+        ? (projectIds
+            .map((projectItemId) => getProjectById(projectItemId))
+            .filter((projectDetails) => projectDetails) as IProject[])
         : [],
     [projectIds, getProjectById]
   );
@@ -170,6 +251,21 @@ export const useWorkItemFiltersConfig = (props: TUseWorkItemFiltersConfigProps):
         ...operatorConfigs,
       }),
     [isFilterEnabled, workItemStates, operatorConfigs]
+  );
+
+  // sub-state filter config
+  const subStateFilterConfig = useMemo(
+    () =>
+      getSubStateFilterConfig<TWorkItemFilterProperty>("sub_state_id")({
+        isEnabled: isFilterEnabled("sub_state_id") && selectedStateIds.length > 0 && subStateOptions.length > 0,
+        filterIcon: StatePropertyIcon,
+        getOptionIcon: (subState) => (
+          <span className="flex size-2.5 flex-shrink-0 rounded-full" style={{ backgroundColor: subState.color }} />
+        ),
+        subStates: subStateOptions,
+        ...operatorConfigs,
+      }),
+    [isFilterEnabled, operatorConfigs, selectedStateIds.length, subStateOptions]
   );
 
   // label filter config
@@ -356,7 +452,7 @@ export const useWorkItemFiltersConfig = (props: TUseWorkItemFiltersConfigProps):
         isEnabled: isFilterEnabled("project_id") && projects !== undefined,
         filterIcon: Briefcase,
         projects: projects,
-        getOptionIcon: (project) => <Logo logo={project.logo_props} size={12} />,
+        getOptionIcon: (projectDetails) => <Logo logo={projectDetails.logo_props} size={12} />,
         ...operatorConfigs,
       }),
     [isFilterEnabled, projects, operatorConfigs]
@@ -364,8 +460,10 @@ export const useWorkItemFiltersConfig = (props: TUseWorkItemFiltersConfigProps):
 
   return {
     areAllConfigsInitialized,
+    canValidateSubStateFilters,
     configs: [
       stateFilterConfig,
+      subStateFilterConfig,
       stateGroupFilterConfig,
       assigneeFilterConfig,
       priorityFilterConfig,
@@ -385,6 +483,7 @@ export const useWorkItemFiltersConfig = (props: TUseWorkItemFiltersConfigProps):
       project_id: projectFilterConfig,
       state_group: stateGroupFilterConfig,
       state_id: stateFilterConfig,
+      sub_state_id: subStateFilterConfig,
       label_id: labelFilterConfig,
       cycle_id: cycleFilterConfig,
       module_id: moduleFilterConfig,
@@ -400,5 +499,6 @@ export const useWorkItemFiltersConfig = (props: TUseWorkItemFiltersConfigProps):
     },
     isFilterEnabled,
     members: members ?? [],
+    subStateFilterOptionIds,
   };
 };

@@ -151,6 +151,9 @@ class IssueFilterSet(BaseFilterSet):
     state_id = filters.UUIDFilter(field_name="state_id")
     state_id__in = UUIDInFilter(field_name="state_id", lookup_expr="in")
 
+    sub_state_id = filters.UUIDFilter(field_name="sub_state_id")
+    sub_state_id__in = UUIDInFilter(field_name="sub_state_id", lookup_expr="in")
+
     project_id = filters.UUIDFilter(field_name="project_id")
     project_id__in = UUIDInFilter(field_name="project_id", lookup_expr="in")
 

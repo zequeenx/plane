@@ -15,7 +15,7 @@ import type { IState, TStateGroups, TStateOperationsCallbacks } from "@plane/typ
 import { DropIndicator } from "@plane/ui";
 import { cn, getCurrentStateSequence } from "@plane/utils";
 // components
-import { StateItemTitle, StateUpdate } from "@/components/project-states";
+import { StateItemTitle, StateUpdate, SubStateList } from "@/components/project-states";
 // helpers
 type TStateItem = {
   groupKey: TStateGroups;
@@ -41,13 +41,14 @@ export const StateItem = observer(function StateItem(props: TStateItem) {
   } = props;
   // ref
   const draggableElementRef = useRef<HTMLDivElement | null>(null);
+  const dragHandleRef = useRef<HTMLDivElement | null>(null);
   // states
   const [updateStateModal, setUpdateStateModal] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
   const [isDraggedOver, setIsDraggedOver] = useState(false);
   const [closestEdge, setClosestEdge] = useState<string | null>(null);
   // derived values
-  const isDraggable = totalStates === 1 ? false : true;
+  const isDraggable = totalStates !== 1;
   const commonStateItemListProps = {
     stateCount: totalStates,
     state: state,
@@ -68,12 +69,14 @@ export const StateItem = observer(function StateItem(props: TStateItem) {
 
   useEffect(() => {
     const elementRef = draggableElementRef.current;
+    const dragHandleElement = dragHandleRef.current;
     const initialData: TDraggableData = { groupKey: groupKey, id: state.id };
 
     if (elementRef && state) {
       combine(
         draggable({
           element: elementRef,
+          dragHandle: dragHandleElement ?? undefined,
           getInitialData: () => initialData,
           onDragStart: () => setIsDragging(true),
           onDrop: () => setIsDragging(false),
@@ -137,22 +140,40 @@ export const StateItem = observer(function StateItem(props: TStateItem) {
         className={cn(
           "group relative rounded-sm border border-subtle bg-surface-1 px-3.5 py-3",
           isDragging ? `opacity-50` : `opacity-100`,
-          totalStates === 1 ? `cursor-auto` : `cursor-grab`,
           stateItemClassName
         )}
       >
         {disabled ? (
-          <StateItemTitle {...commonStateItemListProps} disabled />
+          <>
+            <StateItemTitle {...commonStateItemListProps} disabled />
+            <SubStateList
+              state={state}
+              disabled
+              createSubState={stateOperationsCallbacks.createSubState}
+              updateSubState={stateOperationsCallbacks.updateSubState}
+              deleteSubState={stateOperationsCallbacks.deleteSubState}
+            />
+          </>
         ) : (
-          <StateItemTitle
-            {...commonStateItemListProps}
-            disabled={false}
-            stateOperationsCallbacks={{
-              markStateAsDefault: stateOperationsCallbacks.markStateAsDefault,
-              deleteState: stateOperationsCallbacks.deleteState,
-            }}
-            shouldTrackEvents={shouldTrackEvents}
-          />
+          <>
+            <StateItemTitle
+              {...commonStateItemListProps}
+              disabled={false}
+              dragHandleRef={dragHandleRef}
+              stateOperationsCallbacks={{
+                markStateAsDefault: stateOperationsCallbacks.markStateAsDefault,
+                deleteState: stateOperationsCallbacks.deleteState,
+              }}
+              shouldTrackEvents={shouldTrackEvents}
+            />
+            <SubStateList
+              state={state}
+              disabled={false}
+              createSubState={stateOperationsCallbacks.createSubState}
+              updateSubState={stateOperationsCallbacks.updateSubState}
+              deleteSubState={stateOperationsCallbacks.deleteSubState}
+            />
+          </>
         )}
       </div>
       {/* draggable drop bottom indicator */}

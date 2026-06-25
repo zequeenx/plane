@@ -14,6 +14,7 @@ export const DEFAULT_WORK_ITEM_FORM_VALUES: Partial<TIssue> = {
   description_html: "",
   estimate_point: null,
   state_id: "",
+  sub_state_id: null,
   parent_id: null,
   priority: "none",
   assignee_ids: [],
