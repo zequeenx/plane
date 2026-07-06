@@ -7,18 +7,20 @@
 import { differenceInDays, format, formatDistanceToNow, isAfter, isEqual, isValid, parseISO } from "date-fns";
 import { isNumber } from "lodash-es";
 
+const DISPLAY_DATE_FORMAT = "yyyy.M.d";
+const DISPLAY_DATE_WITHOUT_YEAR_FORMAT = "M.d";
+
 // Format Date Helpers
 /**
- * @returns {string | null} formatted date in the desired format or platform default format (MMM dd, yyyy)
+ * @returns {string | null} formatted date in the desired format or platform default format (yyyy.M.d)
  * @description Returns date in the formatted format
  * @param {Date | string} date
- * @param {string} formatToken (optional) // default MMM dd, yyyy
- * @example renderFormattedDate("2024-01-01", "MM-DD-YYYY") // Jan 01, 2024
- * @example renderFormattedDate("2024-01-01") // Jan 01, 2024
+ * @param {string} formatToken (optional) // default yyyy.M.d
+ * @example renderFormattedDate("2024-01-01") // 2024.1.1
  */
 export const renderFormattedDate = (
   date: string | Date | undefined | null,
-  formatToken: string = "MMM dd, yyyy"
+  formatToken: string = DISPLAY_DATE_FORMAT
 ): string | undefined => {
   // Parse the date to check if it is valid
   const parsedDate = getDate(date);
@@ -28,20 +30,18 @@ export const renderFormattedDate = (
   if (!isValid(parsedDate)) return; // Return null for invalid dates
   let formattedDate;
   try {
-    // Format the date in the format provided or default format (MMM dd, yyyy)
     formattedDate = format(parsedDate, formatToken);
   } catch (_e) {
-    // Format the date in format (MMM dd, yyyy) in case of any error
-    formattedDate = format(parsedDate, "MMM dd, yyyy");
+    formattedDate = format(parsedDate, DISPLAY_DATE_FORMAT);
   }
   return formattedDate;
 };
 
 /**
- * @returns {string} formatted date in the format of MMM dd
+ * @returns {string} formatted date in the format of M.d
  * @description Returns date in the formatted format
  * @param {string | Date} date
- * @example renderShortDateFormat("2024-01-01") // Jan 01
+ * @example renderFormattedDateWithoutYear("2024-01-01") // 1.1
  */
 export const renderFormattedDateWithoutYear = (date: string | Date): string => {
   // Parse the date to check if it is valid
@@ -50,8 +50,7 @@ export const renderFormattedDateWithoutYear = (date: string | Date): string => {
   if (!parsedDate) return "";
   // Check if the parsed date is valid before formatting
   if (!isValid(parsedDate)) return ""; // Return empty string for invalid dates
-  // Format the date in short format (MMM dd)
-  const formattedDate = format(parsedDate, "MMM dd");
+  const formattedDate = format(parsedDate, DISPLAY_DATE_WITHOUT_YEAR_FORMAT);
   return formattedDate;
 };
 
@@ -59,7 +58,7 @@ export const renderFormattedDateWithoutYear = (date: string | Date): string => {
  * @returns {string | null} formatted date in the format of yyyy-mm-dd to be used in payload
  * @description Returns date in the formatted format to be used in payload
  * @param {Date | string} date
- * @example renderFormattedPayloadDate("Jan 01, 20224") // "2024-01-01"
+ * @example renderFormattedPayloadDate("2024-01-01") // "2024-01-01"
  */
 export const renderFormattedPayloadDate = (date: Date | string | undefined | null): string | undefined => {
   // Parse the date to check if it is valid
@@ -284,7 +283,7 @@ export const getDate = (date: string | Date | undefined | null): Date | undefine
   try {
     if (!date || date === "") return;
 
-    if (typeof date !== "string" && !(date instanceof String)) return date;
+    if (typeof date !== "string") return date;
 
     const [yearString, monthString, dayString] = date.substring(0, 10).split("-");
     const year = parseInt(yearString);
@@ -391,22 +390,22 @@ export const getReadTimeFromWordsCount = (wordsCount: number): number => {
  */
 export const generateDateArray = (startDate: string | Date, endDate: string | Date) => {
   // Convert the start and end dates to Date objects if they aren't already
-  const start = new Date(startDate);
-  // start.setDate(start.getDate() + 1);
-  const end = new Date(endDate);
-  end.setDate(end.getDate() + 2);
+  let currentTimestamp = new Date(startDate).getTime();
+  const rangeEndDate = new Date(endDate);
+  rangeEndDate.setDate(rangeEndDate.getDate() + 2);
+  const rangeEndTimestamp = rangeEndDate.getTime();
 
   // Create an empty array to store the dates
   const dateArray = [];
 
   // Use a while loop to generate dates between the range
-  while (start <= end) {
+  while (currentTimestamp <= rangeEndTimestamp) {
     // Push the current date (converted to ISO string for consistency)
     dateArray.push({
-      date: new Date(start).toISOString().split("T")[0],
+      date: new Date(currentTimestamp).toISOString().split("T")[0],
     });
     // Increment the date by 1 day (86400000 milliseconds)
-    start.setDate(start.getDate() + 1);
+    currentTimestamp += 86400000;
   }
 
   return dateArray;
@@ -484,10 +483,8 @@ export const checkDateCriteria = (dateToCheck: Date | null, filterDate: Date, ty
 
 /**
  * Formats merged date range display with smart formatting
- * - Single date: "Jan 24, 2025"
- * - Same year, same month: "Jan 24 - 28, 2025"
- * - Same year, different month: "Jan 24 - Feb 6, 2025"
- * - Different year: "Dec 28, 2024 - Jan 4, 2025"
+ * - Single date: "2025.1.24"
+ * - Date range: "2025.1.24 - 2025.2.6"
  */
 export const formatDateRange = (
   parsedStartDate: Date | null | undefined,
@@ -500,38 +497,18 @@ export const formatDateRange = (
 
   // If only start date is provided
   if (parsedStartDate && !parsedEndDate) {
-    return format(parsedStartDate, "MMM dd, yyyy");
+    return format(parsedStartDate, DISPLAY_DATE_FORMAT);
   }
 
   // If only end date is provided
   if (!parsedStartDate && parsedEndDate) {
-    return format(parsedEndDate, "MMM dd, yyyy");
+    return format(parsedEndDate, DISPLAY_DATE_FORMAT);
   }
 
   // If both dates are provided
   if (parsedStartDate && parsedEndDate) {
-    const startYear = parsedStartDate.getFullYear();
-    const startMonth = parsedStartDate.getMonth();
-    const endYear = parsedEndDate.getFullYear();
-    const endMonth = parsedEndDate.getMonth();
-
-    // Same year, same month
-    if (startYear === endYear && startMonth === endMonth) {
-      const startDay = format(parsedStartDate, "dd");
-      const endDay = format(parsedEndDate, "dd");
-      return `${format(parsedStartDate, "MMM")} ${startDay} - ${endDay}, ${startYear}`;
-    }
-
-    // Same year, different month
-    if (startYear === endYear) {
-      const startFormatted = format(parsedStartDate, "MMM dd");
-      const endFormatted = format(parsedEndDate, "MMM dd");
-      return `${startFormatted} - ${endFormatted}, ${startYear}`;
-    }
-
-    // Different year
-    const startFormatted = format(parsedStartDate, "MMM dd, yyyy");
-    const endFormatted = format(parsedEndDate, "MMM dd, yyyy");
+    const startFormatted = format(parsedStartDate, DISPLAY_DATE_FORMAT);
+    const endFormatted = format(parsedEndDate, DISPLAY_DATE_FORMAT);
     return `${startFormatted} - ${endFormatted}`;
   }
 

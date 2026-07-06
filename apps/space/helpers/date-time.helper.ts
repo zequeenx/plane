@@ -32,7 +32,7 @@ export const getDate = (date: string | Date | undefined | null): Date | undefine
   try {
     if (!date || date === "") return;
 
-    if (typeof date !== "string" && !(date instanceof String)) return date;
+    if (typeof date !== "string") return date;
 
     const [yearString, monthString, dayString] = date.substring(0, 10).split("-");
     const year = parseInt(yearString);
@@ -47,10 +47,10 @@ export const getDate = (date: string | Date | undefined | null): Date | undefine
 };
 
 /**
- * @returns {string | null} formatted date in the format of MMM dd, yyyy
+ * @returns {string | null} formatted date in the format of yyyy.M.d
  * @description Returns date in the formatted format
  * @param {Date | string} date
- * @example renderFormattedDate("2024-01-01") // Jan 01, 2024
+ * @example renderFormattedDate("2024-01-01") // 2024.1.1
  */
 export const renderFormattedDate = (date: string | Date | undefined | null): string | null => {
   // Parse the date to check if it is valid
@@ -59,7 +59,6 @@ export const renderFormattedDate = (date: string | Date | undefined | null): str
   if (!parsedDate) return null;
   // Check if the parsed date is valid before formatting
   if (!isValid(parsedDate)) return null; // Return null for invalid dates
-  // Format the date in format (MMM dd, yyyy)
-  const formattedDate = format(parsedDate, "MMM dd, yyyy");
+  const formattedDate = format(parsedDate, "yyyy.M.d");
   return formattedDate;
 };

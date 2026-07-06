@@ -37,13 +37,13 @@ const getDateGroupingName = (date: string, dateGrouping: ChartXAxisDateGrouping)
       else parsedName = renderFormattedDate(formattedData);
       break;
     case ChartXAxisDateGrouping.WEEK: {
-      const month = renderFormattedDate(formattedData, "MMM");
+      const month = renderFormattedDate(formattedData, "M");
       parsedName = `${month}, Week ${getWeekOfMonth(formattedData)}`;
       break;
     }
     case ChartXAxisDateGrouping.MONTH:
-      if (isCurrentYear) parsedName = renderFormattedDate(formattedData, "MMM");
-      else parsedName = renderFormattedDate(formattedData, "MMM, yyyy");
+      if (isCurrentYear) parsedName = renderFormattedDate(formattedData, "M");
+      else parsedName = renderFormattedDate(formattedData, "yyyy.M");
       break;
     case ChartXAxisDateGrouping.YEAR:
       parsedName = `${year}`;
@@ -87,10 +87,7 @@ export const parseChartData = (
       }
     }
 
-    return {
-      ...datum,
-      ...missingValues,
-    };
+    return Object.assign(datum, missingValues);
   });
 
   // capitalize first letter if groupByProperty is in TO_CAPITALIZE_PROPERTIES
@@ -131,7 +128,10 @@ export const generateExtendedColors = (baseColorSet: string[], targetCount: numb
   const avgLight = baseHSL.reduce((sum, hsl) => sum + hsl.l, 0) / baseHSL.length;
 
   // Sort base colors by hue for better distribution
-  const sortedBaseHSL = [...baseHSL].sort((a, b) => a.h - b.h);
+  const sortedBaseHSL = [...baseHSL];
+  // oxlint-disable unicorn/no-array-sort -- This copied array keeps source data immutable without requiring ES2023 toSorted.
+  sortedBaseHSL.sort((a, b) => a.h - b.h);
+  // oxlint-enable unicorn/no-array-sort
 
   // Generate additional colors for each base color
   const colorsNeeded = targetCount - baseCount;

@@ -17,10 +17,8 @@ type Props = {
 
 /**
  * Formats merged date range display with smart formatting
- * - Single date: "Jan 24, 2025"
- * - Same year, same month: "Jan 24 - 28, 2025"
- * - Same year, different month: "Jan 24 - Feb 6, 2025"
- * - Different year: "Dec 28, 2024 - Jan 4, 2025"
+ * - Single date: "2025.1.24"
+ * - Date range: "2025.1.24 - 2025.2.6"
  */
 export const MergedDateDisplay = observer(function MergedDateDisplay(props: Props) {
   const { startDate, endDate, className = "" } = props;
