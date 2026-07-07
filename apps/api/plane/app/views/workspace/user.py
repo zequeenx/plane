@@ -57,6 +57,7 @@ from plane.utils.grouper import (
     issue_group_values,
     issue_on_results,
     issue_queryset_grouper,
+    resolve_issue_group_by,
 )
 from plane.utils.issue_filters import issue_filters
 from plane.utils.order_queryset import ACTIVITY_ORDER_BY_ALLOWLIST, order_issue_queryset, sanitize_order_by
@@ -166,9 +167,16 @@ class WorkspaceUserProfileIssuesEndpoint(BaseAPIView):
         # Group by
         group_by = request.GET.get("group_by", False)
         sub_group_by = request.GET.get("sub_group_by", False)
+        group_by = resolve_issue_group_by(group_by, slug=slug)
+        sub_group_by = resolve_issue_group_by(sub_group_by, slug=slug)
 
         # issue queryset
-        issue_queryset = issue_queryset_grouper(queryset=issue_queryset, group_by=group_by, sub_group_by=sub_group_by)
+        issue_queryset = issue_queryset_grouper(
+            queryset=issue_queryset,
+            group_by=group_by,
+            sub_group_by=sub_group_by,
+            slug=slug,
+        )
 
         if group_by:
             if sub_group_by:

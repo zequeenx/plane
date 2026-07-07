@@ -69,6 +69,7 @@ from plane.utils.grouper import (
     issue_group_values,
     issue_on_results,
     issue_queryset_grouper,
+    resolve_issue_group_by,
 )
 from plane.utils.host import base_host
 from plane.utils.issue_filters import issue_filters
@@ -142,14 +143,27 @@ class IssueListEndpoint(BaseAPIView):
 
         order_by_param = request.GET.get("order_by", "-created_at")
         # Issue queryset
-        issue_queryset, _ = order_issue_queryset(issue_queryset=issue_queryset, order_by_param=order_by_param)
+        issue_queryset, _ = order_issue_queryset(
+            issue_queryset=issue_queryset,
+            order_by_param=order_by_param,
+            slug=slug,
+            project_id=project_id,
+        )
 
         # Group by
         group_by = request.GET.get("group_by", False)
         sub_group_by = request.GET.get("sub_group_by", False)
+        group_by = resolve_issue_group_by(group_by, slug=slug, project_id=project_id)
+        sub_group_by = resolve_issue_group_by(sub_group_by, slug=slug, project_id=project_id)
 
         # issue queryset
-        issue_queryset = issue_queryset_grouper(queryset=issue_queryset, group_by=group_by, sub_group_by=sub_group_by)
+        issue_queryset = issue_queryset_grouper(
+            queryset=issue_queryset,
+            group_by=group_by,
+            sub_group_by=sub_group_by,
+            slug=slug,
+            project_id=project_id,
+        )
 
         recent_visited_task.delay(
             slug=slug,
@@ -283,15 +297,26 @@ class IssueViewSet(BaseViewSet):
 
         # Issue queryset
         issue_queryset, order_by_param = order_issue_queryset(
-            issue_queryset=issue_queryset, order_by_param=order_by_param
+            issue_queryset=issue_queryset,
+            order_by_param=order_by_param,
+            slug=slug,
+            project_id=project_id,
         )
 
         # Group by
         group_by = request.GET.get("group_by", False)
         sub_group_by = request.GET.get("sub_group_by", False)
+        group_by = resolve_issue_group_by(group_by, slug=slug, project_id=project_id)
+        sub_group_by = resolve_issue_group_by(sub_group_by, slug=slug, project_id=project_id)
 
         # issue queryset
-        issue_queryset = issue_queryset_grouper(queryset=issue_queryset, group_by=group_by, sub_group_by=sub_group_by)
+        issue_queryset = issue_queryset_grouper(
+            queryset=issue_queryset,
+            group_by=group_by,
+            sub_group_by=sub_group_by,
+            slug=slug,
+            project_id=project_id,
+        )
 
         recent_visited_task.delay(
             slug=slug,

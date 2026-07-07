@@ -32,6 +32,8 @@ def issue_queryset_grouper(
     queryset: QuerySet[Issue],
     group_by: Optional[str],
     sub_group_by: Optional[str],
+    slug: Optional[str] = None,
+    project_id: Optional[str] = None,
 ) -> QuerySet[Issue]:
     FIELD_MAPPER: Dict[str, str] = {
         "label_ids": "labels__id",
@@ -47,7 +49,11 @@ def issue_queryset_grouper(
 
     custom_group_annotations = {}
     for group_key in [group_by, sub_group_by]:
-        custom_group_annotation = _custom_property_group_annotation(group_key)
+        custom_group_annotation = _custom_property_group_annotation(
+            group_key,
+            slug=slug,
+            project_id=project_id,
+        )
         if custom_group_annotation is not None:
             custom_group_annotations[group_key] = custom_group_annotation
         if group_key in GROUP_FILTER_MAPPER:
@@ -239,15 +245,50 @@ def _custom_property_field_id(field: Optional[str]) -> Optional[str]:
     return field_id or None
 
 
-def _custom_property_group_field(field: Optional[str]) -> Optional[ProjectIssueField]:
+def resolve_issue_group_by(
+    field: Optional[str],
+    slug: Optional[str] = None,
+    project_id: Optional[str] = None,
+) -> Optional[str]:
+    if _custom_property_field_id(field) is None:
+        return field
+    if _custom_property_group_field(field, slug=slug, project_id=project_id) is None:
+        return None
+    return field
+
+
+def _custom_property_group_field(
+    field: Optional[str],
+    slug: Optional[str] = None,
+    project_id: Optional[str] = None,
+) -> Optional[ProjectIssueField]:
     field_id = _custom_property_field_id(field)
     if field_id is None:
         return None
-    return ProjectIssueField.objects.filter(id=field_id, is_disabled=False).first()
+    if project_id is None:
+        return None
+    field_filters = {"id": field_id, "is_disabled": False}
+    if slug:
+        field_filters["workspace__slug"] = slug
+    if project_id:
+        field_filters["project_id"] = project_id
+    field = ProjectIssueField.objects.filter(**field_filters).first()
+    if field is None:
+        return None
+    if field.field_type not in (
+        ProjectIssueField.FieldType.SINGLE_SELECT,
+        ProjectIssueField.FieldType.SINGLE_MEMBER,
+    ):
+        return None
+    return field
 
 
-def _custom_property_group_annotation(field: Optional[str]):
-    project_field = _custom_property_group_field(field)
+def _custom_property_group_annotation(
+    field: Optional[str],
+    slug: Optional[str] = None,
+    project_id: Optional[str] = None,
+):
+    project_field = _custom_property_group_field(field, slug=slug, project_id=project_id)
     if project_field is None:
         return None
 
@@ -270,7 +311,7 @@ def _custom_property_group_annotation(field: Optional[str]):
             value_rows.filter(selected_users__deleted_at__isnull=True).values("selected_users__user_id")[:1]
         )
 
-    return Value(None)
+    return None
 
 
 def _custom_property_group_values(
@@ -279,7 +320,7 @@ def _custom_property_group_values(
     project_id: Optional[str],
     queryset: Optional[QuerySet],
 ) -> Optional[List[Union[str, Any]]]:
-    project_field = _custom_property_group_field(field)
+    project_field = _custom_property_group_field(field, slug=slug, project_id=project_id)
     if project_field is None:
         return None
 

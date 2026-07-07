@@ -118,29 +118,39 @@ def custom_property_order_field(order_by_param):
     return field_id, is_desc
 
 
-def order_issue_queryset(issue_queryset, order_by_param="-created_at"):
+def order_issue_queryset(issue_queryset, order_by_param="-created_at", slug=None, project_id=None):
     custom_field_id, custom_order_desc = custom_property_order_field(order_by_param)
     if custom_field_id is not None:
-        project_field = ProjectIssueField.objects.filter(id=custom_field_id, is_disabled=False).first()
-        if project_field and project_field.field_type in (
-            ProjectIssueField.FieldType.DATE,
-            ProjectIssueField.FieldType.PLAIN_TEXT,
-        ):
-            value_rows = IssueFieldValue.objects.filter(
-                issue_id=OuterRef("pk"),
-                field=project_field,
-                deleted_at__isnull=True,
-            )
-            value_field = "date_value" if project_field.field_type == ProjectIssueField.FieldType.DATE else "text_value"
-            issue_queryset = issue_queryset.annotate(
-                **{CUSTOM_PROPERTY_ORDER_ANNOTATION: Subquery(value_rows.values(value_field)[:1])}
-            )
-            order_by_param = (
-                f"-{CUSTOM_PROPERTY_ORDER_ANNOTATION}"
-                if custom_order_desc
-                else CUSTOM_PROPERTY_ORDER_ANNOTATION
-            )
-            return issue_queryset.order_by(order_by_param, "-created_at"), order_by_param
+        if project_id is None:
+            order_by_param = None
+        else:
+            field_filters = {"id": custom_field_id, "is_disabled": False, "project_id": project_id}
+            if slug:
+                field_filters["workspace__slug"] = slug
+            project_field = ProjectIssueField.objects.filter(**field_filters).first()
+            if project_field and project_field.field_type in (
+                ProjectIssueField.FieldType.DATE,
+                ProjectIssueField.FieldType.PLAIN_TEXT,
+            ):
+                value_rows = IssueFieldValue.objects.filter(
+                    issue_id=OuterRef("pk"),
+                    field=project_field,
+                    deleted_at__isnull=True,
+                )
+                value_field = (
+                    "date_value"
+                    if project_field.field_type == ProjectIssueField.FieldType.DATE
+                    else "text_value"
+                )
+                issue_queryset = issue_queryset.annotate(
+                    **{CUSTOM_PROPERTY_ORDER_ANNOTATION: Subquery(value_rows.values(value_field)[:1])}
+                )
+                order_by_param = (
+                    f"-{CUSTOM_PROPERTY_ORDER_ANNOTATION}"
+                    if custom_order_desc
+                    else CUSTOM_PROPERTY_ORDER_ANNOTATION
+                )
+                return issue_queryset.order_by(order_by_param, "-created_at"), order_by_param
 
     # Reject any field that is not in the allowlist before building the queryset.
     # An unrecognised value is silently replaced with the safe default so callers

@@ -1,4 +1,5 @@
 import json
+from datetime import datetime, timezone
 
 import pytest
 
@@ -6,10 +7,12 @@ from plane.db.models import (
     Issue,
     IssueFieldValue,
     IssueFieldValueOption,
+    IssueFieldValueUser,
     Project,
     ProjectIssueField,
     ProjectIssueFieldOption,
     ProjectMember,
+    User,
 )
 
 
@@ -33,6 +36,17 @@ def _issue_list_url(workspace, project):
 
 def _issue_names(response):
     return {issue["name"] for issue in response.data["results"]}
+
+
+def _group_result_names(response):
+    results = response.data["results"]
+    if isinstance(results, list):
+        return {issue["name"] for issue in results}
+    return {
+        issue["name"]
+        for group_data in results.values()
+        for issue in group_data.get("results", [])
+    }
 
 
 def test_plain_text_contains_filter_finds_only_matching_issue(api_client, workspace, project, project_member):
@@ -147,6 +161,68 @@ def test_single_select_custom_field_grouping(api_client, workspace, project, pro
     assert response.data["results"][str(high.id)]["results"][0]["name"] == "High issue"
 
 
+@pytest.mark.parametrize(
+    "field_type",
+    [
+        ProjectIssueField.FieldType.PLAIN_TEXT,
+        ProjectIssueField.FieldType.MULTI_SELECT,
+        ProjectIssueField.FieldType.DATE,
+        ProjectIssueField.FieldType.DATE_RANGE,
+    ],
+)
+def test_unsupported_custom_field_grouping_does_not_activate(
+    api_client,
+    workspace,
+    project,
+    project_member,
+    field_type,
+):
+    api_client.force_authenticate(project_member)
+    field = ProjectIssueField.objects.create(
+        workspace=workspace,
+        project=project,
+        name=f"Unsupported {field_type}",
+        field_type=field_type,
+    )
+    issue = Issue.objects.create(workspace=workspace, project=project, name="Ungrouped issue")
+
+    response = api_client.get(
+        _issue_list_url(workspace, project),
+        {"group_by": f"customproperty_{field.id}"},
+    )
+
+    assert response.status_code == 200
+    assert _group_result_names(response) == {"Ungrouped issue"}
+    assert str(None) not in response.data["results"]
+
+
+def test_cross_project_custom_field_grouping_does_not_activate(
+    api_client,
+    workspace,
+    project,
+    project_member,
+):
+    api_client.force_authenticate(project_member)
+    other_project = Project.objects.create(workspace=workspace, name="Other Filter Field Project", identifier="OFF")
+    field = ProjectIssueField.objects.create(
+        workspace=workspace,
+        project=other_project,
+        name="Other severity",
+        field_type=ProjectIssueField.FieldType.SINGLE_SELECT,
+    )
+    option = ProjectIssueFieldOption.objects.create(workspace=workspace, project=other_project, field=field, value="High")
+    issue = Issue.objects.create(workspace=workspace, project=project, name="Current project issue")
+
+    response = api_client.get(
+        _issue_list_url(workspace, project),
+        {"group_by": f"customproperty_{field.id}"},
+    )
+
+    assert response.status_code == 200
+    assert _group_result_names(response) == {"Current project issue"}
+    assert str(option.id) not in response.data["results"]
+
+
 def test_date_custom_field_sorting(api_client, workspace, project, project_member):
     api_client.force_authenticate(project_member)
     field = ProjectIssueField.objects.create(
@@ -179,3 +255,98 @@ def test_date_custom_field_sorting(api_client, workspace, project, project_membe
 
     assert response.status_code == 200
     assert [issue["name"] for issue in response.data["results"]] == ["Earlier issue", "Later issue"]
+
+
+def test_cross_project_custom_field_sorting_does_not_activate(
+    api_client,
+    workspace,
+    project,
+    project_member,
+):
+    api_client.force_authenticate(project_member)
+    other_project = Project.objects.create(workspace=workspace, name="Other Sort Field Project", identifier="OSF")
+    field = ProjectIssueField.objects.create(
+        workspace=workspace,
+        project=other_project,
+        name="Other release date",
+        field_type=ProjectIssueField.FieldType.DATE,
+    )
+    newer_issue = Issue.objects.create(workspace=workspace, project=project, name="Newer issue")
+    older_issue = Issue.objects.create(workspace=workspace, project=project, name="Older issue")
+    newer_issue.created_at = datetime(2026, 7, 2, tzinfo=timezone.utc)
+    newer_issue.save(update_fields=["created_at"])
+    older_issue.created_at = datetime(2026, 7, 1, tzinfo=timezone.utc)
+    older_issue.save(update_fields=["created_at"])
+
+    response = api_client.get(
+        _issue_list_url(workspace, project),
+        {"order_by": f"customproperty_{field.id}"},
+    )
+
+    assert response.status_code == 200
+    assert [issue["name"] for issue in response.data["results"]] == ["Newer issue", "Older issue"]
+
+
+def test_multi_select_contains_any_filter_does_not_duplicate_matching_issue(
+    api_client,
+    workspace,
+    project,
+    project_member,
+):
+    api_client.force_authenticate(project_member)
+    field = ProjectIssueField.objects.create(
+        workspace=workspace,
+        project=project,
+        name="Components",
+        field_type=ProjectIssueField.FieldType.MULTI_SELECT,
+    )
+    api = ProjectIssueFieldOption.objects.create(workspace=workspace, project=project, field=field, value="API")
+    web = ProjectIssueFieldOption.objects.create(workspace=workspace, project=project, field=field, value="Web")
+    issue = Issue.objects.create(workspace=workspace, project=project, name="Multi match issue")
+    value = IssueFieldValue.objects.create(workspace=workspace, project=project, issue=issue, field=field)
+    IssueFieldValueOption.objects.create(workspace=workspace, project=project, value=value, option=api)
+    IssueFieldValueOption.objects.create(workspace=workspace, project=project, value=value, option=web)
+
+    response = api_client.get(
+        _issue_list_url(workspace, project),
+        {
+            "filters": json.dumps(
+                {f"customproperty_{field.id}__contains_any": [str(api.id), str(web.id)]}
+            )
+        },
+    )
+
+    assert response.status_code == 200
+    assert [issue["name"] for issue in response.data["results"]] == ["Multi match issue"]
+
+
+def test_multi_member_contains_any_filter_does_not_duplicate_matching_issue(
+    api_client,
+    workspace,
+    project,
+    project_member,
+):
+    api_client.force_authenticate(project_member)
+    field = ProjectIssueField.objects.create(
+        workspace=workspace,
+        project=project,
+        name="Reviewers",
+        field_type=ProjectIssueField.FieldType.MULTI_MEMBER,
+    )
+    issue = Issue.objects.create(workspace=workspace, project=project, name="Multi member issue")
+    value = IssueFieldValue.objects.create(workspace=workspace, project=project, issue=issue, field=field)
+    second_user = User.objects.create_user(email="multi-member-reviewer@example.com", username="multi-member-reviewer")
+    IssueFieldValueUser.objects.create(workspace=workspace, project=project, value=value, user=project_member)
+    IssueFieldValueUser.objects.create(workspace=workspace, project=project, value=value, user=second_user)
+
+    response = api_client.get(
+        _issue_list_url(workspace, project),
+        {
+            "filters": json.dumps(
+                {f"customproperty_{field.id}__contains_any": [str(project_member.id), str(second_user.id)]}
+            )
+        },
+    )
+
+    assert response.status_code == 200
+    assert [issue["name"] for issue in response.data["results"]] == ["Multi member issue"]

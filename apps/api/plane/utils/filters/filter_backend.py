@@ -7,7 +7,7 @@ import json
 from uuid import UUID
 
 # Django imports
-from django.db.models import Q
+from django.db.models import Exists, OuterRef, Q
 from django.http import QueryDict
 
 # Third party imports
@@ -365,12 +365,12 @@ class ComplexFilterBackend(filters.BaseFilterBackend):
             ProjectIssueField.FieldType.SINGLE_SELECT,
             ProjectIssueField.FieldType.MULTI_SELECT,
         ):
-            return self._build_option_custom_property_q(base_q, operator, value)
+            return self._build_option_custom_property_q(field.id, operator, value)
         if field_type in (
             ProjectIssueField.FieldType.SINGLE_MEMBER,
             ProjectIssueField.FieldType.MULTI_MEMBER,
         ):
-            return self._build_member_custom_property_q(base_q, operator, value)
+            return self._build_member_custom_property_q(field.id, operator, value)
         if field_type == ProjectIssueField.FieldType.DATE:
             return self._build_date_custom_property_q(base_q, operator, value)
         if field_type == ProjectIssueField.FieldType.DATE_RANGE:
@@ -403,38 +403,47 @@ class ComplexFilterBackend(filters.BaseFilterBackend):
             return non_empty_q
         return Q()
 
-    def _build_option_custom_property_q(self, base_q, operator, value):
-        selected_q = (
-            base_q
-            & Q(field_value_rows__selected_options__deleted_at__isnull=True)
-            & Q(field_value_rows__selected_options__option__deleted_at__isnull=True)
+    def _build_option_custom_property_q(self, field_id, operator, value):
+        from plane.db.models import IssueFieldValueOption
+
+        selected_options = IssueFieldValueOption.objects.filter(
+            value__issue_id=OuterRef("pk"),
+            value__field_id=field_id,
+            value__deleted_at__isnull=True,
+            deleted_at__isnull=True,
+            option__deleted_at__isnull=True,
         )
-        non_empty_q = selected_q & Q(field_value_rows__selected_options__option_id__isnull=False)
         if operator in ("exact", "in", "contains_any"):
             values = self._ensure_list_value(value)
-            return selected_q & Q(field_value_rows__selected_options__option_id__in=values)
+            return Exists(selected_options.filter(option_id__in=values))
         if operator in ("not_exact", "not_in", "not_contains_any"):
             values = self._ensure_list_value(value)
-            return ~(selected_q & Q(field_value_rows__selected_options__option_id__in=values))
+            return ~Exists(selected_options.filter(option_id__in=values))
         if operator == "is_empty":
-            return ~non_empty_q
+            return ~Exists(selected_options)
         if operator == "is_not_empty":
-            return non_empty_q
+            return Exists(selected_options)
         return Q()
 
-    def _build_member_custom_property_q(self, base_q, operator, value):
-        selected_q = base_q & Q(field_value_rows__selected_users__deleted_at__isnull=True)
-        non_empty_q = selected_q & Q(field_value_rows__selected_users__user_id__isnull=False)
+    def _build_member_custom_property_q(self, field_id, operator, value):
+        from plane.db.models import IssueFieldValueUser
+
+        selected_users = IssueFieldValueUser.objects.filter(
+            value__issue_id=OuterRef("pk"),
+            value__field_id=field_id,
+            value__deleted_at__isnull=True,
+            deleted_at__isnull=True,
+        )
         if operator in ("exact", "in", "contains_any"):
             values = self._ensure_list_value(value)
-            return selected_q & Q(field_value_rows__selected_users__user_id__in=values)
+            return Exists(selected_users.filter(user_id__in=values))
         if operator in ("not_exact", "not_in", "not_contains_any"):
             values = self._ensure_list_value(value)
-            return ~(selected_q & Q(field_value_rows__selected_users__user_id__in=values))
+            return ~Exists(selected_users.filter(user_id__in=values))
         if operator == "is_empty":
-            return ~non_empty_q
+            return ~Exists(selected_users)
         if operator == "is_not_empty":
-            return non_empty_q
+            return Exists(selected_users)
         return Q()
 
     def _build_date_custom_property_q(self, base_q, operator, value):
