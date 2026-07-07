@@ -4,8 +4,9 @@
  * See the LICENSE file for details.
  */
 
-import React, { useRef } from "react";
+import React, { useEffect, useMemo, useRef } from "react";
 import { observer } from "mobx-react";
+import { useParams } from "next/navigation";
 // plane constants
 import { SPREADSHEET_SELECT_GROUP, SPREADSHEET_PROPERTY_LIST } from "@plane/constants";
 // types
@@ -15,12 +16,14 @@ import { EIssueLayoutTypes } from "@plane/types";
 import { MultipleSelectGroup } from "@/components/core/multiple-select";
 // hooks
 import { useProject } from "@/hooks/store/use-project";
+import { useProjectIssueFields } from "@/hooks/store/use-project-issue-fields";
 import { useBulkOperationStatus } from "@/hooks/use-bulk-operation-status";
 // plane web components
 import { IssueBulkOperationsRoot } from "@/plane-web/components/issues/bulk-operations";
 // local imports
 import type { TRenderQuickActions } from "../list/list-view-types";
-import { QuickAddIssueRoot, SpreadsheetAddIssueButton } from "../quick-add";
+import { SpreadsheetAddIssueButton } from "../quick-add/button/spreadsheet";
+import { QuickAddIssueRoot } from "../quick-add/root";
 import { SpreadsheetTable } from "./spreadsheet-table";
 
 type Props = {
@@ -61,20 +64,52 @@ export const SpreadsheetView = observer(function SpreadsheetView(props: Props) {
   // refs
   const containerRef = useRef<HTMLTableElement | null>(null);
   const portalRef = useRef<HTMLDivElement | null>(null);
+  // router
+  const { workspaceSlug, projectId } = useParams();
   // store hooks
   const { currentProjectDetails } = useProject();
+  const { fieldsLoader, getFields, getFieldsByProjectId } = useProjectIssueFields();
   // plane web hooks
   const isBulkOperationsEnabled = useBulkOperationStatus();
 
   const isEstimateEnabled: boolean = currentProjectDetails?.estimate !== null;
 
-  const spreadsheetColumnsList = isWorkspaceLevel
-    ? SPREADSHEET_PROPERTY_LIST
-    : SPREADSHEET_PROPERTY_LIST.filter((property) => {
-        if (property === "cycle" && !currentProjectDetails?.cycle_view) return false;
-        if (property === "modules" && !currentProjectDetails?.module_view) return false;
-        return true;
-      });
+  const currentProjectId = projectId?.toString();
+  const projectIssueFields = currentProjectId ? getFieldsByProjectId(currentProjectId) : undefined;
+
+  useEffect(() => {
+    if (!workspaceSlug || !currentProjectId) return;
+    if (projectIssueFields || fieldsLoader[currentProjectId]) return;
+
+    getFields(workspaceSlug.toString(), currentProjectId).catch((error) => {
+      console.error("Failed to load project issue fields:", error);
+    });
+  }, [currentProjectId, fieldsLoader, getFields, projectIssueFields, workspaceSlug]);
+
+  const spreadsheetColumnsList = useMemo(() => {
+    const systemColumns = isWorkspaceLevel
+      ? SPREADSHEET_PROPERTY_LIST
+      : SPREADSHEET_PROPERTY_LIST.filter((property) => {
+          if (property === "cycle" && !currentProjectDetails?.cycle_view) return false;
+          if (property === "modules" && !currentProjectDetails?.module_view) return false;
+          return true;
+        });
+
+    const customColumns = projectIssueFields?.reduce<(keyof IIssueDisplayProperties)[]>((acc, field) => {
+      const property = `customproperty_${field.id}` as keyof IIssueDisplayProperties;
+      if (displayProperties[property]) acc.push(property);
+
+      return acc;
+    }, []);
+
+    return [...systemColumns, ...(customColumns ?? [])];
+  }, [
+    currentProjectDetails?.cycle_view,
+    currentProjectDetails?.module_view,
+    displayProperties,
+    isWorkspaceLevel,
+    projectIssueFields,
+  ]);
 
   if (!issueIds || issueIds.length === 0) return <></>;
   return (

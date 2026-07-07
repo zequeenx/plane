@@ -28,7 +28,7 @@ const FIELD_ICON: Record<EProjectIssueFieldType, LucideIcon> = {
   [EProjectIssueFieldType.PLAIN_TEXT]: TextCursorInput,
 };
 
-const FieldEditor = observer(function FieldEditor(props: TProjectFieldEditorProps) {
+export const ProjectFieldValueEditor = observer(function ProjectFieldValueEditor(props: TProjectFieldEditorProps) {
   switch (props.field.field_type) {
     case EProjectIssueFieldType.SINGLE_SELECT:
     case EProjectIssueFieldType.MULTI_SELECT:
@@ -62,7 +62,7 @@ export const ProjectFieldValueEditors = observer(function ProjectFieldValueEdito
 
         return (
           <SidebarPropertyListItem key={field.id} icon={Icon} label={field.name}>
-            <FieldEditor
+            <ProjectFieldValueEditor
               commitPlainTextOnBlur={commitPlainTextOnBlur}
               disabled={disabled}
               field={field}

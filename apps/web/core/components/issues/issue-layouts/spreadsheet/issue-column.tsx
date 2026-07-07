@@ -6,11 +6,16 @@
 
 import { useRef } from "react";
 import { observer } from "mobx-react";
+import { useParams } from "next/navigation";
 // types
-import type { IIssueDisplayProperties, TIssue } from "@plane/types";
+import { TOAST_TYPE, setToast } from "@plane/propel/toast";
+import type { IIssueDisplayProperties, TIssue, TIssueFieldValue } from "@plane/types";
 // components
+import { useTranslation } from "@plane/i18n";
+import { ProjectFieldValueEditor } from "@/components/project-fields/value-editors/root";
 import { SPREADSHEET_COLUMNS } from "@/plane-web/components/issues/issue-layouts/utils";
 import { shouldRenderColumn } from "@/helpers/issue-filter.helper";
+import { useProjectIssueFields } from "@/hooks/store/use-project-issue-fields";
 import { WithDisplayPropertiesHOC } from "../properties/with-display-properties-HOC";
 
 type Props = {
@@ -26,15 +31,39 @@ export const IssueColumn = observer(function IssueColumn(props: Props) {
   const { displayProperties, issueDetail, disableUserActions, property, updateIssue } = props;
   // router
   const tableCellRef = useRef<HTMLTableCellElement | null>(null);
+  const { workspaceSlug } = useParams();
+  const { t } = useTranslation();
+  const { getFieldById, updateIssueValues } = useProjectIssueFields();
 
   const shouldRenderProperty = shouldRenderColumn(property);
+  const issueProjectId = issueDetail.project_id;
+  const customFieldId = property.startsWith("customproperty_") ? property.replace("customproperty_", "") : null;
+  const customField = issueProjectId && customFieldId ? getFieldById(issueProjectId, customFieldId) : undefined;
 
   const Column = SPREADSHEET_COLUMNS[property];
 
-  if (!Column) return null;
+  if (!Column && !customField) return null;
 
   const handleUpdateIssue = async (issue: TIssue, data: Partial<TIssue>) => {
     if (updateIssue) await updateIssue(issue.project_id, issue.id, data);
+  };
+
+  const handleUpdateCustomField = async (fieldId: string, value: TIssueFieldValue) => {
+    if (!workspaceSlug || !issueProjectId) return;
+
+    try {
+      await updateIssueValues(workspaceSlug.toString(), issueProjectId, issueDetail.id, {
+        field_values: {
+          [fieldId]: Array.isArray(value) && value.length === 0 ? null : value,
+        },
+      });
+    } catch {
+      setToast({
+        type: TOAST_TYPE.ERROR,
+        title: t("common.error"),
+        message: t("project_settings.fields.toasts.updated.error.message"),
+      });
+    }
   };
 
   return (
@@ -48,12 +77,26 @@ export const IssueColumn = observer(function IssueColumn(props: Props) {
         className="h-11 min-w-36 border-r-[1px] border-subtle text-13 after:absolute after:bottom-[-1px] after:w-full after:border after:border-subtle"
         ref={tableCellRef}
       >
-        <Column
-          issue={issueDetail}
-          onChange={handleUpdateIssue}
-          disabled={disableUserActions}
-          onClose={() => tableCellRef?.current?.focus()}
-        />
+        {customField ? (
+          <div className="flex h-full w-full items-center px-2">
+            <ProjectFieldValueEditor
+              commitPlainTextOnBlur
+              disabled={disableUserActions}
+              field={customField}
+              onChange={handleUpdateCustomField}
+              projectId={customField.project}
+              value={issueDetail.field_values?.[customField.id]}
+              workspaceSlug={workspaceSlug?.toString() ?? ""}
+            />
+          </div>
+        ) : Column ? (
+          <Column
+            issue={issueDetail}
+            onChange={handleUpdateIssue}
+            disabled={disableUserActions}
+            onClose={() => tableCellRef?.current?.focus()}
+          />
+        ) : null}
       </td>
     </WithDisplayPropertiesHOC>
   );

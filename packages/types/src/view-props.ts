@@ -55,7 +55,9 @@ export type TIssueOrderByOptions =
   | "attachment_count"
   | "-attachment_count"
   | "sub_issues_count"
-  | "-sub_issues_count";
+  | "-sub_issues_count"
+  | TCustomPropertyKey
+  | `-${TCustomPropertyKey}`;
 
 export type TIssueGroupingFilters = "active" | "backlog";
 
@@ -166,6 +168,7 @@ export interface IIssueDisplayFilterOptions {
   sub_issue?: boolean;
 }
 export interface IIssueDisplayProperties {
+  [key: TCustomPropertyKey]: boolean | undefined;
   assignee?: boolean;
   start_date?: boolean;
   due_date?: boolean;

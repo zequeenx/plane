@@ -5,7 +5,7 @@
  */
 
 import type { FC } from "react";
-import { CalendarDays, LayersIcon, Paperclip } from "lucide-react";
+import { CalendarDays, LayersIcon, Paperclip, TextCursorInput } from "lucide-react";
 // types
 import { ISSUE_GROUP_BY_OPTIONS } from "@plane/constants";
 import type { ISvgIcons } from "@plane/propel/icons";
@@ -82,6 +82,8 @@ export const getTeamProjectColumns = (): IGroupByColumn[] | undefined => undefin
 export const SpreadSheetPropertyIconMap: Record<string, FC<ISvgIcons>> = {
   MembersPropertyIcon: MembersPropertyIcon,
   CalenderDays: CalendarDays,
+  CalendarDays: CalendarDays,
+  TextCursorInput: TextCursorInput,
   DueDatePropertyIcon: DueDatePropertyIcon,
   EstimatePropertyIcon: EstimatePropertyIcon,
   LabelPropertyIcon: LabelPropertyIcon,

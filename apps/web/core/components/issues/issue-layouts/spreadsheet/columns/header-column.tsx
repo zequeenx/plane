@@ -11,7 +11,13 @@ import { SPREADSHEET_PROPERTY_DETAILS } from "@plane/constants";
 // i18n
 import { useTranslation } from "@plane/i18n";
 // types
-import type { IIssueDisplayFilterOptions, IIssueDisplayProperties, TIssueOrderByOptions } from "@plane/types";
+import {
+  EProjectIssueFieldType,
+  type IIssueDisplayFilterOptions,
+  type IIssueDisplayProperties,
+  type TIssueOrderByOptions,
+  type TProjectIssueField,
+} from "@plane/types";
 import { CustomMenu, Row } from "@plane/ui";
 import useLocalStorage from "@/hooks/use-local-storage";
 import { SpreadSheetPropertyIcon } from "../../utils";
@@ -22,10 +28,11 @@ interface Props {
   handleDisplayFilterUpdate: (data: Partial<IIssueDisplayFilterOptions>) => void;
   onClose: () => void;
   isEpic?: boolean;
+  customField?: TProjectIssueField;
 }
 
 export function HeaderColumn(props: Props) {
-  const { displayFilters, handleDisplayFilterUpdate, property, onClose, isEpic = false } = props;
+  const { customField, displayFilters, handleDisplayFilterUpdate, property, onClose, isEpic = false } = props;
   // i18n
   const { t } = useTranslation();
   const { storedValue: selectedMenuItem, setValue: setSelectedMenuItem } = useLocalStorage(
@@ -36,7 +43,19 @@ export function HeaderColumn(props: Props) {
     "spreadsheetViewActiveSortingProperty",
     ""
   );
-  const propertyDetails = SPREADSHEET_PROPERTY_DETAILS[property];
+  const propertyDetails = customField
+    ? {
+        i18n_title: customField.name,
+        ascendingOrderKey: property as TIssueOrderByOptions,
+        ascendingOrderTitle: customField.field_type === EProjectIssueFieldType.DATE ? "Old" : "A",
+        descendingOrderKey: `-${property}` as TIssueOrderByOptions,
+        descendingOrderTitle: customField.field_type === EProjectIssueFieldType.DATE ? "New" : "Z",
+        icon: customField.field_type === EProjectIssueFieldType.DATE ? "CalendarDays" : "TextCursorInput",
+        isSortable:
+          customField.field_type === EProjectIssueFieldType.DATE ||
+          customField.field_type === EProjectIssueFieldType.PLAIN_TEXT,
+      }
+    : SPREADSHEET_PROPERTY_DETAILS[property];
 
   const handleOrderBy = (order: TIssueOrderByOptions, itemKey: string) => {
     handleDisplayFilterUpdate({ order_by: order });
@@ -52,7 +71,7 @@ export function HeaderColumn(props: Props) {
       <Row className="flex w-full items-center justify-between gap-1.5 py-2 text-13 text-secondary">
         <div className="flex items-center gap-1.5">
           {<SpreadSheetPropertyIcon iconKey={propertyDetails.icon} className="h-4 w-4 text-placeholder" />}
-          {t(propertyDetails.i18n_title)}
+          {customField ? propertyDetails.i18n_title : t(propertyDetails.i18n_title)}
         </div>
       </Row>
     );
@@ -67,7 +86,11 @@ export function HeaderColumn(props: Props) {
         <Row className="flex w-full cursor-pointer items-center justify-between gap-1.5 py-2 text-13 text-secondary hover:text-primary">
           <div className="flex items-center gap-1.5">
             {<SpreadSheetPropertyIcon iconKey={propertyDetails.icon} className="h-4 w-4 text-placeholder" />}
-            {property === "sub_issue_count" && isEpic ? t("issue.label", { count: 2 }) : t(propertyDetails.i18n_title)}
+            {customField
+              ? propertyDetails.i18n_title
+              : property === "sub_issue_count" && isEpic
+                ? t("issue.label", { count: 2 })
+                : t(propertyDetails.i18n_title)}
           </div>
           <div className="ml-3 flex">
             {activeSortingProperty === property && (

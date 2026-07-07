@@ -7,9 +7,11 @@
 import { useRef } from "react";
 //types
 import { observer } from "mobx-react";
+import { useParams } from "next/navigation";
 import type { IIssueDisplayFilterOptions, IIssueDisplayProperties } from "@plane/types";
 //components
 import { shouldRenderColumn } from "@/helpers/issue-filter.helper";
+import { useProjectIssueFields } from "@/hooks/store/use-project-issue-fields";
 import { WithDisplayPropertiesHOC } from "../properties/with-display-properties-HOC";
 import { HeaderColumn } from "./columns/header-column";
 
@@ -26,8 +28,12 @@ export const SpreadsheetHeaderColumn = observer(function SpreadsheetHeaderColumn
 
   //hooks
   const tableHeaderCellRef = useRef<HTMLTableCellElement | null>(null);
+  const { projectId } = useParams();
+  const { getFieldById } = useProjectIssueFields();
 
   const shouldRenderProperty = shouldRenderColumn(property);
+  const customFieldId = property.startsWith("customproperty_") ? property.replace("customproperty_", "") : null;
+  const customField = projectId && customFieldId ? getFieldById(projectId.toString(), customFieldId) : undefined;
 
   return (
     <WithDisplayPropertiesHOC
@@ -48,6 +54,7 @@ export const SpreadsheetHeaderColumn = observer(function SpreadsheetHeaderColumn
             tableHeaderCellRef?.current?.focus();
           }}
           isEpic={isEpic}
+          customField={customField}
         />
       </th>
     </WithDisplayPropertiesHOC>
