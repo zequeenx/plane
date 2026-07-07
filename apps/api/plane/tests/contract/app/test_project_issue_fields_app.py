@@ -646,6 +646,7 @@ def test_issue_list_batches_field_value_serialization_once(
     api_client, workspace, project, project_member, issue, monkeypatch
 ):
     api_client.force_authenticate(project_member)
+    second_issue = Issue.objects.create(workspace=workspace, project=project, name="Second Issue Field Issue")
     calls = []
     serialize_values = IssueFieldValueService.serialize_values
 
@@ -658,4 +659,5 @@ def test_issue_list_batches_field_value_serialization_once(
     response = api_client.get(f"/api/workspaces/{workspace.slug}/projects/{project.id}/issues/")
 
     assert response.status_code == status.HTTP_200_OK
-    assert calls == [[issue.id]]
+    assert len(calls) == 1
+    assert set(calls[0]) == {issue.id, second_issue.id}
