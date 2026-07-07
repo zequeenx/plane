@@ -77,7 +77,7 @@ def test_hard_deleted_field_erases_options_and_values(workspace, project, issue)
     value = IssueFieldValue.objects.create(workspace=workspace, project=project, issue=issue, field=field)
     IssueFieldValueOption.objects.create(workspace=workspace, project=project, value=value, option=option)
 
-    field.delete()
+    field.delete(soft=False)
 
     assert not ProjectIssueField.objects.filter(pk=field.pk).exists()
     assert not ProjectIssueFieldOption.objects.filter(pk=option.pk).exists()
@@ -89,7 +89,7 @@ def test_single_select_value_is_unique_per_issue_and_field(workspace, project, i
         workspace=workspace,
         project=project,
         name="Priority reason",
-        field_type=ProjectIssueField.FieldType.PLAIN_TEXT,
+        field_type=ProjectIssueField.FieldType.SINGLE_SELECT,
     )
     IssueFieldValue.objects.create(workspace=workspace, project=project, issue=issue, field=field, text_value="first")
 
