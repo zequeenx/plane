@@ -339,13 +339,15 @@ class ComplexFilterBackend(filters.BaseFilterBackend):
         from plane.db.models import ProjectIssueField
 
         project_id = getattr(view, "kwargs", {}).get("project_id")
+        if not project_id:
+            return Q()
+
         slug = getattr(view, "kwargs", {}).get("slug")
         field_filters = {
             "id": field_id,
             "is_disabled": False,
+            "project_id": project_id,
         }
-        if project_id:
-            field_filters["project_id"] = project_id
         if slug:
             field_filters["workspace__slug"] = slug
 
@@ -385,6 +387,13 @@ class ComplexFilterBackend(filters.BaseFilterBackend):
             return [item.strip() for item in value.split(",") if item.strip()]
         return [value]
 
+    def _ensure_uuid_list_value(self, value):
+        values = self._ensure_list_value(value)
+        try:
+            return [str(UUID(str(item))) for item in values]
+        except (AttributeError, TypeError, ValueError):
+            return None
+
     def _build_plain_text_custom_property_q(self, base_q, operator, value):
         non_empty_q = base_q & Q(field_value_rows__text_value__isnull=False) & ~Q(field_value_rows__text_value="")
         if operator in ("contains", "icontains"):
@@ -416,10 +425,14 @@ class ComplexFilterBackend(filters.BaseFilterBackend):
             option__deleted_at__isnull=True,
         )
         if operator in ("exact", "in", "contains_any"):
-            values = self._ensure_list_value(value)
+            values = self._ensure_uuid_list_value(value)
+            if values is None:
+                return Q(pk__in=[])
             return Exists(selected_options.filter(option_id__in=values))
         if operator in ("not_exact", "not_in", "not_contains_any"):
-            values = self._ensure_list_value(value)
+            values = self._ensure_uuid_list_value(value)
+            if values is None:
+                return Q(pk__in=[])
             return ~Exists(selected_options.filter(option_id__in=values))
         if operator == "is_empty":
             return ~Exists(selected_options)
@@ -437,10 +450,14 @@ class ComplexFilterBackend(filters.BaseFilterBackend):
             deleted_at__isnull=True,
         )
         if operator in ("exact", "in", "contains_any"):
-            values = self._ensure_list_value(value)
+            values = self._ensure_uuid_list_value(value)
+            if values is None:
+                return Q(pk__in=[])
             return Exists(selected_users.filter(user_id__in=values))
         if operator in ("not_exact", "not_in", "not_contains_any"):
-            values = self._ensure_list_value(value)
+            values = self._ensure_uuid_list_value(value)
+            if values is None:
+                return Q(pk__in=[])
             return ~Exists(selected_users.filter(user_id__in=values))
         if operator == "is_empty":
             return ~Exists(selected_users)

@@ -1,5 +1,6 @@
 import json
 from datetime import datetime, timezone
+from types import SimpleNamespace
 
 import pytest
 
@@ -14,6 +15,7 @@ from plane.db.models import (
     ProjectMember,
     User,
 )
+from plane.utils.filters import ComplexFilterBackend, IssueFilterSet
 
 
 pytestmark = pytest.mark.django_db
@@ -418,6 +420,33 @@ def test_single_select_in_filter_accepts_comma_separated_string(api_client, work
     assert _issue_names(response) == {"High issue"}
 
 
+def test_single_select_in_filter_with_invalid_option_value_does_not_error(
+    api_client,
+    workspace,
+    project,
+    project_member,
+):
+    api_client.force_authenticate(project_member)
+    field = ProjectIssueField.objects.create(
+        workspace=workspace,
+        project=project,
+        name="Severity",
+        field_type=ProjectIssueField.FieldType.SINGLE_SELECT,
+    )
+    high = ProjectIssueFieldOption.objects.create(workspace=workspace, project=project, field=field, value="High")
+    issue = Issue.objects.create(workspace=workspace, project=project, name="High issue")
+    value = IssueFieldValue.objects.create(workspace=workspace, project=project, issue=issue, field=field)
+    IssueFieldValueOption.objects.create(workspace=workspace, project=project, value=value, option=high)
+
+    response = api_client.get(
+        _issue_list_url(workspace, project),
+        {"filters": json.dumps({f"customproperty_{field.id}__in": ["not-a-uuid"]})},
+    )
+
+    assert response.status_code == 200
+    assert _issue_names(response) == set()
+
+
 def test_multi_member_contains_any_filter_does_not_duplicate_matching_issue(
     api_client,
     workspace,
@@ -481,6 +510,32 @@ def test_multi_member_contains_any_filter_accepts_comma_separated_string(
     assert [issue["name"] for issue in response.data["results"]] == ["Multi member issue"]
 
 
+def test_multi_member_contains_any_filter_with_invalid_user_value_does_not_error(
+    api_client,
+    workspace,
+    project,
+    project_member,
+):
+    api_client.force_authenticate(project_member)
+    field = ProjectIssueField.objects.create(
+        workspace=workspace,
+        project=project,
+        name="Reviewers",
+        field_type=ProjectIssueField.FieldType.MULTI_MEMBER,
+    )
+    issue = Issue.objects.create(workspace=workspace, project=project, name="Multi member issue")
+    value = IssueFieldValue.objects.create(workspace=workspace, project=project, issue=issue, field=field)
+    IssueFieldValueUser.objects.create(workspace=workspace, project=project, value=value, user=project_member)
+
+    response = api_client.get(
+        _issue_list_url(workspace, project),
+        {"filters": json.dumps({f"customproperty_{field.id}__contains_any": "not-a-uuid"})},
+    )
+
+    assert response.status_code == 200
+    assert _issue_names(response) == set()
+
+
 def test_date_range_filter_accepts_comma_separated_string(api_client, workspace, project, project_member):
     api_client.force_authenticate(project_member)
     field = ProjectIssueField.objects.create(
@@ -513,3 +568,33 @@ def test_date_range_filter_accepts_comma_separated_string(api_client, workspace,
 
     assert response.status_code == 200
     assert _issue_names(response) == {"Matching issue"}
+
+
+def test_workspace_scoped_filter_context_does_not_activate_project_custom_fields(
+    workspace,
+    project,
+):
+    field = ProjectIssueField.objects.create(
+        workspace=workspace,
+        project=project,
+        name="Customer note",
+        field_type=ProjectIssueField.FieldType.PLAIN_TEXT,
+    )
+    matching_issue = Issue.objects.create(workspace=workspace, project=project, name="Matching issue")
+    other_issue = Issue.objects.create(workspace=workspace, project=project, name="Other issue")
+    IssueFieldValue.objects.create(
+        workspace=workspace,
+        project=project,
+        issue=matching_issue,
+        field=field,
+        text_value="Only this has the value",
+    )
+
+    queryset = ComplexFilterBackend().filter_queryset(
+        request=None,
+        queryset=Issue.objects.filter(workspace=workspace),
+        view=SimpleNamespace(kwargs={"slug": workspace.slug}, filterset_class=IssueFilterSet),
+        filter_data={f"customproperty_{field.id}__contains": "Only this"},
+    )
+
+    assert {issue.name for issue in queryset} == {"Matching issue", "Other issue"}
