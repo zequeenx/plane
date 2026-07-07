@@ -7,6 +7,8 @@
 import { useEffect } from "react";
 import { observer } from "mobx-react";
 // plane imports
+import { useTranslation } from "@plane/i18n";
+import { TOAST_TYPE, setToast } from "@plane/propel/toast";
 import type { TIssueFieldValue } from "@plane/types";
 // components
 import { ProjectFieldValueEditors } from "@/components/project-fields/value-editors/root";
@@ -27,6 +29,7 @@ export const WorkItemAdditionalSidebarProperties = observer(function WorkItemAdd
   props: TWorkItemAdditionalSidebarProperties
 ) {
   const { isEditable, projectId, workItemId, workspaceSlug } = props;
+  const { t } = useTranslation();
   // store hooks
   const {
     issue: { getIssueById },
@@ -39,16 +42,25 @@ export const WorkItemAdditionalSidebarProperties = observer(function WorkItemAdd
 
   useEffect(() => {
     if (!workspaceSlug || !projectId) return;
+    if (fields || fieldsLoader[projectId]) return;
 
     getFields(workspaceSlug, projectId);
-  }, [getFields, projectId, workspaceSlug]);
+  }, [fields, fieldsLoader, getFields, projectId, workspaceSlug]);
 
   const handleChange = async (fieldId: string, value: TIssueFieldValue) => {
-    await updateIssueValues(workspaceSlug, projectId, workItemId, {
-      field_values: {
-        [fieldId]: value,
-      },
-    });
+    try {
+      await updateIssueValues(workspaceSlug, projectId, workItemId, {
+        field_values: {
+          [fieldId]: Array.isArray(value) && value.length === 0 ? null : value,
+        },
+      });
+    } catch {
+      setToast({
+        type: TOAST_TYPE.ERROR,
+        title: t("common.error"),
+        message: t("project_settings.fields.toasts.updated.error.message"),
+      });
+    }
   };
 
   if (!issue || isLoading || !fields || fields.length === 0) return null;
@@ -58,6 +70,7 @@ export const WorkItemAdditionalSidebarProperties = observer(function WorkItemAdd
       fields={fields}
       values={issue.field_values}
       disabled={!isEditable}
+      commitPlainTextOnBlur
       onChange={handleChange}
       projectId={projectId}
       workspaceSlug={workspaceSlug}

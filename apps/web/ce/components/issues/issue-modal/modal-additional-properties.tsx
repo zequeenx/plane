@@ -8,6 +8,8 @@ import { useEffect } from "react";
 import { observer } from "mobx-react";
 import { useFormContext } from "react-hook-form";
 // plane imports
+import { useTranslation } from "@plane/i18n";
+import { TOAST_TYPE, setToast } from "@plane/propel/toast";
 import type { TIssue, TIssueFieldValue, TIssueFieldValues } from "@plane/types";
 // components
 import { ProjectFieldValueEditors } from "@/components/project-fields/value-editors/root";
@@ -31,6 +33,12 @@ const getSparseFieldValues = (values: TIssueFieldValues, fieldId: string, value:
   return nextFieldValues;
 };
 
+const getPersistedFieldValue = (value: TIssueFieldValue) => {
+  if (Array.isArray(value) && value.length === 0) return null;
+
+  return value;
+};
+
 export type TWorkItemModalAdditionalPropertiesProps = {
   isDraft?: boolean;
   onFormChange?: () => void;
@@ -43,6 +51,7 @@ export const WorkItemModalAdditionalProperties = observer(function WorkItemModal
   props: TWorkItemModalAdditionalPropertiesProps
 ) {
   const { isDraft = false, onFormChange, projectId, workItemId, workspaceSlug } = props;
+  const { t } = useTranslation();
   // form info
   const { setValue, watch } = useFormContext<TIssue>();
   // store hooks
@@ -54,12 +63,14 @@ export const WorkItemModalAdditionalProperties = observer(function WorkItemModal
 
   useEffect(() => {
     if (!workspaceSlug || !projectId) return;
+    if (fields || fieldsLoader[projectId]) return;
 
     getFields(workspaceSlug, projectId);
-  }, [getFields, projectId, workspaceSlug]);
+  }, [fields, fieldsLoader, getFields, projectId, workspaceSlug]);
 
   const handleChange = async (fieldId: string, value: TIssueFieldValue) => {
     const shouldPersistImmediately = !!workItemId && !isDraft;
+    const previousFieldValues = fieldValues;
     const nextFieldValues = shouldPersistImmediately
       ? { ...fieldValues, [fieldId]: value }
       : getSparseFieldValues(fieldValues, fieldId, value);
@@ -69,11 +80,20 @@ export const WorkItemModalAdditionalProperties = observer(function WorkItemModal
 
     if (!shouldPersistImmediately || !projectId) return;
 
-    await updateIssueValues(workspaceSlug, projectId, workItemId, {
-      field_values: {
-        [fieldId]: value,
-      },
-    });
+    try {
+      await updateIssueValues(workspaceSlug, projectId, workItemId, {
+        field_values: {
+          [fieldId]: getPersistedFieldValue(value),
+        },
+      });
+    } catch {
+      setValue("field_values", previousFieldValues, { shouldDirty: false, shouldValidate: true });
+      setToast({
+        type: TOAST_TYPE.ERROR,
+        title: t("common.error"),
+        message: t("project_settings.fields.toasts.updated.error.message"),
+      });
+    }
   };
 
   if (!projectId || isLoading || !fields || fields.length === 0) return null;
@@ -84,6 +104,7 @@ export const WorkItemModalAdditionalProperties = observer(function WorkItemModal
         fields={fields}
         values={fieldValues}
         disabled={false}
+        commitPlainTextOnBlur={!!workItemId && !isDraft}
         onChange={handleChange}
         projectId={projectId}
         workspaceSlug={workspaceSlug}

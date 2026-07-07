@@ -50,7 +50,7 @@ const FieldEditor = observer(function FieldEditor(props: TProjectFieldEditorProp
 export const ProjectFieldValueEditors = observer(function ProjectFieldValueEditors(
   props: TProjectFieldValueEditorsProps
 ) {
-  const { disabled = false, fields, onChange, projectId, values, workspaceSlug } = props;
+  const { commitPlainTextOnBlur = false, disabled = false, fields, onChange, projectId, values, workspaceSlug } = props;
   const enabledFields = fields.filter((field) => !field.is_disabled);
 
   if (enabledFields.length === 0) return null;
@@ -63,6 +63,7 @@ export const ProjectFieldValueEditors = observer(function ProjectFieldValueEdito
         return (
           <SidebarPropertyListItem key={field.id} icon={Icon} label={field.name}>
             <FieldEditor
+              commitPlainTextOnBlur={commitPlainTextOnBlur}
               disabled={disabled}
               field={field}
               onChange={onChange}

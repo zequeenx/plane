@@ -17,6 +17,7 @@ import { Button } from "@plane/propel/button";
 import { TOAST_TYPE, setToast } from "@plane/propel/toast";
 import { Tooltip } from "@plane/propel/tooltip";
 import { EProjectIssueFieldType } from "@plane/types";
+import { AlertModalCore } from "@plane/ui";
 import { cn } from "@plane/utils";
 // hooks
 import { useProjectIssueFields } from "@/hooks/store/use-project-issue-fields";
@@ -37,6 +38,7 @@ export const ProjectFieldTextSelectEditor = observer(function ProjectFieldTextSe
   const [isOpen, setIsOpen] = useState(false);
   const [query, setQuery] = useState("");
   const [isUpdating, setIsUpdating] = useState(false);
+  const [deleteOptionId, setDeleteOptionId] = useState<string | null>(null);
   const [referenceElement, setReferenceElement] = useState<HTMLButtonElement | null>(null);
   const [popperElement, setPopperElement] = useState<HTMLDivElement | null>(null);
   // popper-js init
@@ -58,6 +60,7 @@ export const ProjectFieldTextSelectEditor = observer(function ProjectFieldTextSe
   }, [isMultiple, value]);
 
   const selectedOptions = field.options.filter((option) => selectedOptionIds.includes(option.id));
+  const deleteOptionValue = field.options.find((option) => option.id === deleteOptionId)?.value;
   const filteredOptions = field.options.filter((option) => option.value.toLowerCase().includes(query.toLowerCase()));
   const canCreateOption =
     query.trim().length > 0 &&
@@ -121,17 +124,24 @@ export const ProjectFieldTextSelectEditor = observer(function ProjectFieldTextSe
     }
   };
 
-  const handleDeleteOption = async (event: React.MouseEvent<HTMLButtonElement>, optionId: string) => {
+  const handleDeleteOptionClick = (event: React.MouseEvent<HTMLButtonElement>, optionId: string) => {
     event.stopPropagation();
     event.preventDefault();
 
+    setDeleteOptionId(optionId);
+  };
+
+  const handleDeleteOption = async () => {
+    if (!deleteOptionId) return;
+
     try {
       setIsUpdating(true);
-      await deleteOption(workspaceSlug, projectId, field.id, optionId);
-      if (selectedOptionIds.includes(optionId)) {
-        const nextValue = selectedOptionIds.filter((currentOptionId) => currentOptionId !== optionId);
+      await deleteOption(workspaceSlug, projectId, field.id, deleteOptionId);
+      if (selectedOptionIds.includes(deleteOptionId)) {
+        const nextValue = selectedOptionIds.filter((currentOptionId) => currentOptionId !== deleteOptionId);
         onChange(field.id, isMultiple ? nextValue : null);
       }
+      setDeleteOptionId(null);
     } catch {
       setToast({
         type: TOAST_TYPE.ERROR,
@@ -153,120 +163,149 @@ export const ProjectFieldTextSelectEditor = observer(function ProjectFieldTextSe
         : (selectedOptions[0]?.value ?? field.name);
 
   return (
-    <Combobox
-      as="div"
-      ref={dropdownRef}
-      role="presentation"
-      value={isMultiple ? selectedOptionIds : (selectedOptionIds[0] ?? null)}
-      onChange={handleSelect}
-      disabled={disabled || isUpdating}
-      className="relative h-7.5 w-full grow text-left"
-      onKeyDown={handleKeyDown}
-    >
-      <Combobox.Button as={Fragment}>
-        <button
-          ref={setReferenceElement}
-          type="button"
-          className={cn(
-            "group flex h-7.5 w-full items-center justify-between gap-2 rounded-sm px-2 text-body-xs-regular outline-none",
-            disabled || isUpdating
-              ? "cursor-not-allowed text-secondary"
-              : "cursor-pointer text-primary hover:bg-layer-transparent-hover",
-            selectedOptions.length === 0 && "text-placeholder"
-          )}
-          onClick={toggleDropdown}
-          disabled={disabled || isUpdating}
-        >
-          <span className="min-w-0 grow truncate text-left">{label}</span>
-          <span className="flex shrink-0 items-center gap-1">
-            {!disabled && selectedOptions.length > 0 && (
-              <X
-                className="hidden h-3 w-3 text-secondary group-hover:inline"
-                onClick={(event) => {
-                  event.stopPropagation();
-                  onChange(field.id, isMultiple ? [] : null);
-                }}
-              />
+    <>
+      <AlertModalCore
+        handleClose={() => setDeleteOptionId(null)}
+        handleSubmit={handleDeleteOption}
+        isSubmitting={isUpdating}
+        isOpen={!!deleteOptionId}
+        primaryButtonText={{
+          default: t("common.delete"),
+          loading: t("common.deleting"),
+        }}
+        secondaryButtonText={t("common.cancel")}
+        title={t("project_settings.fields.options.delete_modal.title")}
+        content={
+          <>
+            {t("project_settings.fields.options.delete_modal.description_prefix")}{" "}
+            <span className="font-medium text-primary">{deleteOptionValue}</span>?{" "}
+            {t("project_settings.fields.options.delete_modal.description_suffix")}
+          </>
+        }
+      />
+      <Combobox
+        as="div"
+        ref={dropdownRef}
+        role="presentation"
+        value={isMultiple ? selectedOptionIds : (selectedOptionIds[0] ?? null)}
+        onChange={handleSelect}
+        disabled={disabled || isUpdating}
+        className="group relative h-7.5 w-full grow text-left"
+        onKeyDown={handleKeyDown}
+      >
+        <Combobox.Button as={Fragment}>
+          <button
+            ref={setReferenceElement}
+            type="button"
+            className={cn(
+              "group flex h-7.5 w-full items-center justify-between gap-2 rounded-sm px-2 text-body-xs-regular outline-none",
+              disabled || isUpdating
+                ? "cursor-not-allowed text-secondary"
+                : "cursor-pointer text-primary hover:bg-layer-transparent-hover",
+              selectedOptions.length === 0 && "text-placeholder"
             )}
-            {!disabled && <ChevronDown className="hidden h-3.5 w-3.5 text-secondary group-hover:inline" />}
-          </span>
-        </button>
-      </Combobox.Button>
-      {isOpen &&
-        createPortal(
-          <Combobox.Options data-prevent-outside-click static>
-            <div
-              ref={setPopperElement}
-              style={styles.popper}
-              {...attributes.popper}
-              className="z-30 my-1 w-56 rounded-sm border-[0.5px] border-strong bg-surface-1 px-2 py-2.5 text-11 shadow-raised-200 focus:outline-none"
-            >
-              <Combobox.Input
-                className="w-full rounded-sm border border-subtle bg-surface-2 px-2 py-1 text-11 text-secondary placeholder:text-placeholder focus:outline-none"
-                value={query}
-                onChange={(event) => setQuery(event.target.value)}
-                placeholder={t("search")}
-              />
-              <div className="vertical-scrollbar mt-2 max-h-48 space-y-1 overflow-y-auto">
-                {filteredOptions.length > 0 ? (
-                  filteredOptions.map((option) => {
-                    const isSelected = selectedOptionIds.includes(option.id);
+            onClick={toggleDropdown}
+            disabled={disabled || isUpdating}
+          >
+            <span className="min-w-0 grow truncate text-left">{label}</span>
+            <span className="flex shrink-0 items-center gap-1">
+              {!disabled && <ChevronDown className="hidden h-3.5 w-3.5 text-secondary group-hover:inline" />}
+            </span>
+          </button>
+        </Combobox.Button>
+        {!disabled && selectedOptions.length > 0 && (
+          <button
+            type="button"
+            aria-label={t("common.clear")}
+            className="pointer-events-none absolute top-1/2 right-5 inline-flex -translate-y-1/2 rounded-sm text-secondary opacity-0 group-hover:pointer-events-auto group-hover:opacity-100 hover:text-primary focus:pointer-events-auto focus:opacity-100"
+            title={t("common.clear")}
+            onClick={(event) => {
+              event.stopPropagation();
+              onChange(field.id, isMultiple ? [] : null);
+            }}
+            disabled={isUpdating}
+          >
+            <X className="h-3 w-3" aria-hidden="true" />
+          </button>
+        )}
+        {isOpen &&
+          createPortal(
+            <Combobox.Options data-prevent-outside-click static>
+              <div
+                ref={setPopperElement}
+                style={styles.popper}
+                {...attributes.popper}
+                className="z-30 my-1 w-56 rounded-sm border-[0.5px] border-strong bg-surface-1 px-2 py-2.5 text-11 shadow-raised-200 focus:outline-none"
+              >
+                <Combobox.Input
+                  className="w-full rounded-sm border border-subtle bg-surface-2 px-2 py-1 text-11 text-secondary placeholder:text-placeholder focus:outline-none"
+                  value={query}
+                  onChange={(event) => setQuery(event.target.value)}
+                  placeholder={t("search")}
+                />
+                <div className="vertical-scrollbar mt-2 max-h-48 space-y-1 overflow-y-auto">
+                  {filteredOptions.length > 0 ? (
+                    filteredOptions.map((option) => {
+                      const isSelected = selectedOptionIds.includes(option.id);
 
-                    return (
-                      <Combobox.Option
-                        key={option.id}
-                        value={option.id}
-                        className={({ active }) =>
-                          cn(
-                            "flex w-full cursor-pointer items-center justify-between gap-2 truncate rounded-sm px-1 py-1.5 text-secondary select-none",
-                            active && "bg-layer-transparent-hover",
-                            isSelected && "text-primary"
-                          )
-                        }
-                      >
-                        <span className="min-w-0 flex-grow truncate">{option.value}</span>
-                        <span className="flex shrink-0 items-center gap-1">
-                          {isSelected && <Check className="h-3.5 w-3.5" />}
-                          {!disabled && (
-                            <Tooltip tooltipContent={t("common.delete")}>
-                              <button
-                                type="button"
-                                className="rounded-sm text-tertiary hover:text-danger-primary"
-                                disabled={isUpdating}
-                                onClick={(event) => handleDeleteOption(event, option.id)}
-                                aria-label={`${t("common.delete")} ${option.value}`}
-                              >
-                                <Trash2 className="h-3 w-3" />
-                              </button>
-                            </Tooltip>
-                          )}
-                        </span>
-                      </Combobox.Option>
-                    );
-                  })
-                ) : (
-                  <p className="px-1.5 py-1 text-placeholder italic">{t("no_matching_results")}</p>
+                      return (
+                        <Combobox.Option
+                          key={option.id}
+                          value={option.id}
+                          className={({ active }) =>
+                            cn(
+                              "flex w-full cursor-pointer items-center justify-between gap-2 truncate rounded-sm px-1 py-1.5 text-secondary select-none",
+                              active && "bg-layer-transparent-hover",
+                              isSelected && "text-primary"
+                            )
+                          }
+                        >
+                          <span className="min-w-0 flex-grow truncate">{option.value}</span>
+                          <span className="flex shrink-0 items-center gap-1">
+                            {isSelected && <Check className="h-3.5 w-3.5" />}
+                            {!disabled && (
+                              <Tooltip tooltipContent={t("common.delete")}>
+                                <button
+                                  type="button"
+                                  className="rounded-sm text-tertiary hover:text-danger-primary"
+                                  disabled={isUpdating}
+                                  onClick={(event) => handleDeleteOptionClick(event, option.id)}
+                                  aria-label={t("project_settings.fields.options.delete_option_aria_label", {
+                                    option: option.value,
+                                  })}
+                                >
+                                  <Trash2 className="h-3 w-3" />
+                                </button>
+                              </Tooltip>
+                            )}
+                          </span>
+                        </Combobox.Option>
+                      );
+                    })
+                  ) : (
+                    <p className="px-1.5 py-1 text-placeholder italic">{t("no_matching_results")}</p>
+                  )}
+                </div>
+                {canCreateOption && !disabled && (
+                  <div className="mt-2 border-t border-subtle pt-2">
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      className="w-full justify-start"
+                      prependIcon={<Plus className="h-3.5 w-3.5" />}
+                      disabled={isUpdating}
+                      onClick={handleCreateOption}
+                    >
+                      {query.trim()}
+                    </Button>
+                  </div>
                 )}
               </div>
-              {canCreateOption && !disabled && (
-                <div className="mt-2 border-t border-subtle pt-2">
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    className="w-full justify-start"
-                    prependIcon={<Plus className="h-3.5 w-3.5" />}
-                    disabled={isUpdating}
-                    onClick={handleCreateOption}
-                  >
-                    {query.trim()}
-                  </Button>
-                </div>
-              )}
-            </div>
-          </Combobox.Options>,
-          document.body
-        )}
-    </Combobox>
+            </Combobox.Options>,
+            document.body
+          )}
+      </Combobox>
+    </>
   );
 });
