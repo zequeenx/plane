@@ -197,6 +197,24 @@ def test_admin_can_create_and_list_project_issue_field(api_client, workspace, pr
     assert [item["id"] for item in list_response.data] == [response.data["id"]]
 
 
+def test_admin_cannot_create_disabled_project_issue_field(api_client, workspace, project, project_admin):
+    api_client.force_authenticate(project_admin)
+
+    response = api_client.post(
+        f"/api/workspaces/{workspace.slug}/projects/{project.id}/issue-fields/",
+        {
+            "name": "Severity",
+            "field_type": ProjectIssueField.FieldType.SINGLE_SELECT,
+            "is_disabled": True,
+        },
+        format="json",
+    )
+
+    assert response.status_code == status.HTTP_201_CREATED
+    assert response.data["is_disabled"] is False
+    assert response.data["disabled_at"] is None
+
+
 def test_member_cannot_create_project_issue_field(api_client, workspace, project, project_member):
     api_client.force_authenticate(project_member)
 
@@ -209,13 +227,31 @@ def test_member_cannot_create_project_issue_field(api_client, workspace, project
     assert response.status_code == status.HTTP_403_FORBIDDEN
 
 
-def test_admin_can_disable_restore_and_hard_delete_field(api_client, workspace, project, project_admin):
+def test_admin_can_disable_restore_and_hard_delete_field(api_client, workspace, project, project_admin, issue):
     api_client.force_authenticate(project_admin)
     field = ProjectIssueField.objects.create(
         workspace=workspace,
         project=project,
-        name="Release date",
-        field_type=ProjectIssueField.FieldType.DATE,
+        name="Area",
+        field_type=ProjectIssueField.FieldType.MULTI_SELECT,
+    )
+    option = ProjectIssueFieldOption.objects.create(
+        workspace=workspace,
+        project=project,
+        field=field,
+        value="API",
+    )
+    value = IssueFieldValue.objects.create(
+        workspace=workspace,
+        project=project,
+        issue=issue,
+        field=field,
+    )
+    selected_option = IssueFieldValueOption.objects.create(
+        workspace=workspace,
+        project=project,
+        value=value,
+        option=option,
     )
 
     disabled = api_client.patch(
@@ -256,6 +292,47 @@ def test_admin_can_disable_restore_and_hard_delete_field(api_client, workspace, 
 
     assert deleted.status_code == status.HTTP_204_NO_CONTENT
     assert not ProjectIssueField.objects.filter(id=field.id).exists()
+    assert not ProjectIssueField.all_objects.filter(id=field.id).exists()
+    assert not ProjectIssueFieldOption.all_objects.filter(id=option.id).exists()
+    assert not IssueFieldValue.all_objects.filter(id=value.id).exists()
+    assert not IssueFieldValueOption.all_objects.filter(id=selected_option.id).exists()
+
+
+def test_work_item_editor_create_text_option_trims_value(api_client, workspace, project, project_member):
+    api_client.force_authenticate(project_member)
+    field = ProjectIssueField.objects.create(
+        workspace=workspace,
+        project=project,
+        name="Area",
+        field_type=ProjectIssueField.FieldType.MULTI_SELECT,
+    )
+
+    created = api_client.post(
+        f"/api/workspaces/{workspace.slug}/projects/{project.id}/issue-fields/{field.id}/options/",
+        {"value": " API "},
+        format="json",
+    )
+
+    assert created.status_code == status.HTTP_201_CREATED
+    assert created.data["value"] == "API"
+
+
+def test_work_item_editor_cannot_create_blank_text_option(api_client, workspace, project, project_member):
+    api_client.force_authenticate(project_member)
+    field = ProjectIssueField.objects.create(
+        workspace=workspace,
+        project=project,
+        name="Area",
+        field_type=ProjectIssueField.FieldType.MULTI_SELECT,
+    )
+
+    created = api_client.post(
+        f"/api/workspaces/{workspace.slug}/projects/{project.id}/issue-fields/{field.id}/options/",
+        {"value": "   "},
+        format="json",
+    )
+
+    assert created.status_code == status.HTTP_400_BAD_REQUEST
 
 
 def test_work_item_editor_can_create_and_delete_text_option(api_client, workspace, project, project_member, issue):

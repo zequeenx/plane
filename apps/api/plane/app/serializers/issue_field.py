@@ -13,6 +13,11 @@ class ProjectIssueFieldOptionSerializer(BaseSerializer):
         fields = ["id", "value", "sort_order", "field", "project", "workspace", "created_at", "updated_at"]
         read_only_fields = ["id", "field", "project", "workspace", "created_at", "updated_at"]
 
+    def validate_value(self, value):
+        if not value.strip():
+            raise serializers.ValidationError("Option value is required")
+        return value.strip()
+
 
 class ProjectIssueFieldSerializer(BaseSerializer):
     id = serializers.UUIDField(read_only=True)
@@ -45,6 +50,11 @@ class ProjectIssueFieldSerializer(BaseSerializer):
         if not value.strip():
             raise serializers.ValidationError("Field name is required")
         return value.strip()
+
+    def create(self, validated_data):
+        validated_data["is_disabled"] = False
+        validated_data["disabled_at"] = None
+        return super().create(validated_data)
 
     def update(self, instance, validated_data):
         if "is_disabled" in validated_data:
