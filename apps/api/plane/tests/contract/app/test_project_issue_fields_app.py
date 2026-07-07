@@ -210,6 +210,25 @@ def test_admin_can_create_and_list_project_issue_field(api_client, workspace, pr
     assert [item["id"] for item in list_response.data] == [response.data["id"]]
 
 
+def test_admin_cannot_create_duplicate_project_issue_field_name(api_client, workspace, project, project_admin):
+    api_client.force_authenticate(project_admin)
+    ProjectIssueField.objects.create(
+        workspace=workspace,
+        project=project,
+        name="Severity",
+        field_type=ProjectIssueField.FieldType.SINGLE_SELECT,
+    )
+
+    response = api_client.post(
+        f"/api/workspaces/{workspace.slug}/projects/{project.id}/issue-fields/",
+        {"name": "Severity", "field_type": ProjectIssueField.FieldType.SINGLE_SELECT},
+        format="json",
+    )
+
+    assert response.status_code == status.HTTP_400_BAD_REQUEST
+    assert response.data["name"] == ["Field name already exists"]
+
+
 def test_admin_cannot_create_disabled_project_issue_field(api_client, workspace, project, project_admin):
     api_client.force_authenticate(project_admin)
 

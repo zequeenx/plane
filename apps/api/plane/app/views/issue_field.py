@@ -36,7 +36,7 @@ class ProjectIssueFieldViewSet(BaseViewSet):
 
     @allow_permission([ROLE.ADMIN])
     def create(self, request, slug, project_id):
-        serializer = self.serializer_class(data=request.data)
+        serializer = self.serializer_class(data=request.data, context={"project_id": project_id})
         serializer.is_valid(raise_exception=True)
         serializer.save(project_id=project_id)
         return Response(serializer.data, status=status.HTTP_201_CREATED)

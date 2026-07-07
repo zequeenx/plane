@@ -47,9 +47,17 @@ class ProjectIssueFieldSerializer(BaseSerializer):
         return value
 
     def validate_name(self, value):
-        if not value.strip():
+        name = value.strip()
+        if not name:
             raise serializers.ValidationError("Field name is required")
-        return value.strip()
+        project_id = self.instance.project_id if self.instance else self.context.get("project_id")
+        if project_id:
+            fields = ProjectIssueField.objects.filter(project_id=project_id, name=name)
+            if self.instance:
+                fields = fields.exclude(pk=self.instance.pk)
+            if fields.exists():
+                raise serializers.ValidationError("Field name already exists")
+        return name
 
     def create(self, validated_data):
         validated_data["is_disabled"] = False

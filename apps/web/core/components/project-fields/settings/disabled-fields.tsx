@@ -46,7 +46,7 @@ export const DisabledProjectFields = observer(function DisabledProjectFields(pro
     } catch {
       setToast({
         type: TOAST_TYPE.ERROR,
-        title: t("common.error"),
+        title: t("common.error.label"),
         message: t("project_settings.fields.toasts.restored.error.message"),
       });
     } finally {
@@ -69,7 +69,7 @@ export const DisabledProjectFields = observer(function DisabledProjectFields(pro
     } catch {
       setToast({
         type: TOAST_TYPE.ERROR,
-        title: t("common.error"),
+        title: t("common.error.label"),
         message: t("project_settings.fields.toasts.deleted.error.message"),
       });
     } finally {

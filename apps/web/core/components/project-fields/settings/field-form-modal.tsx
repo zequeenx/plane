@@ -52,6 +52,25 @@ const DEFAULT_FORM_VALUES: TFieldForm = {
   sort_order: "",
 };
 
+const getErrorMessage = (error: unknown, fallback: string): string => {
+  if (typeof error === "string") return error;
+  if (!error || typeof error !== "object") return fallback;
+
+  const errorRecord = error as Record<string, unknown>;
+  const directMessage = errorRecord.error ?? errorRecord.detail;
+  if (typeof directMessage === "string") return directMessage;
+
+  for (const value of Object.values(errorRecord)) {
+    if (typeof value === "string") return value;
+    if (Array.isArray(value)) {
+      const message = value.find((item) => typeof item === "string");
+      if (message) return message;
+    }
+  }
+
+  return fallback;
+};
+
 export const ProjectFieldFormModal = observer(function ProjectFieldFormModal(props: Props) {
   const { workspaceSlug, projectId, field, isOpen, handleClose } = props;
   // states
@@ -136,8 +155,8 @@ export const ProjectFieldFormModal = observer(function ProjectFieldFormModal(pro
         : t("project_settings.fields.toasts.created.error.message");
       setToast({
         type: TOAST_TYPE.ERROR,
-        title: t("common.error"),
-        message: typeof error === "object" && error && "error" in error ? String(error.error) : fallback,
+        title: t("common.error.label"),
+        message: getErrorMessage(error, fallback),
       });
     } finally {
       setIsSubmitting(false);

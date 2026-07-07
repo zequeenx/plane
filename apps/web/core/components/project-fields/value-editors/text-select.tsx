@@ -116,7 +116,7 @@ export const ProjectFieldTextSelectEditor = observer(function ProjectFieldTextSe
     } catch {
       setToast({
         type: TOAST_TYPE.ERROR,
-        title: t("common.error"),
+        title: t("common.error.label"),
         message: t("project_settings.fields.toasts.option_created.error.message"),
       });
     } finally {
@@ -145,7 +145,7 @@ export const ProjectFieldTextSelectEditor = observer(function ProjectFieldTextSe
     } catch {
       setToast({
         type: TOAST_TYPE.ERROR,
-        title: t("common.error"),
+        title: t("common.error.label"),
         message: t("project_settings.fields.toasts.option_deleted.error.message"),
       });
     } finally {
