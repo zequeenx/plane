@@ -55,6 +55,126 @@
         "error": "更新标签时出错"
       }
     },
+    "fields": {
+      "heading": "字段",
+      "description": "管理此项目工作项可用的自定义字段。",
+      "actions": {
+        "add_field": "添加字段",
+        "create_field": "创建字段",
+        "edit_field": "编辑字段",
+        "disable_field": "禁用字段",
+        "restore_field": "恢复字段",
+        "delete_field": "删除字段"
+      },
+      "table": {
+        "field": "字段",
+        "type": "类型",
+        "actions": "操作"
+      },
+      "empty_state": {
+        "title": "还没有字段",
+        "description": "创建字段以记录项目特定的工作项详情。"
+      },
+      "modal": {
+        "add_title": "添加字段",
+        "edit_title": "编辑字段",
+        "name_placeholder": "字段名称",
+        "description_placeholder": "可选描述",
+        "type": "类型",
+        "type_aria_label": "选择字段类型",
+        "sort_order": "排序顺序",
+        "sort_order_placeholder": "自动"
+      },
+      "validation": {
+        "sort_order": "排序顺序必须是大于或等于 0 的整数。"
+      },
+      "field_types": {
+        "single_select": "单选",
+        "multi_select": "多选",
+        "single_member": "单个成员",
+        "multi_member": "多个成员",
+        "date": "日期",
+        "date_range": "日期范围",
+        "plain_text": "纯文本"
+      },
+      "options": {
+        "no_options": "无选项",
+        "add_option": "添加选项",
+        "add_option_aria_label": "选项值",
+        "delete_option_aria_label": "删除 {option}",
+        "delete_modal": {
+          "title": "删除选项",
+          "description_prefix": "删除选项",
+          "description_suffix": "使用此选项的现有工作项值将被移除。"
+        }
+      },
+      "disabled": {
+        "heading": "已禁用字段",
+        "description": "恢复字段或永久删除字段。"
+      },
+      "delete_modal": {
+        "title": "删除字段",
+        "description_prefix": "永久删除",
+        "description_suffix": "此操作无法撤销。"
+      },
+      "toasts": {
+        "created": {
+          "success": {
+            "title": "Field created",
+            "message": "Field has been added to this project."
+          },
+          "error": {
+            "message": "Field could not be created. Please try again."
+          }
+        },
+        "updated": {
+          "success": {
+            "title": "Field updated",
+            "message": "Field details have been saved."
+          },
+          "error": {
+            "message": "Field could not be updated. Please try again."
+          }
+        },
+        "disabled": {
+          "success": {
+            "title": "Field disabled",
+            "message": "Field has been moved to disabled fields."
+          },
+          "error": {
+            "message": "Field could not be disabled. Please try again."
+          }
+        },
+        "restored": {
+          "success": {
+            "title": "Field restored",
+            "message": "Field is available on work items again."
+          },
+          "error": {
+            "message": "Field could not be restored. Please try again."
+          }
+        },
+        "deleted": {
+          "success": {
+            "title": "Field deleted",
+            "message": "Field has been permanently deleted."
+          },
+          "error": {
+            "message": "Field could not be deleted. Please try again."
+          }
+        },
+        "option_created": {
+          "error": {
+            "message": "Option could not be added. Please try again."
+          }
+        },
+        "option_deleted": {
+          "error": {
+            "message": "Option could not be deleted. Please try again."
+          }
+        }
+      }
+    },
     "estimates": {
       "heading": "估算",
       "description": "设置估算系统以跟踪和传达每个工作项所需的工作量。",

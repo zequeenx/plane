@@ -55,6 +55,126 @@
         "error": "Error while updating the label"
       }
     },
+    "fields": {
+      "heading": "Fields",
+      "description": "Manage the custom fields available on this project's work items.",
+      "actions": {
+        "add_field": "Add field",
+        "create_field": "Create field",
+        "edit_field": "Edit field",
+        "disable_field": "Disable field",
+        "restore_field": "Restore field",
+        "delete_field": "Delete field"
+      },
+      "table": {
+        "field": "Field",
+        "type": "Type",
+        "actions": "Actions"
+      },
+      "empty_state": {
+        "title": "No fields yet",
+        "description": "Create a field to capture project-specific work item details."
+      },
+      "modal": {
+        "add_title": "Add field",
+        "edit_title": "Edit field",
+        "name_placeholder": "Field name",
+        "description_placeholder": "Optional description",
+        "type": "Type",
+        "type_aria_label": "Select field type",
+        "sort_order": "Sort order",
+        "sort_order_placeholder": "Auto"
+      },
+      "validation": {
+        "sort_order": "Sort order must be a whole number greater than or equal to 0."
+      },
+      "field_types": {
+        "single_select": "Single select",
+        "multi_select": "Multi select",
+        "single_member": "Single member",
+        "multi_member": "Multi member",
+        "date": "Date",
+        "date_range": "Date range",
+        "plain_text": "Plain text"
+      },
+      "options": {
+        "no_options": "No options",
+        "add_option": "Add option",
+        "add_option_aria_label": "Option value",
+        "delete_option_aria_label": "Delete {option}",
+        "delete_modal": {
+          "title": "Delete option",
+          "description_prefix": "Delete option",
+          "description_suffix": "Existing work item values using this option will be removed."
+        }
+      },
+      "disabled": {
+        "heading": "Disabled fields",
+        "description": "Restore fields or delete them permanently."
+      },
+      "delete_modal": {
+        "title": "Delete field",
+        "description_prefix": "Permanently delete",
+        "description_suffix": "This cannot be undone."
+      },
+      "toasts": {
+        "created": {
+          "success": {
+            "title": "Field created",
+            "message": "Field has been added to this project."
+          },
+          "error": {
+            "message": "Field could not be created. Please try again."
+          }
+        },
+        "updated": {
+          "success": {
+            "title": "Field updated",
+            "message": "Field details have been saved."
+          },
+          "error": {
+            "message": "Field could not be updated. Please try again."
+          }
+        },
+        "disabled": {
+          "success": {
+            "title": "Field disabled",
+            "message": "Field has been moved to disabled fields."
+          },
+          "error": {
+            "message": "Field could not be disabled. Please try again."
+          }
+        },
+        "restored": {
+          "success": {
+            "title": "Field restored",
+            "message": "Field is available on work items again."
+          },
+          "error": {
+            "message": "Field could not be restored. Please try again."
+          }
+        },
+        "deleted": {
+          "success": {
+            "title": "Field deleted",
+            "message": "Field has been permanently deleted."
+          },
+          "error": {
+            "message": "Field could not be deleted. Please try again."
+          }
+        },
+        "option_created": {
+          "error": {
+            "message": "Option could not be added. Please try again."
+          }
+        },
+        "option_deleted": {
+          "error": {
+            "message": "Option could not be deleted. Please try again."
+          }
+        }
+      }
+    },
     "estimates": {
       "heading": "Estimates",
       "description": "Set up estimation systems to track and communicate the effort required for each work item.",

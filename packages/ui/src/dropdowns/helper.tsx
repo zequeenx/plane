@@ -62,6 +62,7 @@ export interface ICustomMenuDropdownProps extends IDropdownProps {
 }
 
 export interface ICustomSelectProps extends IDropdownProps {
+  ariaLabel?: string;
   children: React.ReactNode;
   value: any;
   onChange: any;

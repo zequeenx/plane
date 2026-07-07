@@ -7,6 +7,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { observer } from "mobx-react";
 // plane imports
+import { useTranslation } from "@plane/i18n";
 import { Button } from "@plane/propel/button";
 import { TOAST_TYPE, setToast } from "@plane/propel/toast";
 import {
@@ -34,14 +35,14 @@ type TFieldForm = {
   sort_order: string;
 };
 
-const FIELD_TYPE_OPTIONS: { label: string; value: EProjectIssueFieldType }[] = [
-  { label: "Single select", value: EProjectIssueFieldType.SINGLE_SELECT },
-  { label: "Multi select", value: EProjectIssueFieldType.MULTI_SELECT },
-  { label: "Single member", value: EProjectIssueFieldType.SINGLE_MEMBER },
-  { label: "Multi member", value: EProjectIssueFieldType.MULTI_MEMBER },
-  { label: "Date", value: EProjectIssueFieldType.DATE },
-  { label: "Date range", value: EProjectIssueFieldType.DATE_RANGE },
-  { label: "Plain text", value: EProjectIssueFieldType.PLAIN_TEXT },
+const FIELD_TYPE_OPTIONS: { i18nKey: string; value: EProjectIssueFieldType }[] = [
+  { i18nKey: "project_settings.fields.field_types.single_select", value: EProjectIssueFieldType.SINGLE_SELECT },
+  { i18nKey: "project_settings.fields.field_types.multi_select", value: EProjectIssueFieldType.MULTI_SELECT },
+  { i18nKey: "project_settings.fields.field_types.single_member", value: EProjectIssueFieldType.SINGLE_MEMBER },
+  { i18nKey: "project_settings.fields.field_types.multi_member", value: EProjectIssueFieldType.MULTI_MEMBER },
+  { i18nKey: "project_settings.fields.field_types.date", value: EProjectIssueFieldType.DATE },
+  { i18nKey: "project_settings.fields.field_types.date_range", value: EProjectIssueFieldType.DATE_RANGE },
+  { i18nKey: "project_settings.fields.field_types.plain_text", value: EProjectIssueFieldType.PLAIN_TEXT },
 ];
 
 const DEFAULT_FORM_VALUES: TFieldForm = {
@@ -56,6 +57,8 @@ export const ProjectFieldFormModal = observer(function ProjectFieldFormModal(pro
   // states
   const [formData, setFormData] = useState<TFieldForm>(DEFAULT_FORM_VALUES);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  // translation
+  const { t } = useTranslation();
   // store hooks
   const { createField, updateField } = useProjectIssueFields();
 
@@ -63,6 +66,10 @@ export const ProjectFieldFormModal = observer(function ProjectFieldFormModal(pro
     () => FIELD_TYPE_OPTIONS.find((option) => option.value === formData.field_type) ?? FIELD_TYPE_OPTIONS[0],
     [formData.field_type]
   );
+  const sortOrderValue = formData.sort_order.trim();
+  const sortOrderNumber = sortOrderValue === "" ? undefined : Number(sortOrderValue);
+  const hasSortOrderError =
+    typeof sortOrderNumber === "number" && (!Number.isInteger(sortOrderNumber) || sortOrderNumber < 0);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -91,7 +98,9 @@ export const ProjectFieldFormModal = observer(function ProjectFieldFormModal(pro
     const name = formData.name.trim();
     if (!name) return;
 
-    const sortOrder = formData.sort_order.trim() === "" ? undefined : Number(formData.sort_order);
+    if (hasSortOrderError) return;
+
+    const sortOrder = sortOrderNumber;
     const basePayload = {
       name,
       description: formData.description.trim(),
@@ -105,8 +114,8 @@ export const ProjectFieldFormModal = observer(function ProjectFieldFormModal(pro
         await updateField(workspaceSlug, projectId, field.id, payload);
         setToast({
           type: TOAST_TYPE.SUCCESS,
-          title: "Field updated",
-          message: "Field details have been saved.",
+          title: t("project_settings.fields.toasts.updated.success.title"),
+          message: t("project_settings.fields.toasts.updated.success.message"),
         });
       } else {
         const payload: TProjectIssueFieldPayload = {
@@ -116,18 +125,18 @@ export const ProjectFieldFormModal = observer(function ProjectFieldFormModal(pro
         await createField(workspaceSlug, projectId, payload);
         setToast({
           type: TOAST_TYPE.SUCCESS,
-          title: "Field created",
-          message: "Field has been added to this project.",
+          title: t("project_settings.fields.toasts.created.success.title"),
+          message: t("project_settings.fields.toasts.created.success.message"),
         });
       }
       handleClose();
     } catch (error) {
       const fallback = field
-        ? "Field could not be updated. Please try again."
-        : "Field could not be created. Please try again.";
+        ? t("project_settings.fields.toasts.updated.error.message")
+        : t("project_settings.fields.toasts.created.error.message");
       setToast({
         type: TOAST_TYPE.ERROR,
-        title: "Error",
+        title: t("common.error"),
         message: typeof error === "object" && error && "error" in error ? String(error.error) : fallback,
       });
     } finally {
@@ -139,44 +148,47 @@ export const ProjectFieldFormModal = observer(function ProjectFieldFormModal(pro
     <ModalCore isOpen={isOpen} handleClose={handleFormClose} position={EModalPosition.TOP} width={EModalWidth.XL}>
       <form onSubmit={handleSubmit} className="relative space-y-6 py-5">
         <div className="px-5">
-          <h3 className="text-18 font-medium text-primary">{field ? "Edit field" : "Add field"}</h3>
+          <h3 className="text-18 font-medium text-primary">
+            {field ? t("project_settings.fields.modal.edit_title") : t("project_settings.fields.modal.add_title")}
+          </h3>
         </div>
         <div className="space-y-4 px-5">
           <div className="space-y-1.5">
             <label htmlFor="project-field-name" className="text-body-xs-medium text-secondary">
-              Name
+              {t("common.name")}
             </label>
             <Input
               id="project-field-name"
               value={formData.name}
               onChange={(event) => setFormData((current) => ({ ...current, name: event.target.value }))}
-              placeholder="Field name"
+              placeholder={t("project_settings.fields.modal.name_placeholder")}
               inputSize="md"
               required
             />
           </div>
           <div className="space-y-1.5">
             <label htmlFor="project-field-description" className="text-body-xs-medium text-secondary">
-              Description
+              {t("common.description")}
             </label>
             <TextArea
               id="project-field-description"
               value={formData.description}
               onChange={(event) => setFormData((current) => ({ ...current, description: event.target.value }))}
-              placeholder="Optional description"
+              placeholder={t("project_settings.fields.modal.description_placeholder")}
               textAreaSize="md"
               rows={3}
             />
           </div>
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <div className="space-y-1.5">
-              <div className="text-body-xs-medium text-secondary">Type</div>
+              <div className="text-body-xs-medium text-secondary">{t("project_settings.fields.modal.type")}</div>
               <CustomSelect
                 value={formData.field_type}
                 onChange={(value: EProjectIssueFieldType) =>
                   setFormData((current) => ({ ...current, field_type: value }))
                 }
-                label={selectedFieldType.label}
+                label={t(selectedFieldType.i18nKey)}
+                ariaLabel={t("project_settings.fields.modal.type_aria_label")}
                 input
                 disabled={!!field}
                 className="w-full"
@@ -184,32 +196,46 @@ export const ProjectFieldFormModal = observer(function ProjectFieldFormModal(pro
               >
                 {FIELD_TYPE_OPTIONS.map((option) => (
                   <CustomSelect.Option key={option.value} value={option.value}>
-                    {option.label}
+                    {t(option.i18nKey)}
                   </CustomSelect.Option>
                 ))}
               </CustomSelect>
             </div>
             <div className="space-y-1.5">
               <label htmlFor="project-field-sort-order" className="text-body-xs-medium text-secondary">
-                Sort order
+                {t("project_settings.fields.modal.sort_order")}
               </label>
               <Input
                 id="project-field-sort-order"
                 type="number"
+                min={0}
+                step={1}
                 value={formData.sort_order}
                 onChange={(event) => setFormData((current) => ({ ...current, sort_order: event.target.value }))}
-                placeholder="Auto"
+                placeholder={t("project_settings.fields.modal.sort_order_placeholder")}
                 inputSize="md"
+                hasError={hasSortOrderError}
               />
+              {hasSortOrderError && (
+                <p className="text-caption-md-regular text-danger-primary">
+                  {t("project_settings.fields.validation.sort_order")}
+                </p>
+              )}
             </div>
           </div>
         </div>
         <div className="relative flex items-center justify-end gap-3 border-t border-subtle px-5 pt-5">
           <Button variant="secondary" size="lg" onClick={handleFormClose} disabled={isSubmitting}>
-            Cancel
+            {t("common.cancel")}
           </Button>
-          <Button variant="primary" size="lg" type="submit" loading={isSubmitting} disabled={!formData.name.trim()}>
-            {field ? "Save changes" : "Create field"}
+          <Button
+            variant="primary"
+            size="lg"
+            type="submit"
+            loading={isSubmitting}
+            disabled={!formData.name.trim() || hasSortOrderError}
+          >
+            {field ? t("common.save_changes") : t("project_settings.fields.actions.create_field")}
           </Button>
         </div>
       </form>

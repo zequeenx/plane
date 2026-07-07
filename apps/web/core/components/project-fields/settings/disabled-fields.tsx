@@ -8,6 +8,7 @@ import { useState } from "react";
 import { RotateCcw, Trash2 } from "lucide-react";
 import { observer } from "mobx-react";
 // plane imports
+import { useTranslation } from "@plane/i18n";
 import { Button } from "@plane/propel/button";
 import { TOAST_TYPE, setToast } from "@plane/propel/toast";
 import { Tooltip } from "@plane/propel/tooltip";
@@ -28,6 +29,8 @@ export const DisabledProjectFields = observer(function DisabledProjectFields(pro
   // states
   const [selectedField, setSelectedField] = useState<TProjectIssueField | null>(null);
   const [isUpdating, setIsUpdating] = useState(false);
+  // translation
+  const { t } = useTranslation();
   // store hooks
   const { updateField, deleteField } = useProjectIssueFields();
 
@@ -37,14 +40,14 @@ export const DisabledProjectFields = observer(function DisabledProjectFields(pro
       await updateField(workspaceSlug, projectId, field.id, { is_disabled: false });
       setToast({
         type: TOAST_TYPE.SUCCESS,
-        title: "Field restored",
-        message: "Field is available on work items again.",
+        title: t("project_settings.fields.toasts.restored.success.title"),
+        message: t("project_settings.fields.toasts.restored.success.message"),
       });
     } catch {
       setToast({
         type: TOAST_TYPE.ERROR,
-        title: "Error",
-        message: "Field could not be restored. Please try again.",
+        title: t("common.error"),
+        message: t("project_settings.fields.toasts.restored.error.message"),
       });
     } finally {
       setIsUpdating(false);
@@ -60,14 +63,14 @@ export const DisabledProjectFields = observer(function DisabledProjectFields(pro
       setSelectedField(null);
       setToast({
         type: TOAST_TYPE.SUCCESS,
-        title: "Field deleted",
-        message: "Field has been permanently deleted.",
+        title: t("project_settings.fields.toasts.deleted.success.title"),
+        message: t("project_settings.fields.toasts.deleted.success.message"),
       });
     } catch {
       setToast({
         type: TOAST_TYPE.ERROR,
-        title: "Error",
-        message: "Field could not be deleted. Please try again.",
+        title: t("common.error"),
+        message: t("project_settings.fields.toasts.deleted.error.message"),
       });
     } finally {
       setIsUpdating(false);
@@ -77,7 +80,7 @@ export const DisabledProjectFields = observer(function DisabledProjectFields(pro
   if (isLoading) {
     return (
       <div className="mt-8">
-        <div className="mb-3 text-body-sm-medium text-primary">Disabled fields</div>
+        <div className="mb-3 text-body-sm-medium text-primary">{t("project_settings.fields.disabled.heading")}</div>
         <Loader className="space-y-2">
           <Loader.Item height="44px" />
           <Loader.Item height="44px" />
@@ -95,19 +98,25 @@ export const DisabledProjectFields = observer(function DisabledProjectFields(pro
         handleSubmit={handleDelete}
         isSubmitting={isUpdating}
         isOpen={!!selectedField}
-        title="Delete field"
+        primaryButtonText={{
+          default: t("common.delete"),
+          loading: t("common.deleting"),
+        }}
+        secondaryButtonText={t("common.cancel")}
+        title={t("project_settings.fields.delete_modal.title")}
         content={
           <>
-            Permanently delete <span className="font-medium text-primary">{selectedField?.name}</span>? This cannot be
-            undone.
+            {t("project_settings.fields.delete_modal.description_prefix")}{" "}
+            <span className="font-medium text-primary">{selectedField?.name}</span>?{" "}
+            {t("project_settings.fields.delete_modal.description_suffix")}
           </>
         }
       />
       <div className="mt-8">
         <div className="mb-3 flex items-center justify-between">
           <div>
-            <h3 className="text-body-sm-medium text-primary">Disabled fields</h3>
-            <p className="text-body-xs-regular text-tertiary">Restore fields or delete them permanently.</p>
+            <h3 className="text-body-sm-medium text-primary">{t("project_settings.fields.disabled.heading")}</h3>
+            <p className="text-body-xs-regular text-tertiary">{t("project_settings.fields.disabled.description")}</p>
           </div>
         </div>
         <div className="overflow-hidden rounded-sm border border-subtle">
@@ -121,23 +130,23 @@ export const DisabledProjectFields = observer(function DisabledProjectFields(pro
                   )}
                 </div>
                 <div className="flex items-center justify-end gap-1">
-                  <Tooltip tooltipContent="Restore field">
+                  <Tooltip tooltipContent={t("project_settings.fields.actions.restore_field")}>
                     <Button
                       variant="ghost"
                       size="sm"
                       onClick={() => handleRestore(field)}
-                      aria-label="Restore field"
+                      aria-label={t("project_settings.fields.actions.restore_field")}
                       disabled={isUpdating}
                     >
                       <RotateCcw className="size-3.5" />
                     </Button>
                   </Tooltip>
-                  <Tooltip tooltipContent="Delete field">
+                  <Tooltip tooltipContent={t("project_settings.fields.actions.delete_field")}>
                     <Button
                       variant="ghost"
                       size="sm"
                       onClick={() => setSelectedField(field)}
-                      aria-label="Delete field"
+                      aria-label={t("project_settings.fields.actions.delete_field")}
                       disabled={isUpdating}
                     >
                       <Trash2 className="size-3.5 text-danger-primary" />

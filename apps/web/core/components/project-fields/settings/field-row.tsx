@@ -8,11 +8,12 @@ import { useState } from "react";
 import { Archive, Pencil, Plus, X } from "lucide-react";
 import { observer } from "mobx-react";
 // plane imports
+import { useTranslation } from "@plane/i18n";
 import { Button } from "@plane/propel/button";
 import { TOAST_TYPE, setToast } from "@plane/propel/toast";
 import { Tooltip } from "@plane/propel/tooltip";
 import { EProjectIssueFieldType, type TProjectIssueField } from "@plane/types";
-import { Input } from "@plane/ui";
+import { AlertModalCore, Input } from "@plane/ui";
 // hooks
 import { useProjectIssueFields } from "@/hooks/store/use-project-issue-fields";
 
@@ -23,14 +24,14 @@ type Props = {
   onEdit: () => void;
 };
 
-const FIELD_TYPE_LABELS: Record<EProjectIssueFieldType, string> = {
-  [EProjectIssueFieldType.SINGLE_SELECT]: "Single select",
-  [EProjectIssueFieldType.MULTI_SELECT]: "Multi select",
-  [EProjectIssueFieldType.SINGLE_MEMBER]: "Single member",
-  [EProjectIssueFieldType.MULTI_MEMBER]: "Multi member",
-  [EProjectIssueFieldType.DATE]: "Date",
-  [EProjectIssueFieldType.DATE_RANGE]: "Date range",
-  [EProjectIssueFieldType.PLAIN_TEXT]: "Plain text",
+const FIELD_TYPE_LABEL_KEYS: Record<EProjectIssueFieldType, string> = {
+  [EProjectIssueFieldType.SINGLE_SELECT]: "project_settings.fields.field_types.single_select",
+  [EProjectIssueFieldType.MULTI_SELECT]: "project_settings.fields.field_types.multi_select",
+  [EProjectIssueFieldType.SINGLE_MEMBER]: "project_settings.fields.field_types.single_member",
+  [EProjectIssueFieldType.MULTI_MEMBER]: "project_settings.fields.field_types.multi_member",
+  [EProjectIssueFieldType.DATE]: "project_settings.fields.field_types.date",
+  [EProjectIssueFieldType.DATE_RANGE]: "project_settings.fields.field_types.date_range",
+  [EProjectIssueFieldType.PLAIN_TEXT]: "project_settings.fields.field_types.plain_text",
 };
 
 const isOptionField = (fieldType: EProjectIssueFieldType) =>
@@ -41,8 +42,13 @@ export const ProjectFieldRow = observer(function ProjectFieldRow(props: Props) {
   // states
   const [optionValue, setOptionValue] = useState("");
   const [isUpdating, setIsUpdating] = useState(false);
+  const [selectedOptionId, setSelectedOptionId] = useState<string | null>(null);
+  // translation
+  const { t } = useTranslation();
   // store hooks
   const { updateField, createOption, deleteOption } = useProjectIssueFields();
+  // derived values
+  const selectedOption = field.options.find((option) => option.id === selectedOptionId);
 
   const handleDisable = async () => {
     try {
@@ -50,14 +56,14 @@ export const ProjectFieldRow = observer(function ProjectFieldRow(props: Props) {
       await updateField(workspaceSlug, projectId, field.id, { is_disabled: true });
       setToast({
         type: TOAST_TYPE.SUCCESS,
-        title: "Field disabled",
-        message: "Field has been moved to disabled fields.",
+        title: t("project_settings.fields.toasts.disabled.success.title"),
+        message: t("project_settings.fields.toasts.disabled.success.message"),
       });
     } catch {
       setToast({
         type: TOAST_TYPE.ERROR,
-        title: "Error",
-        message: "Field could not be disabled. Please try again.",
+        title: t("common.error"),
+        message: t("project_settings.fields.toasts.disabled.error.message"),
       });
     } finally {
       setIsUpdating(false);
@@ -77,23 +83,26 @@ export const ProjectFieldRow = observer(function ProjectFieldRow(props: Props) {
     } catch {
       setToast({
         type: TOAST_TYPE.ERROR,
-        title: "Error",
-        message: "Option could not be added. Please try again.",
+        title: t("common.error"),
+        message: t("project_settings.fields.toasts.option_created.error.message"),
       });
     } finally {
       setIsUpdating(false);
     }
   };
 
-  const handleDeleteOption = async (optionId: string) => {
+  const handleDeleteOption = async () => {
+    if (!selectedOptionId) return;
+
     try {
       setIsUpdating(true);
-      await deleteOption(workspaceSlug, projectId, field.id, optionId);
+      await deleteOption(workspaceSlug, projectId, field.id, selectedOptionId);
+      setSelectedOptionId(null);
     } catch {
       setToast({
         type: TOAST_TYPE.ERROR,
-        title: "Error",
-        message: "Option could not be deleted. Please try again.",
+        title: t("common.error"),
+        message: t("project_settings.fields.toasts.option_deleted.error.message"),
       });
     } finally {
       setIsUpdating(false);
@@ -101,73 +110,117 @@ export const ProjectFieldRow = observer(function ProjectFieldRow(props: Props) {
   };
 
   return (
-    <div className="px-4 py-3">
-      <div className="grid grid-cols-[minmax(0,1fr)_9rem_7rem] items-center gap-4">
-        <div className="min-w-0">
-          <div className="truncate text-body-sm-medium text-primary">{field.name}</div>
-          {field.description && (
-            <div className="mt-0.5 truncate text-body-xs-regular text-tertiary">{field.description}</div>
-          )}
-        </div>
-        <div className="text-body-xs-regular text-secondary">{FIELD_TYPE_LABELS[field.field_type]}</div>
-        <div className="flex items-center justify-end gap-1">
-          <Tooltip tooltipContent="Edit field">
-            <Button variant="ghost" size="sm" onClick={onEdit} aria-label="Edit field" disabled={isUpdating}>
-              <Pencil className="size-3.5" />
-            </Button>
-          </Tooltip>
-          <Tooltip tooltipContent="Disable field">
-            <Button variant="ghost" size="sm" onClick={handleDisable} aria-label="Disable field" disabled={isUpdating}>
-              <Archive className="size-3.5" />
-            </Button>
-          </Tooltip>
-        </div>
-      </div>
-      {isOptionField(field.field_type) && (
-        <div className="mt-3 flex flex-col gap-2 rounded-sm bg-surface-2 px-3 py-2">
-          <div className="flex flex-wrap gap-1.5">
-            {field.options.length === 0 ? (
-              <span className="text-caption-md-regular text-tertiary">No options</span>
-            ) : (
-              field.options.map((option) => (
-                <span
-                  key={option.id}
-                  className="inline-flex max-w-full items-center gap-1 rounded-sm border border-subtle bg-surface-1 px-2 py-1 text-caption-md-regular text-secondary"
-                >
-                  <span className="truncate">{option.value}</span>
-                  <button
-                    type="button"
-                    onClick={() => handleDeleteOption(option.id)}
-                    disabled={isUpdating}
-                    aria-label={`Delete ${option.value}`}
-                    className="rounded-sm text-tertiary hover:text-danger-primary disabled:cursor-not-allowed disabled:text-disabled"
-                  >
-                    <X className="size-3" />
-                  </button>
-                </span>
-              ))
+    <>
+      <AlertModalCore
+        handleClose={() => setSelectedOptionId(null)}
+        handleSubmit={handleDeleteOption}
+        isSubmitting={isUpdating}
+        isOpen={!!selectedOptionId}
+        primaryButtonText={{
+          default: t("common.delete"),
+          loading: t("common.deleting"),
+        }}
+        secondaryButtonText={t("common.cancel")}
+        title={t("project_settings.fields.options.delete_modal.title")}
+        content={
+          <>
+            {t("project_settings.fields.options.delete_modal.description_prefix")}{" "}
+            <span className="font-medium text-primary">{selectedOption?.value}</span>?{" "}
+            {t("project_settings.fields.options.delete_modal.description_suffix")}
+          </>
+        }
+      />
+      <div className="px-4 py-3">
+        <div className="grid grid-cols-[minmax(0,1fr)_9rem_7rem] items-center gap-4">
+          <div className="min-w-0">
+            <div className="truncate text-body-sm-medium text-primary">{field.name}</div>
+            {field.description && (
+              <div className="mt-0.5 truncate text-body-xs-regular text-tertiary">{field.description}</div>
             )}
           </div>
-          <form onSubmit={handleCreateOption} className="flex items-center gap-2">
-            <Input
-              value={optionValue}
-              onChange={(event) => setOptionValue(event.target.value)}
-              placeholder="Add option"
-              inputSize="xs"
-              className="max-w-64"
-            />
-            <Button
-              variant="secondary"
-              size="sm"
-              type="submit"
-              prependIcon={<Plus />}
-              disabled={isUpdating || !optionValue.trim()}
-            >
-              Add
-            </Button>
-          </form>
+          <div className="text-body-xs-regular text-secondary">{t(FIELD_TYPE_LABEL_KEYS[field.field_type])}</div>
+          <div className="flex items-center justify-end gap-1">
+            <Tooltip tooltipContent={t("project_settings.fields.actions.edit_field")}>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={onEdit}
+                aria-label={t("project_settings.fields.actions.edit_field")}
+                disabled={isUpdating}
+              >
+                <Pencil className="size-3.5" />
+              </Button>
+            </Tooltip>
+            <Tooltip tooltipContent={t("project_settings.fields.actions.disable_field")}>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={handleDisable}
+                aria-label={t("project_settings.fields.actions.disable_field")}
+                disabled={isUpdating}
+              >
+                <Archive className="size-3.5" />
+              </Button>
+            </Tooltip>
+          </div>
         </div>
-      )}
-    </div>
+        {isOptionField(field.field_type) && (
+          <div className="mt-3 flex flex-col gap-2 rounded-sm bg-surface-2 px-3 py-2">
+            <div className="flex flex-wrap gap-1.5">
+              {field.options.length === 0 ? (
+                <span className="text-caption-md-regular text-tertiary">
+                  {t("project_settings.fields.options.no_options")}
+                </span>
+              ) : (
+                field.options.map((option) => (
+                  <span
+                    key={option.id}
+                    className="inline-flex max-w-full items-center gap-1 rounded-sm border border-subtle bg-surface-1 px-2 py-1 text-caption-md-regular text-secondary"
+                  >
+                    <span className="truncate">{option.value}</span>
+                    <Tooltip
+                      tooltipContent={t("project_settings.fields.options.delete_option_aria_label", {
+                        option: option.value,
+                      })}
+                    >
+                      <button
+                        type="button"
+                        onClick={() => setSelectedOptionId(option.id)}
+                        disabled={isUpdating}
+                        aria-label={t("project_settings.fields.options.delete_option_aria_label", {
+                          option: option.value,
+                        })}
+                        className="rounded-sm text-tertiary hover:text-danger-primary disabled:cursor-not-allowed disabled:text-disabled"
+                      >
+                        <X className="size-3" />
+                      </button>
+                    </Tooltip>
+                  </span>
+                ))
+              )}
+            </div>
+            <form onSubmit={handleCreateOption} className="flex items-center gap-2">
+              <Input
+                value={optionValue}
+                onChange={(event) => setOptionValue(event.target.value)}
+                placeholder={t("project_settings.fields.options.add_option")}
+                aria-label={t("project_settings.fields.options.add_option_aria_label")}
+                inputSize="xs"
+                className="max-w-64"
+              />
+              <Button
+                variant="secondary"
+                size="sm"
+                type="submit"
+                prependIcon={<Plus />}
+                disabled={isUpdating || !optionValue.trim()}
+              >
+                {t("common.add")}
+              </Button>
+            </form>
+          </div>
+        )}
+      </div>
+    </>
   );
 });

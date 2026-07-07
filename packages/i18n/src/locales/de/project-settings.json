@@ -55,6 +55,126 @@
         "error": "Fehler beim Aktualisieren des Labels"
       }
     },
+    "fields": {
+      "heading": "Felder",
+      "description": "Verwalte die benutzerdefinierten Felder, die für Arbeitselemente dieses Projekts verfügbar sind.",
+      "actions": {
+        "add_field": "Feld hinzufügen",
+        "create_field": "Feld erstellen",
+        "edit_field": "Feld bearbeiten",
+        "disable_field": "Feld deaktivieren",
+        "restore_field": "Feld wiederherstellen",
+        "delete_field": "Feld löschen"
+      },
+      "table": {
+        "field": "Feld",
+        "type": "Typ",
+        "actions": "Aktionen"
+      },
+      "empty_state": {
+        "title": "Noch keine Felder",
+        "description": "Erstelle ein Feld, um projektspezifische Details zu Arbeitselementen zu erfassen."
+      },
+      "modal": {
+        "add_title": "Feld hinzufügen",
+        "edit_title": "Feld bearbeiten",
+        "name_placeholder": "Feldname",
+        "description_placeholder": "Optionale Beschreibung",
+        "type": "Typ",
+        "type_aria_label": "Feldtyp auswählen",
+        "sort_order": "Sortierreihenfolge",
+        "sort_order_placeholder": "Automatisch"
+      },
+      "validation": {
+        "sort_order": "Die Sortierreihenfolge muss eine ganze Zahl größer oder gleich 0 sein."
+      },
+      "field_types": {
+        "single_select": "Einzelauswahl",
+        "multi_select": "Mehrfachauswahl",
+        "single_member": "Einzelnes Mitglied",
+        "multi_member": "Mehrere Mitglieder",
+        "date": "Datum",
+        "date_range": "Datumsbereich",
+        "plain_text": "Nur Text"
+      },
+      "options": {
+        "no_options": "Keine Optionen",
+        "add_option": "Option hinzufügen",
+        "add_option_aria_label": "Optionswert",
+        "delete_option_aria_label": "{option} löschen",
+        "delete_modal": {
+          "title": "Option löschen",
+          "description_prefix": "Option löschen",
+          "description_suffix": "Vorhandene Werte in Arbeitselementen, die diese Option verwenden, werden entfernt."
+        }
+      },
+      "disabled": {
+        "heading": "Deaktivierte Felder",
+        "description": "Felder wiederherstellen oder dauerhaft löschen."
+      },
+      "delete_modal": {
+        "title": "Feld löschen",
+        "description_prefix": "Dauerhaft löschen:",
+        "description_suffix": "Dies kann nicht rückgängig gemacht werden."
+      },
+      "toasts": {
+        "created": {
+          "success": {
+            "title": "Field created",
+            "message": "Field has been added to this project."
+          },
+          "error": {
+            "message": "Field could not be created. Please try again."
+          }
+        },
+        "updated": {
+          "success": {
+            "title": "Field updated",
+            "message": "Field details have been saved."
+          },
+          "error": {
+            "message": "Field could not be updated. Please try again."
+          }
+        },
+        "disabled": {
+          "success": {
+            "title": "Field disabled",
+            "message": "Field has been moved to disabled fields."
+          },
+          "error": {
+            "message": "Field could not be disabled. Please try again."
+          }
+        },
+        "restored": {
+          "success": {
+            "title": "Field restored",
+            "message": "Field is available on work items again."
+          },
+          "error": {
+            "message": "Field could not be restored. Please try again."
+          }
+        },
+        "deleted": {
+          "success": {
+            "title": "Field deleted",
+            "message": "Field has been permanently deleted."
+          },
+          "error": {
+            "message": "Field could not be deleted. Please try again."
+          }
+        },
+        "option_created": {
+          "error": {
+            "message": "Option could not be added. Please try again."
+          }
+        },
+        "option_deleted": {
+          "error": {
+            "message": "Option could not be deleted. Please try again."
+          }
+        }
+      }
+    },
     "estimates": {
       "heading": "Schätzungen",
       "description": "Sie helfen Ihnen, die Komplexität und Arbeitsbelastung des Teams zu kommunizieren.",

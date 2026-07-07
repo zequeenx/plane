@@ -7,6 +7,7 @@
 import { useEffect, useState } from "react";
 import { observer } from "mobx-react";
 // plane imports
+import { useTranslation } from "@plane/i18n";
 import { Button } from "@plane/propel/button";
 import { EmptyStateCompact } from "@plane/propel/empty-state";
 import type { TProjectIssueField } from "@plane/types";
@@ -30,6 +31,8 @@ export const ProjectFieldsSettingsRoot = observer(function ProjectFieldsSettings
   // states
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [selectedField, setSelectedField] = useState<TProjectIssueField | null>(null);
+  // translation
+  const { t } = useTranslation();
   // store hooks
   const {
     fieldsLoader,
@@ -77,19 +80,19 @@ export const ProjectFieldsSettingsRoot = observer(function ProjectFieldsSettings
       />
       <div className="w-full">
         <SettingsHeading
-          title="Fields"
-          description="Manage the custom fields available on this project's work items."
+          title={t("project_settings.fields.heading")}
+          description={t("project_settings.fields.description")}
           control={
             <Button variant="primary" size="lg" onClick={handleCreate}>
-              Add field
+              {t("project_settings.fields.actions.add_field")}
             </Button>
           }
         />
         <div className="mt-6 overflow-hidden rounded-sm border border-subtle">
           <div className="grid grid-cols-[minmax(0,1fr)_9rem_7rem] gap-4 border-b border-subtle bg-surface-2 px-4 py-2 text-caption-md-medium text-tertiary">
-            <div>Field</div>
-            <div>Type</div>
-            <div className="text-right">Actions</div>
+            <div>{t("project_settings.fields.table.field")}</div>
+            <div>{t("project_settings.fields.table.type")}</div>
+            <div className="text-right">{t("project_settings.fields.table.actions")}</div>
           </div>
           {isLoading ? (
             <Loader className="space-y-0">
@@ -99,13 +102,13 @@ export const ProjectFieldsSettingsRoot = observer(function ProjectFieldsSettings
             </Loader>
           ) : enabledFields.length === 0 ? (
             <EmptyStateCompact
-              assetKey="label"
+              assetKey="settings"
               assetClassName="size-20"
-              title="No fields yet"
-              description="Create a field to capture project-specific work item details."
+              title={t("project_settings.fields.empty_state.title")}
+              description={t("project_settings.fields.empty_state.description")}
               actions={[
                 {
-                  label: "Add field",
+                  label: t("project_settings.fields.actions.add_field"),
                   onClick: handleCreate,
                 },
               ]}

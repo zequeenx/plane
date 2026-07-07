@@ -55,6 +55,126 @@
         "error": "ラベルの更新中にエラーが発生しました"
       }
     },
+    "fields": {
+      "heading": "フィールド",
+      "description": "このプロジェクトの作業項目で利用できるカスタムフィールドを管理します。",
+      "actions": {
+        "add_field": "フィールドを追加",
+        "create_field": "フィールドを作成",
+        "edit_field": "フィールドを編集",
+        "disable_field": "フィールドを無効化",
+        "restore_field": "フィールドを復元",
+        "delete_field": "フィールドを削除"
+      },
+      "table": {
+        "field": "フィールド",
+        "type": "タイプ",
+        "actions": "操作"
+      },
+      "empty_state": {
+        "title": "フィールドはまだありません",
+        "description": "プロジェクト固有の作業項目詳細を記録するフィールドを作成します。"
+      },
+      "modal": {
+        "add_title": "フィールドを追加",
+        "edit_title": "フィールドを編集",
+        "name_placeholder": "フィールド名",
+        "description_placeholder": "任意の説明",
+        "type": "タイプ",
+        "type_aria_label": "フィールドタイプを選択",
+        "sort_order": "並び順",
+        "sort_order_placeholder": "自動"
+      },
+      "validation": {
+        "sort_order": "並び順は 0 以上の整数である必要があります。"
+      },
+      "field_types": {
+        "single_select": "単一選択",
+        "multi_select": "複数選択",
+        "single_member": "単一メンバー",
+        "multi_member": "複数メンバー",
+        "date": "日付",
+        "date_range": "日付範囲",
+        "plain_text": "プレーンテキスト"
+      },
+      "options": {
+        "no_options": "オプションなし",
+        "add_option": "オプションを追加",
+        "add_option_aria_label": "オプション値",
+        "delete_option_aria_label": "{option}を削除",
+        "delete_modal": {
+          "title": "オプションを削除",
+          "description_prefix": "オプションを削除",
+          "description_suffix": "このオプションを使用している既存の作業項目の値は削除されます。"
+        }
+      },
+      "disabled": {
+        "heading": "無効なフィールド",
+        "description": "フィールドを復元するか、完全に削除します。"
+      },
+      "delete_modal": {
+        "title": "フィールドを削除",
+        "description_prefix": "完全に削除",
+        "description_suffix": "この操作は元に戻せません。"
+      },
+      "toasts": {
+        "created": {
+          "success": {
+            "title": "Field created",
+            "message": "Field has been added to this project."
+          },
+          "error": {
+            "message": "Field could not be created. Please try again."
+          }
+        },
+        "updated": {
+          "success": {
+            "title": "Field updated",
+            "message": "Field details have been saved."
+          },
+          "error": {
+            "message": "Field could not be updated. Please try again."
+          }
+        },
+        "disabled": {
+          "success": {
+            "title": "Field disabled",
+            "message": "Field has been moved to disabled fields."
+          },
+          "error": {
+            "message": "Field could not be disabled. Please try again."
+          }
+        },
+        "restored": {
+          "success": {
+            "title": "Field restored",
+            "message": "Field is available on work items again."
+          },
+          "error": {
+            "message": "Field could not be restored. Please try again."
+          }
+        },
+        "deleted": {
+          "success": {
+            "title": "Field deleted",
+            "message": "Field has been permanently deleted."
+          },
+          "error": {
+            "message": "Field could not be deleted. Please try again."
+          }
+        },
+        "option_created": {
+          "error": {
+            "message": "Option could not be added. Please try again."
+          }
+        },
+        "option_deleted": {
+          "error": {
+            "message": "Option could not be deleted. Please try again."
+          }
+        }
+      }
+    },
     "estimates": {
       "heading": "見積もり",
       "description": "チームの複雑さと作業負荷を伝えるのに役立ちます。",

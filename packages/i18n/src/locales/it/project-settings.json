@@ -55,6 +55,126 @@
         "error": "Errore durante l'aggiornamento dell'etichetta"
       }
     },
+    "fields": {
+      "heading": "Campi",
+      "description": "Gestisci i campi personalizzati disponibili negli elementi di lavoro di questo progetto.",
+      "actions": {
+        "add_field": "Aggiungi campo",
+        "create_field": "Crea campo",
+        "edit_field": "Modifica campo",
+        "disable_field": "Disabilita campo",
+        "restore_field": "Ripristina campo",
+        "delete_field": "Elimina campo"
+      },
+      "table": {
+        "field": "Campo",
+        "type": "Tipo",
+        "actions": "Azioni"
+      },
+      "empty_state": {
+        "title": "Nessun campo ancora",
+        "description": "Crea un campo per raccogliere dettagli specifici del progetto negli elementi di lavoro."
+      },
+      "modal": {
+        "add_title": "Aggiungi campo",
+        "edit_title": "Modifica campo",
+        "name_placeholder": "Nome campo",
+        "description_placeholder": "Descrizione facoltativa",
+        "type": "Tipo",
+        "type_aria_label": "Seleziona tipo di campo",
+        "sort_order": "Ordine",
+        "sort_order_placeholder": "Automatico"
+      },
+      "validation": {
+        "sort_order": "L’ordine deve essere un numero intero maggiore o uguale a 0."
+      },
+      "field_types": {
+        "single_select": "Selezione singola",
+        "multi_select": "Selezione multipla",
+        "single_member": "Membro singolo",
+        "multi_member": "Più membri",
+        "date": "Data",
+        "date_range": "Intervallo di date",
+        "plain_text": "Testo semplice"
+      },
+      "options": {
+        "no_options": "Nessuna opzione",
+        "add_option": "Aggiungi opzione",
+        "add_option_aria_label": "Valore opzione",
+        "delete_option_aria_label": "Elimina {option}",
+        "delete_modal": {
+          "title": "Elimina opzione",
+          "description_prefix": "Eliminare l’opzione",
+          "description_suffix": "I valori esistenti degli elementi di lavoro che usano questa opzione verranno rimossi."
+        }
+      },
+      "disabled": {
+        "heading": "Campi disabilitati",
+        "description": "Ripristina i campi o eliminali definitivamente."
+      },
+      "delete_modal": {
+        "title": "Elimina campo",
+        "description_prefix": "Eliminare definitivamente",
+        "description_suffix": "Questa azione non può essere annullata."
+      },
+      "toasts": {
+        "created": {
+          "success": {
+            "title": "Field created",
+            "message": "Field has been added to this project."
+          },
+          "error": {
+            "message": "Field could not be created. Please try again."
+          }
+        },
+        "updated": {
+          "success": {
+            "title": "Field updated",
+            "message": "Field details have been saved."
+          },
+          "error": {
+            "message": "Field could not be updated. Please try again."
+          }
+        },
+        "disabled": {
+          "success": {
+            "title": "Field disabled",
+            "message": "Field has been moved to disabled fields."
+          },
+          "error": {
+            "message": "Field could not be disabled. Please try again."
+          }
+        },
+        "restored": {
+          "success": {
+            "title": "Field restored",
+            "message": "Field is available on work items again."
+          },
+          "error": {
+            "message": "Field could not be restored. Please try again."
+          }
+        },
+        "deleted": {
+          "success": {
+            "title": "Field deleted",
+            "message": "Field has been permanently deleted."
+          },
+          "error": {
+            "message": "Field could not be deleted. Please try again."
+          }
+        },
+        "option_created": {
+          "error": {
+            "message": "Option could not be added. Please try again."
+          }
+        },
+        "option_deleted": {
+          "error": {
+            "message": "Option could not be deleted. Please try again."
+          }
+        }
+      }
+    },
     "estimates": {
       "heading": "Stime",
       "description": "Imposta sistemi di stima per tracciare e comunicare lo sforzo richiesto per ogni elemento di lavoro.",

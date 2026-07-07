@@ -55,6 +55,126 @@
         "error": "Kesalahan saat memperbarui label"
       }
     },
+    "fields": {
+      "heading": "Bidang",
+      "description": "Kelola bidang kustom yang tersedia pada item kerja proyek ini.",
+      "actions": {
+        "add_field": "Tambah bidang",
+        "create_field": "Buat bidang",
+        "edit_field": "Edit bidang",
+        "disable_field": "Nonaktifkan bidang",
+        "restore_field": "Pulihkan bidang",
+        "delete_field": "Hapus bidang"
+      },
+      "table": {
+        "field": "Bidang",
+        "type": "Tipe",
+        "actions": "Tindakan"
+      },
+      "empty_state": {
+        "title": "Belum ada bidang",
+        "description": "Buat bidang untuk menangkap detail khusus proyek pada item kerja."
+      },
+      "modal": {
+        "add_title": "Tambah bidang",
+        "edit_title": "Edit bidang",
+        "name_placeholder": "Nama bidang",
+        "description_placeholder": "Deskripsi opsional",
+        "type": "Tipe",
+        "type_aria_label": "Pilih tipe bidang",
+        "sort_order": "Urutan sortir",
+        "sort_order_placeholder": "Otomatis"
+      },
+      "validation": {
+        "sort_order": "Urutan sortir harus berupa bilangan bulat lebih besar atau sama dengan 0."
+      },
+      "field_types": {
+        "single_select": "Pilihan tunggal",
+        "multi_select": "Pilihan ganda",
+        "single_member": "Satu anggota",
+        "multi_member": "Beberapa anggota",
+        "date": "Tanggal",
+        "date_range": "Rentang tanggal",
+        "plain_text": "Teks biasa"
+      },
+      "options": {
+        "no_options": "Tidak ada opsi",
+        "add_option": "Tambah opsi",
+        "add_option_aria_label": "Nilai opsi",
+        "delete_option_aria_label": "Hapus {option}",
+        "delete_modal": {
+          "title": "Hapus opsi",
+          "description_prefix": "Hapus opsi",
+          "description_suffix": "Nilai item kerja yang menggunakan opsi ini akan dihapus."
+        }
+      },
+      "disabled": {
+        "heading": "Bidang dinonaktifkan",
+        "description": "Pulihkan bidang atau hapus secara permanen."
+      },
+      "delete_modal": {
+        "title": "Hapus bidang",
+        "description_prefix": "Hapus permanen",
+        "description_suffix": "Tindakan ini tidak dapat dibatalkan."
+      },
+      "toasts": {
+        "created": {
+          "success": {
+            "title": "Field created",
+            "message": "Field has been added to this project."
+          },
+          "error": {
+            "message": "Field could not be created. Please try again."
+          }
+        },
+        "updated": {
+          "success": {
+            "title": "Field updated",
+            "message": "Field details have been saved."
+          },
+          "error": {
+            "message": "Field could not be updated. Please try again."
+          }
+        },
+        "disabled": {
+          "success": {
+            "title": "Field disabled",
+            "message": "Field has been moved to disabled fields."
+          },
+          "error": {
+            "message": "Field could not be disabled. Please try again."
+          }
+        },
+        "restored": {
+          "success": {
+            "title": "Field restored",
+            "message": "Field is available on work items again."
+          },
+          "error": {
+            "message": "Field could not be restored. Please try again."
+          }
+        },
+        "deleted": {
+          "success": {
+            "title": "Field deleted",
+            "message": "Field has been permanently deleted."
+          },
+          "error": {
+            "message": "Field could not be deleted. Please try again."
+          }
+        },
+        "option_created": {
+          "error": {
+            "message": "Option could not be added. Please try again."
+          }
+        },
+        "option_deleted": {
+          "error": {
+            "message": "Option could not be deleted. Please try again."
+          }
+        }
+      }
+    },
     "estimates": {
       "heading": "Perkiraan",
       "description": "Ini membantu Anda dalam mengkomunikasikan kompleksitas dan beban kerja tim.",

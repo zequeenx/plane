@@ -55,6 +55,126 @@
         "error": "Error al actualizar la etiqueta"
       }
     },
+    "fields": {
+      "heading": "Campos",
+      "description": "Gestiona los campos personalizados disponibles en los elementos de trabajo de este proyecto.",
+      "actions": {
+        "add_field": "Añadir campo",
+        "create_field": "Crear campo",
+        "edit_field": "Editar campo",
+        "disable_field": "Desactivar campo",
+        "restore_field": "Restaurar campo",
+        "delete_field": "Eliminar campo"
+      },
+      "table": {
+        "field": "Campo",
+        "type": "Tipo",
+        "actions": "Acciones"
+      },
+      "empty_state": {
+        "title": "Aún no hay campos",
+        "description": "Crea un campo para capturar detalles específicos del proyecto en los elementos de trabajo."
+      },
+      "modal": {
+        "add_title": "Añadir campo",
+        "edit_title": "Editar campo",
+        "name_placeholder": "Nombre del campo",
+        "description_placeholder": "Descripción opcional",
+        "type": "Tipo",
+        "type_aria_label": "Seleccionar tipo de campo",
+        "sort_order": "Orden",
+        "sort_order_placeholder": "Automático"
+      },
+      "validation": {
+        "sort_order": "El orden debe ser un número entero mayor o igual que 0."
+      },
+      "field_types": {
+        "single_select": "Selección única",
+        "multi_select": "Selección múltiple",
+        "single_member": "Miembro único",
+        "multi_member": "Varios miembros",
+        "date": "Fecha",
+        "date_range": "Rango de fechas",
+        "plain_text": "Texto sin formato"
+      },
+      "options": {
+        "no_options": "Sin opciones",
+        "add_option": "Añadir opción",
+        "add_option_aria_label": "Valor de la opción",
+        "delete_option_aria_label": "Eliminar {option}",
+        "delete_modal": {
+          "title": "Eliminar opción",
+          "description_prefix": "Eliminar opción",
+          "description_suffix": "Se eliminarán los valores existentes de elementos de trabajo que usen esta opción."
+        }
+      },
+      "disabled": {
+        "heading": "Campos desactivados",
+        "description": "Restaura campos o elimínalos permanentemente."
+      },
+      "delete_modal": {
+        "title": "Eliminar campo",
+        "description_prefix": "Eliminar permanentemente",
+        "description_suffix": "Esto no se puede deshacer."
+      },
+      "toasts": {
+        "created": {
+          "success": {
+            "title": "Field created",
+            "message": "Field has been added to this project."
+          },
+          "error": {
+            "message": "Field could not be created. Please try again."
+          }
+        },
+        "updated": {
+          "success": {
+            "title": "Field updated",
+            "message": "Field details have been saved."
+          },
+          "error": {
+            "message": "Field could not be updated. Please try again."
+          }
+        },
+        "disabled": {
+          "success": {
+            "title": "Field disabled",
+            "message": "Field has been moved to disabled fields."
+          },
+          "error": {
+            "message": "Field could not be disabled. Please try again."
+          }
+        },
+        "restored": {
+          "success": {
+            "title": "Field restored",
+            "message": "Field is available on work items again."
+          },
+          "error": {
+            "message": "Field could not be restored. Please try again."
+          }
+        },
+        "deleted": {
+          "success": {
+            "title": "Field deleted",
+            "message": "Field has been permanently deleted."
+          },
+          "error": {
+            "message": "Field could not be deleted. Please try again."
+          }
+        },
+        "option_created": {
+          "error": {
+            "message": "Option could not be added. Please try again."
+          }
+        },
+        "option_deleted": {
+          "error": {
+            "message": "Option could not be deleted. Please try again."
+          }
+        }
+      }
+    },
     "estimates": {
       "heading": "Estimaciones",
       "description": "Te ayudan a comunicar la complejidad y la carga de trabajo del equipo.",

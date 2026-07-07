@@ -55,6 +55,126 @@
         "error": "更新標籤時發生錯誤"
       }
     },
+    "fields": {
+      "heading": "欄位",
+      "description": "管理此專案工作項目可用的自訂欄位。",
+      "actions": {
+        "add_field": "新增欄位",
+        "create_field": "建立欄位",
+        "edit_field": "編輯欄位",
+        "disable_field": "停用欄位",
+        "restore_field": "還原欄位",
+        "delete_field": "刪除欄位"
+      },
+      "table": {
+        "field": "欄位",
+        "type": "類型",
+        "actions": "操作"
+      },
+      "empty_state": {
+        "title": "尚無欄位",
+        "description": "建立欄位以記錄專案特定的工作項目詳細資料。"
+      },
+      "modal": {
+        "add_title": "新增欄位",
+        "edit_title": "編輯欄位",
+        "name_placeholder": "欄位名稱",
+        "description_placeholder": "選填描述",
+        "type": "類型",
+        "type_aria_label": "選取欄位類型",
+        "sort_order": "排序順序",
+        "sort_order_placeholder": "自動"
+      },
+      "validation": {
+        "sort_order": "排序順序必須是大於或等於 0 的整數。"
+      },
+      "field_types": {
+        "single_select": "單選",
+        "multi_select": "多選",
+        "single_member": "單一成員",
+        "multi_member": "多位成員",
+        "date": "日期",
+        "date_range": "日期範圍",
+        "plain_text": "純文字"
+      },
+      "options": {
+        "no_options": "沒有選項",
+        "add_option": "新增選項",
+        "add_option_aria_label": "選項值",
+        "delete_option_aria_label": "刪除 {option}",
+        "delete_modal": {
+          "title": "刪除選項",
+          "description_prefix": "刪除選項",
+          "description_suffix": "使用此選項的現有工作項目值將會被移除。"
+        }
+      },
+      "disabled": {
+        "heading": "已停用欄位",
+        "description": "還原欄位或永久刪除欄位。"
+      },
+      "delete_modal": {
+        "title": "刪除欄位",
+        "description_prefix": "永久刪除",
+        "description_suffix": "此操作無法復原。"
+      },
+      "toasts": {
+        "created": {
+          "success": {
+            "title": "Field created",
+            "message": "Field has been added to this project."
+          },
+          "error": {
+            "message": "Field could not be created. Please try again."
+          }
+        },
+        "updated": {
+          "success": {
+            "title": "Field updated",
+            "message": "Field details have been saved."
+          },
+          "error": {
+            "message": "Field could not be updated. Please try again."
+          }
+        },
+        "disabled": {
+          "success": {
+            "title": "Field disabled",
+            "message": "Field has been moved to disabled fields."
+          },
+          "error": {
+            "message": "Field could not be disabled. Please try again."
+          }
+        },
+        "restored": {
+          "success": {
+            "title": "Field restored",
+            "message": "Field is available on work items again."
+          },
+          "error": {
+            "message": "Field could not be restored. Please try again."
+          }
+        },
+        "deleted": {
+          "success": {
+            "title": "Field deleted",
+            "message": "Field has been permanently deleted."
+          },
+          "error": {
+            "message": "Field could not be deleted. Please try again."
+          }
+        },
+        "option_created": {
+          "error": {
+            "message": "Option could not be added. Please try again."
+          }
+        },
+        "option_deleted": {
+          "error": {
+            "message": "Option could not be deleted. Please try again."
+          }
+        }
+      }
+    },
     "estimates": {
       "heading": "評估",
       "description": "幫助你傳達團隊的複雜性和工作負荷。",

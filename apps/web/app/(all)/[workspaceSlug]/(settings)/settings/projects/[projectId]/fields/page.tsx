@@ -7,6 +7,7 @@
 import { observer } from "mobx-react";
 // components
 import { EUserPermissions, EUserPermissionsLevel } from "@plane/constants";
+import { useTranslation } from "@plane/i18n";
 import { NotAuthorizedView } from "@/components/auth-screens/not-authorized-view";
 import { PageHead } from "@/components/core/page-title";
 import { ProjectFieldsSettingsRoot } from "@/components/project-fields/settings/root";
@@ -23,9 +24,11 @@ function FieldsSettingsPage({ params }: Route.ComponentProps) {
   // store
   const { currentProjectDetails } = useProject();
   const { workspaceUserInfo, allowPermissions } = useUserPermissions();
+  // translation
+  const { t } = useTranslation();
 
   // derived values
-  const pageTitle = currentProjectDetails?.name ? `${currentProjectDetails?.name} - Fields` : undefined;
+  const pageTitle = currentProjectDetails?.name ? `${currentProjectDetails?.name} - ${t("common.fields")}` : undefined;
   const canPerformProjectAdminActions = allowPermissions([EUserPermissions.ADMIN], EUserPermissionsLevel.PROJECT);
 
   if (workspaceUserInfo && !canPerformProjectAdminActions) {
