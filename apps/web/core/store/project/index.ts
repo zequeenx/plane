@@ -5,6 +5,8 @@
  */
 
 import type { CoreRootStore } from "../root.store";
+import type { IProjectIssueFieldStore } from "./project-issue-field.store";
+import { ProjectIssueFieldStore } from "./project-issue-field.store";
 import type { IProjectPublishStore } from "./project-publish.store";
 import { ProjectPublishStore } from "./project-publish.store";
 import type { IProjectStore } from "./project.store";
@@ -15,17 +17,22 @@ import { ProjectFilterStore } from "./project_filter.store";
 export interface IProjectRootStore {
   project: IProjectStore;
   projectFilter: IProjectFilterStore;
+  projectIssueFields: IProjectIssueFieldStore;
   publish: IProjectPublishStore;
 }
 
 export class ProjectRootStore {
+  rootStore: CoreRootStore;
   project: IProjectStore;
   projectFilter: IProjectFilterStore;
+  projectIssueFields: IProjectIssueFieldStore;
   publish: IProjectPublishStore;
 
   constructor(_root: CoreRootStore) {
+    this.rootStore = _root;
     this.project = new ProjectStore(_root);
     this.projectFilter = new ProjectFilterStore(_root);
+    this.projectIssueFields = new ProjectIssueFieldStore(this);
     this.publish = new ProjectPublishStore(this);
   }
 }
