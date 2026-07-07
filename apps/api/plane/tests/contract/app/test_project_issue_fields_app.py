@@ -258,7 +258,7 @@ def test_admin_can_disable_restore_and_hard_delete_field(api_client, workspace, 
     assert not ProjectIssueField.objects.filter(id=field.id).exists()
 
 
-def test_work_item_editor_can_create_and_delete_text_option(api_client, workspace, project, project_member):
+def test_work_item_editor_can_create_and_delete_text_option(api_client, workspace, project, project_member, issue):
     api_client.force_authenticate(project_member)
     field = ProjectIssueField.objects.create(
         workspace=workspace,
@@ -276,8 +276,21 @@ def test_work_item_editor_can_create_and_delete_text_option(api_client, workspac
     assert created.status_code == status.HTTP_201_CREATED
     assert created.data["value"] == "API"
 
+    option = ProjectIssueFieldOption.objects.get(id=created.data["id"])
+    value = IssueFieldValue.objects.create(workspace=workspace, project=project, issue=issue, field=field)
+    selected_option = IssueFieldValueOption.objects.create(
+        workspace=workspace,
+        project=project,
+        value=value,
+        option=option,
+    )
+
     deleted = api_client.delete(
         f"/api/workspaces/{workspace.slug}/projects/{project.id}/issue-fields/{field.id}/options/{created.data['id']}/"
     )
 
     assert deleted.status_code == status.HTTP_204_NO_CONTENT
+    assert not ProjectIssueFieldOption.objects.filter(id=option.id).exists()
+    assert not IssueFieldValueOption.objects.filter(id=selected_option.id).exists()
+    assert not ProjectIssueFieldOption.all_objects.filter(id=option.id).exists()
+    assert not IssueFieldValueOption.all_objects.filter(id=selected_option.id).exists()

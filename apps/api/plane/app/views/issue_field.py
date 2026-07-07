@@ -101,6 +101,6 @@ class ProjectIssueFieldOptionViewSet(BaseViewSet):
         field = self._get_field(slug, project_id, field_id)
         option = ProjectIssueFieldOption.objects.get(field=field, pk=pk)
         with transaction.atomic():
-            IssueFieldValueOption.objects.filter(option=option).delete()
-            option.delete()
+            IssueFieldValueOption.objects.filter(option=option).delete(soft=False)
+            option.delete(soft=False)
         return Response(status=status.HTTP_204_NO_CONTENT)
