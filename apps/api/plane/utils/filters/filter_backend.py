@@ -4,11 +4,13 @@
 
 # Python imports
 import json
+from datetime import date
 from uuid import UUID
 
 # Django imports
 from django.db.models import Exists, OuterRef, Q
 from django.http import QueryDict
+from django.utils.dateparse import parse_date
 
 # Third party imports
 from django_filters.utils import translate_validation
@@ -389,13 +391,62 @@ class ComplexFilterBackend(filters.BaseFilterBackend):
 
     def _ensure_uuid_list_value(self, value):
         values = self._ensure_list_value(value)
+        if not values:
+            self._raise_invalid_custom_filter_value("Expected at least one UUID value.")
         try:
             return [str(UUID(str(item))) for item in values]
         except (AttributeError, TypeError, ValueError):
-            return None
+            self._raise_invalid_custom_filter_value("Expected UUID values.")
+
+    def _ensure_date_value(self, value):
+        if isinstance(value, date):
+            return value
+        if not isinstance(value, str):
+            self._raise_invalid_custom_filter_value("Expected a date value in YYYY-MM-DD format.")
+        try:
+            parsed_value = parse_date(value)
+        except ValueError:
+            parsed_value = None
+        if parsed_value is None:
+            self._raise_invalid_custom_filter_value("Expected a date value in YYYY-MM-DD format.")
+        return parsed_value
+
+    def _ensure_date_range_value(self, value):
+        values = self._ensure_list_value(value)
+        if len(values) != 2:
+            self._raise_invalid_custom_filter_value("Expected exactly two date values.")
+        return [self._ensure_date_value(item) for item in values]
+
+    def _raise_invalid_custom_filter_value(self, message):
+        raise DRFValidationError(
+            {
+                "message": message,
+                "code": "invalid_custom_filter_value",
+            }
+        )
+
+    def _raise_unsupported_custom_filter_operator(self, operator):
+        raise DRFValidationError(
+            {
+                "message": f"Unsupported custom filter operator '{operator}'.",
+                "code": "unsupported_custom_filter_operator",
+            }
+        )
 
     def _build_plain_text_custom_property_q(self, base_q, operator, value):
         non_empty_q = base_q & Q(field_value_rows__text_value__isnull=False) & ~Q(field_value_rows__text_value="")
+        if operator not in (
+            "contains",
+            "icontains",
+            "not_contains",
+            "exact",
+            "in",
+            "not_exact",
+            "not_in",
+            "is_empty",
+            "is_not_empty",
+        ):
+            self._raise_unsupported_custom_filter_operator(operator)
         if operator in ("contains", "icontains"):
             return base_q & Q(field_value_rows__text_value__icontains=value)
         if operator == "not_contains":
@@ -417,6 +468,18 @@ class ComplexFilterBackend(filters.BaseFilterBackend):
     def _build_option_custom_property_q(self, field_id, operator, value):
         from plane.db.models import IssueFieldValueOption
 
+        if operator not in (
+            "exact",
+            "in",
+            "contains_any",
+            "not_exact",
+            "not_in",
+            "not_contains_any",
+            "is_empty",
+            "is_not_empty",
+        ):
+            self._raise_unsupported_custom_filter_operator(operator)
+
         selected_options = IssueFieldValueOption.objects.filter(
             value__issue_id=OuterRef("pk"),
             value__field_id=field_id,
@@ -426,13 +489,9 @@ class ComplexFilterBackend(filters.BaseFilterBackend):
         )
         if operator in ("exact", "in", "contains_any"):
             values = self._ensure_uuid_list_value(value)
-            if values is None:
-                return Q(pk__in=[])
             return Exists(selected_options.filter(option_id__in=values))
         if operator in ("not_exact", "not_in", "not_contains_any"):
             values = self._ensure_uuid_list_value(value)
-            if values is None:
-                return Q(pk__in=[])
             return ~Exists(selected_options.filter(option_id__in=values))
         if operator == "is_empty":
             return ~Exists(selected_options)
@@ -443,6 +502,18 @@ class ComplexFilterBackend(filters.BaseFilterBackend):
     def _build_member_custom_property_q(self, field_id, operator, value):
         from plane.db.models import IssueFieldValueUser
 
+        if operator not in (
+            "exact",
+            "in",
+            "contains_any",
+            "not_exact",
+            "not_in",
+            "not_contains_any",
+            "is_empty",
+            "is_not_empty",
+        ):
+            self._raise_unsupported_custom_filter_operator(operator)
+
         selected_users = IssueFieldValueUser.objects.filter(
             value__issue_id=OuterRef("pk"),
             value__field_id=field_id,
@@ -451,13 +522,9 @@ class ComplexFilterBackend(filters.BaseFilterBackend):
         )
         if operator in ("exact", "in", "contains_any"):
             values = self._ensure_uuid_list_value(value)
-            if values is None:
-                return Q(pk__in=[])
             return Exists(selected_users.filter(user_id__in=values))
         if operator in ("not_exact", "not_in", "not_contains_any"):
             values = self._ensure_uuid_list_value(value)
-            if values is None:
-                return Q(pk__in=[])
             return ~Exists(selected_users.filter(user_id__in=values))
         if operator == "is_empty":
             return ~Exists(selected_users)
@@ -467,12 +534,12 @@ class ComplexFilterBackend(filters.BaseFilterBackend):
 
     def _build_date_custom_property_q(self, base_q, operator, value):
         non_empty_q = base_q & Q(field_value_rows__date_value__isnull=False)
+        if operator not in ("exact", "range", "is_empty", "is_not_empty"):
+            self._raise_unsupported_custom_filter_operator(operator)
         if operator == "exact":
-            return base_q & Q(field_value_rows__date_value=value)
+            return base_q & Q(field_value_rows__date_value=self._ensure_date_value(value))
         if operator == "range":
-            values = self._ensure_list_value(value)
-            if len(values) != 2:
-                return Q(pk__in=[])
+            values = self._ensure_date_range_value(value)
             return base_q & Q(field_value_rows__date_value__range=values)
         if operator == "is_empty":
             return ~non_empty_q
@@ -485,10 +552,10 @@ class ComplexFilterBackend(filters.BaseFilterBackend):
             field_value_rows__date_range_start__isnull=False,
             field_value_rows__date_range_end__isnull=False,
         )
+        if operator not in ("overlaps", "not_overlaps", "is_empty", "is_not_empty"):
+            self._raise_unsupported_custom_filter_operator(operator)
         if operator in ("overlaps", "not_overlaps"):
-            values = self._ensure_list_value(value)
-            if len(values) != 2:
-                return Q(pk__in=[])
+            values = self._ensure_date_range_value(value)
             overlap_q = (
                 base_q
                 & Q(field_value_rows__date_range_start__lte=values[1])

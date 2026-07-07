@@ -420,7 +420,7 @@ def test_single_select_in_filter_accepts_comma_separated_string(api_client, work
     assert _issue_names(response) == {"High issue"}
 
 
-def test_single_select_in_filter_with_invalid_option_value_does_not_error(
+def test_single_select_in_filter_with_invalid_option_value_returns_400(
     api_client,
     workspace,
     project,
@@ -443,8 +443,35 @@ def test_single_select_in_filter_with_invalid_option_value_does_not_error(
         {"filters": json.dumps({f"customproperty_{field.id}__in": ["not-a-uuid"]})},
     )
 
-    assert response.status_code == 200
-    assert _issue_names(response) == set()
+    assert response.status_code == 400
+    assert response.data["code"] == "invalid_custom_filter_value"
+
+
+def test_single_select_not_in_filter_with_invalid_option_value_returns_400(
+    api_client,
+    workspace,
+    project,
+    project_member,
+):
+    api_client.force_authenticate(project_member)
+    field = ProjectIssueField.objects.create(
+        workspace=workspace,
+        project=project,
+        name="Severity",
+        field_type=ProjectIssueField.FieldType.SINGLE_SELECT,
+    )
+    high = ProjectIssueFieldOption.objects.create(workspace=workspace, project=project, field=field, value="High")
+    issue = Issue.objects.create(workspace=workspace, project=project, name="High issue")
+    value = IssueFieldValue.objects.create(workspace=workspace, project=project, issue=issue, field=field)
+    IssueFieldValueOption.objects.create(workspace=workspace, project=project, value=value, option=high)
+
+    response = api_client.get(
+        _issue_list_url(workspace, project),
+        {"filters": json.dumps({f"customproperty_{field.id}__not_in": "not-a-uuid"})},
+    )
+
+    assert response.status_code == 400
+    assert response.data["code"] == "invalid_custom_filter_value"
 
 
 def test_multi_member_contains_any_filter_does_not_duplicate_matching_issue(
@@ -510,7 +537,7 @@ def test_multi_member_contains_any_filter_accepts_comma_separated_string(
     assert [issue["name"] for issue in response.data["results"]] == ["Multi member issue"]
 
 
-def test_multi_member_contains_any_filter_with_invalid_user_value_does_not_error(
+def test_multi_member_contains_any_filter_with_invalid_user_value_returns_400(
     api_client,
     workspace,
     project,
@@ -532,8 +559,34 @@ def test_multi_member_contains_any_filter_with_invalid_user_value_does_not_error
         {"filters": json.dumps({f"customproperty_{field.id}__contains_any": "not-a-uuid"})},
     )
 
-    assert response.status_code == 200
-    assert _issue_names(response) == set()
+    assert response.status_code == 400
+    assert response.data["code"] == "invalid_custom_filter_value"
+
+
+def test_multi_member_not_in_filter_with_invalid_user_value_returns_400(
+    api_client,
+    workspace,
+    project,
+    project_member,
+):
+    api_client.force_authenticate(project_member)
+    field = ProjectIssueField.objects.create(
+        workspace=workspace,
+        project=project,
+        name="Reviewers",
+        field_type=ProjectIssueField.FieldType.MULTI_MEMBER,
+    )
+    issue = Issue.objects.create(workspace=workspace, project=project, name="Multi member issue")
+    value = IssueFieldValue.objects.create(workspace=workspace, project=project, issue=issue, field=field)
+    IssueFieldValueUser.objects.create(workspace=workspace, project=project, value=value, user=project_member)
+
+    response = api_client.get(
+        _issue_list_url(workspace, project),
+        {"filters": json.dumps({f"customproperty_{field.id}__not_in": "not-a-uuid"})},
+    )
+
+    assert response.status_code == 400
+    assert response.data["code"] == "invalid_custom_filter_value"
 
 
 def test_date_range_filter_accepts_comma_separated_string(api_client, workspace, project, project_member):
@@ -568,6 +621,82 @@ def test_date_range_filter_accepts_comma_separated_string(api_client, workspace,
 
     assert response.status_code == 200
     assert _issue_names(response) == {"Matching issue"}
+
+
+def test_date_exact_filter_with_invalid_value_returns_400(api_client, workspace, project, project_member):
+    api_client.force_authenticate(project_member)
+    field = ProjectIssueField.objects.create(
+        workspace=workspace,
+        project=project,
+        name="Release date",
+        field_type=ProjectIssueField.FieldType.DATE,
+    )
+    Issue.objects.create(workspace=workspace, project=project, name="Issue")
+
+    response = api_client.get(
+        _issue_list_url(workspace, project),
+        {"filters": json.dumps({f"customproperty_{field.id}__exact": "not-a-date"})},
+    )
+
+    assert response.status_code == 400
+    assert response.data["code"] == "invalid_custom_filter_value"
+
+
+def test_date_range_filter_with_invalid_bounds_returns_400(api_client, workspace, project, project_member):
+    api_client.force_authenticate(project_member)
+    field = ProjectIssueField.objects.create(
+        workspace=workspace,
+        project=project,
+        name="Release date",
+        field_type=ProjectIssueField.FieldType.DATE,
+    )
+    Issue.objects.create(workspace=workspace, project=project, name="Issue")
+
+    response = api_client.get(
+        _issue_list_url(workspace, project),
+        {"filters": json.dumps({f"customproperty_{field.id}__range": "2026-07-01,not-a-date"})},
+    )
+
+    assert response.status_code == 400
+    assert response.data["code"] == "invalid_custom_filter_value"
+
+
+def test_date_range_overlaps_filter_with_invalid_bounds_returns_400(api_client, workspace, project, project_member):
+    api_client.force_authenticate(project_member)
+    field = ProjectIssueField.objects.create(
+        workspace=workspace,
+        project=project,
+        name="Target window",
+        field_type=ProjectIssueField.FieldType.DATE_RANGE,
+    )
+    Issue.objects.create(workspace=workspace, project=project, name="Issue")
+
+    response = api_client.get(
+        _issue_list_url(workspace, project),
+        {"filters": json.dumps({f"customproperty_{field.id}__overlaps": "not-a-date,2026-07-31"})},
+    )
+
+    assert response.status_code == 400
+    assert response.data["code"] == "invalid_custom_filter_value"
+
+
+def test_unsupported_custom_field_operator_returns_400(api_client, workspace, project, project_member):
+    api_client.force_authenticate(project_member)
+    field = ProjectIssueField.objects.create(
+        workspace=workspace,
+        project=project,
+        name="Customer note",
+        field_type=ProjectIssueField.FieldType.PLAIN_TEXT,
+    )
+    Issue.objects.create(workspace=workspace, project=project, name="Issue")
+
+    response = api_client.get(
+        _issue_list_url(workspace, project),
+        {"filters": json.dumps({f"customproperty_{field.id}__starts_with": "api"})},
+    )
+
+    assert response.status_code == 400
+    assert response.data["code"] == "unsupported_custom_filter_operator"
 
 
 def test_workspace_scoped_filter_context_does_not_activate_project_custom_fields(
