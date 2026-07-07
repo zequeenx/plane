@@ -12,9 +12,12 @@ from django.db.models.functions import Coalesce
 from plane.db.models import (
     Cycle,
     Issue,
+    IssueFieldValue,
     Label,
     Module,
     Project,
+    ProjectIssueField,
+    ProjectIssueFieldOption,
     ProjectMember,
     State,
     WorkspaceMember,
@@ -42,7 +45,11 @@ def issue_queryset_grouper(
         "issue_module__module_id": Q(issue_module__deleted_at__isnull=True),
     }
 
+    custom_group_annotations = {}
     for group_key in [group_by, sub_group_by]:
+        custom_group_annotation = _custom_property_group_annotation(group_key)
+        if custom_group_annotation is not None:
+            custom_group_annotations[group_key] = custom_group_annotation
         if group_key in GROUP_FILTER_MAPPER:
             queryset = queryset.filter(GROUP_FILTER_MAPPER[group_key])
 
@@ -80,7 +87,7 @@ def issue_queryset_grouper(
         "module_ids": Coalesce(issue_module_subquery, Value([], output_field=ArrayField(UUIDField()))),
     }
 
-    default_annotations: Dict[str, Any] = {}
+    default_annotations: Dict[str, Any] = custom_group_annotations
 
     for key, expression in annotations_map.items():
         if FIELD_MAPPER.get(key) in {group_by, sub_group_by}:
@@ -139,6 +146,9 @@ def issue_on_results(
         original_list.append(sub_group_by)
 
     required_fields.extend(original_list)
+    for custom_group_key in [group_by, sub_group_by]:
+        if _custom_property_field_id(custom_group_key):
+            required_fields.append(custom_group_key)
     return list(issues.values(*required_fields))
 
 
@@ -194,6 +204,10 @@ def issue_group_values(
     if field == "state__group":
         return ["backlog", "unstarted", "started", "completed", "cancelled"]
 
+    custom_group_values = _custom_property_group_values(field, slug, project_id, queryset)
+    if custom_group_values is not None:
+        return custom_group_values
+
     if field == "target_date":
         queryset = queryset.values_list("target_date", flat=True).distinct()
         if project_id:
@@ -214,5 +228,77 @@ def issue_group_values(
             return list(queryset.filter(project_id=project_id))
         else:
             return list(queryset)
+
+    return []
+
+
+def _custom_property_field_id(field: Optional[str]) -> Optional[str]:
+    if not isinstance(field, str) or not field.startswith("customproperty_"):
+        return None
+    field_id = field[len("customproperty_") :]
+    return field_id or None
+
+
+def _custom_property_group_field(field: Optional[str]) -> Optional[ProjectIssueField]:
+    field_id = _custom_property_field_id(field)
+    if field_id is None:
+        return None
+    return ProjectIssueField.objects.filter(id=field_id, is_disabled=False).first()
+
+
+def _custom_property_group_annotation(field: Optional[str]):
+    project_field = _custom_property_group_field(field)
+    if project_field is None:
+        return None
+
+    value_rows = IssueFieldValue.objects.filter(
+        issue_id=OuterRef("pk"),
+        field=project_field,
+        deleted_at__isnull=True,
+    )
+
+    if project_field.field_type == ProjectIssueField.FieldType.SINGLE_SELECT:
+        return Subquery(
+            value_rows.filter(
+                selected_options__deleted_at__isnull=True,
+                selected_options__option__deleted_at__isnull=True,
+            ).values("selected_options__option_id")[:1]
+        )
+
+    if project_field.field_type == ProjectIssueField.FieldType.SINGLE_MEMBER:
+        return Subquery(
+            value_rows.filter(selected_users__deleted_at__isnull=True).values("selected_users__user_id")[:1]
+        )
+
+    return Value(None)
+
+
+def _custom_property_group_values(
+    field: str,
+    slug: str,
+    project_id: Optional[str],
+    queryset: Optional[QuerySet],
+) -> Optional[List[Union[str, Any]]]:
+    project_field = _custom_property_group_field(field)
+    if project_field is None:
+        return None
+
+    if project_field.field_type == ProjectIssueField.FieldType.SINGLE_SELECT:
+        return list(
+            ProjectIssueFieldOption.objects.filter(
+                workspace__slug=slug,
+                project_id=project_id,
+                field=project_field,
+            ).values_list("id", flat=True)
+        ) + [None]
+
+    if project_field.field_type == ProjectIssueField.FieldType.SINGLE_MEMBER:
+        return list(
+            ProjectMember.objects.filter(
+                workspace__slug=slug,
+                project_id=project_id,
+                is_active=True,
+            ).values_list("member_id", flat=True)
+        ) + [None]
 
     return []

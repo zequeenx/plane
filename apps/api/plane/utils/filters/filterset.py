@@ -123,6 +123,7 @@ class BaseFilterSet(FilterSet):
 
 class IssueFilterSet(BaseFilterSet):
     # Custom filter methods to handle soft delete exclusion for relations
+    customproperty = filters.CharFilter(method="filter_customproperty")
 
     assignee_id = filters.UUIDFilter(method="filter_assignee_id")
     assignee_id__in = UUIDInFilter(method="filter_assignee_id_in", lookup_expr="in")
@@ -181,6 +182,10 @@ class IssueFilterSet(BaseFilterSet):
         if value in (False, "false", "False", 0, "0"):
             return Q(archived_at__isnull=True)
         return Q()  # No filter
+
+    def filter_customproperty(self, queryset, name, value):
+        """Validation placeholder; custom property filters are compiled by ComplexFilterBackend."""
+        return Q()
 
     # Filter methods with soft delete exclusion for relations
 

@@ -2,11 +2,15 @@
 # SPDX-License-Identifier: AGPL-3.0-only
 # See the LICENSE file for details.
 
-from django.db.models import Case, CharField, Min, Value, When
+from django.db.models import Case, CharField, Min, OuterRef, Subquery, Value, When
+
+from plane.db.models import IssueFieldValue, ProjectIssueField
 
 # Custom ordering for priority and state
 PRIORITY_ORDER = ["urgent", "high", "medium", "low", "none"]
 STATE_ORDER = ["backlog", "unstarted", "started", "completed", "cancelled"]
+CUSTOM_PROPERTY_PREFIX = "customproperty_"
+CUSTOM_PROPERTY_ORDER_ANNOTATION = "_custom_property_order_value"
 
 # ---------------------------------------------------------------------------
 # order_by allowlists — one per model/endpoint family
@@ -101,7 +105,43 @@ def sanitize_order_by(value, allowed_fields, default="-created_at"):
     return f"-{bare}" if is_desc else bare
 
 
+def custom_property_order_field(order_by_param):
+    if not order_by_param:
+        return None, False
+    is_desc = order_by_param.startswith("-")
+    bare = order_by_param[1:] if is_desc else order_by_param
+    if bare.startswith("-") or not bare.startswith(CUSTOM_PROPERTY_PREFIX):
+        return None, is_desc
+    field_id = bare[len(CUSTOM_PROPERTY_PREFIX) :]
+    if not field_id:
+        return None, is_desc
+    return field_id, is_desc
+
+
 def order_issue_queryset(issue_queryset, order_by_param="-created_at"):
+    custom_field_id, custom_order_desc = custom_property_order_field(order_by_param)
+    if custom_field_id is not None:
+        project_field = ProjectIssueField.objects.filter(id=custom_field_id, is_disabled=False).first()
+        if project_field and project_field.field_type in (
+            ProjectIssueField.FieldType.DATE,
+            ProjectIssueField.FieldType.PLAIN_TEXT,
+        ):
+            value_rows = IssueFieldValue.objects.filter(
+                issue_id=OuterRef("pk"),
+                field=project_field,
+                deleted_at__isnull=True,
+            )
+            value_field = "date_value" if project_field.field_type == ProjectIssueField.FieldType.DATE else "text_value"
+            issue_queryset = issue_queryset.annotate(
+                **{CUSTOM_PROPERTY_ORDER_ANNOTATION: Subquery(value_rows.values(value_field)[:1])}
+            )
+            order_by_param = (
+                f"-{CUSTOM_PROPERTY_ORDER_ANNOTATION}"
+                if custom_order_desc
+                else CUSTOM_PROPERTY_ORDER_ANNOTATION
+            )
+            return issue_queryset.order_by(order_by_param, "-created_at"), order_by_param
+
     # Reject any field that is not in the allowlist before building the queryset.
     # An unrecognised value is silently replaced with the safe default so callers
     # receive consistent output rather than an ORM error or data leak.

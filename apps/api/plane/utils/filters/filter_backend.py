@@ -4,6 +4,7 @@
 
 # Python imports
 import json
+from uuid import UUID
 
 # Django imports
 from django.db.models import Q
@@ -15,6 +16,9 @@ from rest_framework import filters
 from rest_framework.exceptions import ValidationError as DRFValidationError
 
 from plane.utils.exception_logger import log_exception
+
+
+CUSTOM_PROPERTY_PREFIX = "customproperty_"
 
 
 class ComplexFilterBackend(filters.BaseFilterBackend):
@@ -137,6 +141,8 @@ class ComplexFilterBackend(filters.BaseFilterBackend):
         Returns:
             The transformed field name to validate against the FilterSet
         """
+        if self._parse_custom_property_filter_key(field_name) is not None:
+            return "customproperty"
         return field_name
 
     def _extract_field_names(self, filter_data):
@@ -256,10 +262,21 @@ class ComplexFilterBackend(filters.BaseFilterBackend):
 
         # Apply preprocessing hook
         processed_conditions = self._preprocess_leaf_conditions(leaf_conditions, view, queryset)
+        standard_conditions = {}
+        custom_q = Q()
+        for key, value in processed_conditions.items():
+            custom_filter = self._build_custom_property_q(key, value, view)
+            if custom_filter is None:
+                standard_conditions[key] = value
+            else:
+                custom_q &= custom_filter
+
+        if not standard_conditions:
+            return custom_q
 
         # Build a QueryDict from the leaf conditions
         qd = QueryDict(mutable=True)
-        for key, value in processed_conditions.items():
+        for key, value in standard_conditions.items():
             # Default serialization to string; QueryDict expects strings
             if isinstance(value, list):
                 # Repeat key for list values (e.g., __in)
@@ -293,7 +310,168 @@ class ComplexFilterBackend(filters.BaseFilterBackend):
                 }
             )
 
-        return fs.build_combined_q()
+        return custom_q & fs.build_combined_q()
+
+    def _parse_custom_property_filter_key(self, field_name):
+        if not isinstance(field_name, str) or not field_name.startswith(CUSTOM_PROPERTY_PREFIX):
+            return None
+
+        raw_key = field_name[len(CUSTOM_PROPERTY_PREFIX) :]
+        field_id, separator, operator = raw_key.partition("__")
+        operator = operator if separator else "exact"
+
+        try:
+            UUID(str(field_id))
+        except (AttributeError, TypeError, ValueError):
+            return field_id, operator, False
+
+        return field_id, operator, True
+
+    def _build_custom_property_q(self, field_name, value, view):
+        parsed = self._parse_custom_property_filter_key(field_name)
+        if parsed is None:
+            return None
+
+        field_id, operator, is_valid_uuid = parsed
+        if not is_valid_uuid:
+            return Q(pk__in=[])
+
+        from plane.db.models import ProjectIssueField
+
+        project_id = getattr(view, "kwargs", {}).get("project_id")
+        slug = getattr(view, "kwargs", {}).get("slug")
+        field_filters = {
+            "id": field_id,
+            "is_disabled": False,
+        }
+        if project_id:
+            field_filters["project_id"] = project_id
+        if slug:
+            field_filters["workspace__slug"] = slug
+
+        field = ProjectIssueField.objects.filter(**field_filters).first()
+        if field is None:
+            return Q()
+
+        base_q = Q(
+            field_value_rows__field_id=field.id,
+            field_value_rows__deleted_at__isnull=True,
+        )
+        field_type = field.field_type
+
+        if field_type == ProjectIssueField.FieldType.PLAIN_TEXT:
+            return self._build_plain_text_custom_property_q(base_q, operator, value)
+        if field_type in (
+            ProjectIssueField.FieldType.SINGLE_SELECT,
+            ProjectIssueField.FieldType.MULTI_SELECT,
+        ):
+            return self._build_option_custom_property_q(base_q, operator, value)
+        if field_type in (
+            ProjectIssueField.FieldType.SINGLE_MEMBER,
+            ProjectIssueField.FieldType.MULTI_MEMBER,
+        ):
+            return self._build_member_custom_property_q(base_q, operator, value)
+        if field_type == ProjectIssueField.FieldType.DATE:
+            return self._build_date_custom_property_q(base_q, operator, value)
+        if field_type == ProjectIssueField.FieldType.DATE_RANGE:
+            return self._build_date_range_custom_property_q(base_q, operator, value)
+
+        return Q()
+
+    def _ensure_list_value(self, value):
+        if isinstance(value, (list, tuple)):
+            return list(value)
+        return [value]
+
+    def _build_plain_text_custom_property_q(self, base_q, operator, value):
+        non_empty_q = base_q & Q(field_value_rows__text_value__isnull=False) & ~Q(field_value_rows__text_value="")
+        if operator in ("contains", "icontains"):
+            return base_q & Q(field_value_rows__text_value__icontains=value)
+        if operator == "not_contains":
+            return ~(base_q & Q(field_value_rows__text_value__icontains=value))
+        if operator in ("exact", "in"):
+            values = self._ensure_list_value(value) if operator == "in" else value
+            lookup = "field_value_rows__text_value__in" if operator == "in" else "field_value_rows__text_value"
+            return base_q & Q(**{lookup: values})
+        if operator in ("not_exact", "not_in"):
+            values = self._ensure_list_value(value) if operator == "not_in" else value
+            lookup = "field_value_rows__text_value__in" if operator == "not_in" else "field_value_rows__text_value"
+            return ~(base_q & Q(**{lookup: values}))
+        if operator == "is_empty":
+            return ~non_empty_q
+        if operator == "is_not_empty":
+            return non_empty_q
+        return Q()
+
+    def _build_option_custom_property_q(self, base_q, operator, value):
+        selected_q = (
+            base_q
+            & Q(field_value_rows__selected_options__deleted_at__isnull=True)
+            & Q(field_value_rows__selected_options__option__deleted_at__isnull=True)
+        )
+        non_empty_q = selected_q & Q(field_value_rows__selected_options__option_id__isnull=False)
+        if operator in ("exact", "in", "contains_any"):
+            values = self._ensure_list_value(value)
+            return selected_q & Q(field_value_rows__selected_options__option_id__in=values)
+        if operator in ("not_exact", "not_in", "not_contains_any"):
+            values = self._ensure_list_value(value)
+            return ~(selected_q & Q(field_value_rows__selected_options__option_id__in=values))
+        if operator == "is_empty":
+            return ~non_empty_q
+        if operator == "is_not_empty":
+            return non_empty_q
+        return Q()
+
+    def _build_member_custom_property_q(self, base_q, operator, value):
+        selected_q = base_q & Q(field_value_rows__selected_users__deleted_at__isnull=True)
+        non_empty_q = selected_q & Q(field_value_rows__selected_users__user_id__isnull=False)
+        if operator in ("exact", "in", "contains_any"):
+            values = self._ensure_list_value(value)
+            return selected_q & Q(field_value_rows__selected_users__user_id__in=values)
+        if operator in ("not_exact", "not_in", "not_contains_any"):
+            values = self._ensure_list_value(value)
+            return ~(selected_q & Q(field_value_rows__selected_users__user_id__in=values))
+        if operator == "is_empty":
+            return ~non_empty_q
+        if operator == "is_not_empty":
+            return non_empty_q
+        return Q()
+
+    def _build_date_custom_property_q(self, base_q, operator, value):
+        non_empty_q = base_q & Q(field_value_rows__date_value__isnull=False)
+        if operator == "exact":
+            return base_q & Q(field_value_rows__date_value=value)
+        if operator == "range":
+            values = self._ensure_list_value(value)
+            if len(values) != 2:
+                return Q(pk__in=[])
+            return base_q & Q(field_value_rows__date_value__range=values)
+        if operator == "is_empty":
+            return ~non_empty_q
+        if operator == "is_not_empty":
+            return non_empty_q
+        return Q()
+
+    def _build_date_range_custom_property_q(self, base_q, operator, value):
+        non_empty_q = base_q & Q(
+            field_value_rows__date_range_start__isnull=False,
+            field_value_rows__date_range_end__isnull=False,
+        )
+        if operator in ("overlaps", "not_overlaps"):
+            values = self._ensure_list_value(value)
+            if len(values) != 2:
+                return Q(pk__in=[])
+            overlap_q = (
+                base_q
+                & Q(field_value_rows__date_range_start__lte=values[1])
+                & Q(field_value_rows__date_range_end__gte=values[0])
+            )
+            return ~overlap_q if operator == "not_overlaps" else overlap_q
+        if operator == "is_empty":
+            return ~non_empty_q
+        if operator == "is_not_empty":
+            return non_empty_q
+        return Q()
 
     def _get_max_depth(self, view):
         """Return the maximum allowed nesting depth for complex filters.
