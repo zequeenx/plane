@@ -333,6 +333,11 @@ export const coreRoutes: RouteConfigEntry[] = [
               ":workspaceSlug/settings/projects/:projectId/labels",
               "./(all)/[workspaceSlug]/(settings)/settings/projects/[projectId]/labels/page.tsx"
             ),
+            // Project Fields
+            route(
+              ":workspaceSlug/settings/projects/:projectId/fields",
+              "./(all)/[workspaceSlug]/(settings)/settings/projects/[projectId]/fields/page.tsx"
+            ),
             // Project Estimates
             route(
               ":workspaceSlug/settings/projects/:projectId/estimates",

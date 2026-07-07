@@ -720,7 +720,8 @@
     "developer": "Developer",
     "work_structure": "Work structure",
     "execution": "Execution",
-    "administration": "Administration"
+    "administration": "Administration",
+    "fields": "字段"
   },
   "chart": {
     "x_axis": "X轴",

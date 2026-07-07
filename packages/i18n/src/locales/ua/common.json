@@ -720,7 +720,8 @@
     "developer": "Developer",
     "work_structure": "Work structure",
     "execution": "Execution",
-    "administration": "Administration"
+    "administration": "Administration",
+    "fields": "Поля"
   },
   "chart": {
     "x_axis": "Вісь X",
