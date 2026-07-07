@@ -542,3 +542,48 @@ def test_create_issue_accepts_field_values(api_client, workspace, project, proje
     assert response.status_code == status.HTTP_201_CREATED
     assert response.data["field_values"][str(field.id)] == "2026-07-07"
     assert IssueFieldValue.objects.filter(issue_id=response.data["id"], field=field, date_value="2026-07-07").exists()
+
+
+def test_issue_list_includes_field_values(api_client, workspace, project, project_member, issue):
+    api_client.force_authenticate(project_member)
+    field = ProjectIssueField.objects.create(
+        workspace=workspace,
+        project=project,
+        name="Customer note",
+        field_type=ProjectIssueField.FieldType.PLAIN_TEXT,
+    )
+    IssueFieldValue.objects.create(
+        workspace=workspace,
+        project=project,
+        issue=issue,
+        field=field,
+        text_value="Needs API review",
+    )
+
+    response = api_client.get(f"/api/workspaces/{workspace.slug}/projects/{project.id}/issues/")
+
+    assert response.status_code == status.HTTP_200_OK
+    response_issue = next(item for item in response.data["results"] if item["id"] == issue.id)
+    assert response_issue["field_values"] == {str(field.id): "Needs API review"}
+
+
+def test_issue_retrieve_includes_field_values(api_client, workspace, project, project_member, issue):
+    api_client.force_authenticate(project_member)
+    field = ProjectIssueField.objects.create(
+        workspace=workspace,
+        project=project,
+        name="Customer note",
+        field_type=ProjectIssueField.FieldType.PLAIN_TEXT,
+    )
+    IssueFieldValue.objects.create(
+        workspace=workspace,
+        project=project,
+        issue=issue,
+        field=field,
+        text_value="Needs API review",
+    )
+
+    response = api_client.get(f"/api/workspaces/{workspace.slug}/projects/{project.id}/issues/{issue.id}/")
+
+    assert response.status_code == status.HTTP_200_OK
+    assert response.data["field_values"] == {str(field.id): "Needs API review"}

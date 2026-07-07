@@ -31,6 +31,20 @@ class IssueFieldValueService:
         return cls.serialize_values([issue_id]).get(str(issue_id), {})
 
     @classmethod
+    def attach_field_values_to_issue_dicts(cls, issue_dicts):
+        issue_ids = [issue_dict.get("id") for issue_dict in issue_dicts if issue_dict.get("id") is not None]
+        values_by_issue_id = cls.serialize_values(issue_ids)
+        for issue_dict in issue_dicts:
+            issue_id = issue_dict.get("id")
+            issue_dict["field_values"] = values_by_issue_id.get(str(issue_id), {}) if issue_id is not None else {}
+        return issue_dicts
+
+    @classmethod
+    def attach_field_values_to_issue_dict(cls, issue_dict):
+        issue_dict["field_values"] = cls.serialize_issue_value_map(issue_dict.get("id"))
+        return issue_dict
+
+    @classmethod
     @transaction.atomic
     def update_issue_values(cls, issue, raw_values):
         if raw_values is None:

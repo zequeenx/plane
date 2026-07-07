@@ -161,6 +161,7 @@ class IssueListEndpoint(BaseAPIView):
 
         if self.fields or self.expand:
             issues = IssueSerializer(issue_queryset, many=True, fields=self.fields, expand=self.expand).data
+            issues = IssueFieldValueService.attach_field_values_to_issue_dicts(issues)
         else:
             issues = issue_queryset.values(
                 "id",
@@ -193,6 +194,7 @@ class IssueListEndpoint(BaseAPIView):
             )
             datetime_fields = ["created_at", "updated_at"]
             issues = user_timezone_converter(issues, datetime_fields, request.user.user_timezone)
+            issues = IssueFieldValueService.attach_field_values_to_issue_dicts(issues)
         return Response(issues, status=status.HTTP_200_OK)
 
 
@@ -326,8 +328,8 @@ class IssueViewSet(BaseViewSet):
                         order_by=order_by_param,
                         queryset=issue_queryset,
                         total_count_queryset=filtered_issue_queryset,
-                        on_results=lambda issues: issue_on_results(
-                            group_by=group_by, issues=issues, sub_group_by=sub_group_by
+                        on_results=lambda issues: IssueFieldValueService.attach_field_values_to_issue_dicts(
+                            issue_on_results(group_by=group_by, issues=issues, sub_group_by=sub_group_by)
                         ),
                         paginator_cls=SubGroupedOffsetPaginator,
                         group_by_fields=issue_group_values(
@@ -362,8 +364,8 @@ class IssueViewSet(BaseViewSet):
                     order_by=order_by_param,
                     queryset=issue_queryset,
                     total_count_queryset=filtered_issue_queryset,
-                    on_results=lambda issues: issue_on_results(
-                        group_by=group_by, issues=issues, sub_group_by=sub_group_by
+                    on_results=lambda issues: IssueFieldValueService.attach_field_values_to_issue_dicts(
+                        issue_on_results(group_by=group_by, issues=issues, sub_group_by=sub_group_by)
                     ),
                     paginator_cls=GroupedOffsetPaginator,
                     group_by_fields=issue_group_values(
@@ -389,7 +391,9 @@ class IssueViewSet(BaseViewSet):
                 request=request,
                 queryset=issue_queryset,
                 total_count_queryset=filtered_issue_queryset,
-                on_results=lambda issues: issue_on_results(group_by=group_by, issues=issues, sub_group_by=sub_group_by),
+                on_results=lambda issues: IssueFieldValueService.attach_field_values_to_issue_dicts(
+                    issue_on_results(group_by=group_by, issues=issues, sub_group_by=sub_group_by)
+                ),
             )
 
     @allow_permission([ROLE.ADMIN, ROLE.MEMBER])
@@ -465,7 +469,7 @@ class IssueViewSet(BaseViewSet):
             )
             datetime_fields = ["created_at", "updated_at"]
             issue = user_timezone_converter(issue, datetime_fields, request.user.user_timezone)
-            issue["field_values"] = IssueFieldValueService.serialize_issue_value_map(serializer.data["id"])
+            issue = IssueFieldValueService.attach_field_values_to_issue_dict(issue)
             # Send the model activity
             model_activity.delay(
                 model_name="issue",
@@ -619,7 +623,8 @@ class IssueViewSet(BaseViewSet):
         )
 
         serializer = IssueDetailSerializer(issue, expand=self.expand)
-        return Response(serializer.data, status=status.HTTP_200_OK)
+        issue_data = IssueFieldValueService.attach_field_values_to_issue_dict(serializer.data)
+        return Response(issue_data, status=status.HTTP_200_OK)
 
     @allow_permission(allowed_roles=[ROLE.ADMIN, ROLE.MEMBER], creator=True, model=Issue)
     def partial_update(self, request, slug, project_id, pk=None):
@@ -1097,9 +1102,9 @@ class IssueDetailEndpoint(BaseAPIView):
             order_by=order_by_param,
             queryset=issue,
             total_count_queryset=total_issue_queryset,
-            on_results=lambda issue: IssueListDetailSerializer(
-                issue, many=True, fields=self.fields, expand=self.expand
-            ).data,
+            on_results=lambda issue: IssueFieldValueService.attach_field_values_to_issue_dicts(
+                IssueListDetailSerializer(issue, many=True, fields=self.fields, expand=self.expand).data
+            ),
         )
 
 
@@ -1364,4 +1369,5 @@ class IssueDetailIdentifierEndpoint(BaseAPIView):
 
         # Serialize the issue
         serializer = IssueDetailSerializer(issue, expand=self.expand)
-        return Response(serializer.data, status=status.HTTP_200_OK)
+        issue_data = IssueFieldValueService.attach_field_values_to_issue_dict(serializer.data)
+        return Response(issue_data, status=status.HTTP_200_OK)
