@@ -371,3 +371,112 @@ def test_work_item_editor_can_create_and_delete_text_option(api_client, workspac
     assert not IssueFieldValueOption.objects.filter(id=selected_option.id).exists()
     assert not ProjectIssueFieldOption.all_objects.filter(id=option.id).exists()
     assert not IssueFieldValueOption.all_objects.filter(id=selected_option.id).exists()
+
+
+def test_member_can_update_issue_field_values(api_client, workspace, project, project_member, issue):
+    api_client.force_authenticate(project_member)
+    text_field = ProjectIssueField.objects.create(
+        workspace=workspace,
+        project=project,
+        name="Customer note",
+        field_type=ProjectIssueField.FieldType.PLAIN_TEXT,
+    )
+    member_field = ProjectIssueField.objects.create(
+        workspace=workspace,
+        project=project,
+        name="Reviewer",
+        field_type=ProjectIssueField.FieldType.SINGLE_MEMBER,
+    )
+
+    response = api_client.patch(
+        f"/api/workspaces/{workspace.slug}/projects/{project.id}/issues/{issue.id}/field-values/",
+        {
+            "field_values": {
+                str(text_field.id): "Needs API review",
+                str(member_field.id): str(project_member.id),
+            }
+        },
+        format="json",
+    )
+
+    assert response.status_code == status.HTTP_200_OK
+    assert response.data["field_values"][str(text_field.id)] == "Needs API review"
+    assert response.data["field_values"][str(member_field.id)] == str(project_member.id)
+    assert IssueFieldValue.objects.filter(issue=issue, field=text_field, text_value="Needs API review").exists()
+    assert IssueFieldValueUser.objects.filter(
+        value__issue=issue, value__field=member_field, user=project_member
+    ).exists()
+
+
+def test_single_select_value_replaces_existing_option(api_client, workspace, project, project_member, issue):
+    api_client.force_authenticate(project_member)
+    field = ProjectIssueField.objects.create(
+        workspace=workspace,
+        project=project,
+        name="Severity",
+        field_type=ProjectIssueField.FieldType.SINGLE_SELECT,
+    )
+    low = ProjectIssueFieldOption.objects.create(workspace=workspace, project=project, field=field, value="Low")
+    high = ProjectIssueFieldOption.objects.create(workspace=workspace, project=project, field=field, value="High")
+
+    first_response = api_client.patch(
+        f"/api/workspaces/{workspace.slug}/projects/{project.id}/issues/{issue.id}/field-values/",
+        {"field_values": {str(field.id): str(low.id)}},
+        format="json",
+    )
+    second_response = api_client.patch(
+        f"/api/workspaces/{workspace.slug}/projects/{project.id}/issues/{issue.id}/field-values/",
+        {"field_values": {str(field.id): str(high.id)}},
+        format="json",
+    )
+
+    value = IssueFieldValue.objects.get(issue=issue, field=field)
+    assert first_response.status_code == status.HTTP_200_OK
+    assert second_response.status_code == status.HTTP_200_OK
+    assert second_response.data["field_values"][str(field.id)] == str(high.id)
+    assert list(value.selected_options.values_list("option_id", flat=True)) == [high.id]
+    assert not IssueFieldValueOption.all_objects.filter(value=value, option=low).exists()
+
+
+def test_disabled_field_rejects_value_update(api_client, workspace, project, project_member, issue):
+    api_client.force_authenticate(project_member)
+    field = ProjectIssueField.objects.create(
+        workspace=workspace,
+        project=project,
+        name="Customer note",
+        field_type=ProjectIssueField.FieldType.PLAIN_TEXT,
+        is_disabled=True,
+        disabled_at=timezone.now(),
+    )
+
+    response = api_client.patch(
+        f"/api/workspaces/{workspace.slug}/projects/{project.id}/issues/{issue.id}/field-values/",
+        {"field_values": {str(field.id): "Blocked"}},
+        format="json",
+    )
+
+    assert response.status_code == status.HTTP_400_BAD_REQUEST
+    assert not IssueFieldValue.objects.filter(issue=issue, field=field).exists()
+
+
+def test_create_issue_accepts_field_values(api_client, workspace, project, project_member):
+    api_client.force_authenticate(project_member)
+    field = ProjectIssueField.objects.create(
+        workspace=workspace,
+        project=project,
+        name="Release date",
+        field_type=ProjectIssueField.FieldType.DATE,
+    )
+
+    response = api_client.post(
+        f"/api/workspaces/{workspace.slug}/projects/{project.id}/issues/",
+        {
+            "name": "Issue with custom field",
+            "field_values": {str(field.id): "2026-07-07"},
+        },
+        format="json",
+    )
+
+    assert response.status_code == status.HTTP_201_CREATED
+    assert response.data["field_values"][str(field.id)] == "2026-07-07"
+    assert IssueFieldValue.objects.filter(issue_id=response.data["id"], field=field, date_value="2026-07-07").exists()

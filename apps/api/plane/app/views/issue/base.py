@@ -10,6 +10,7 @@ import json
 from django.contrib.postgres.aggregates import ArrayAgg
 from django.contrib.postgres.fields import ArrayField
 from django.core.serializers.json import DjangoJSONEncoder
+from django.db import transaction
 from django.db.models import (
     Count,
     Exists,
@@ -40,6 +41,7 @@ from plane.app.serializers import (
     IssueSerializer,
     ProjectUserPropertySerializer,
 )
+from plane.app.services.issue_field import IssueFieldValueService
 from plane.bgtasks.issue_activities_task import issue_activity
 from plane.bgtasks.issue_description_version_task import issue_description_version_task
 from plane.bgtasks.recent_visited_task import recent_visited_task
@@ -393,9 +395,11 @@ class IssueViewSet(BaseViewSet):
     @allow_permission([ROLE.ADMIN, ROLE.MEMBER])
     def create(self, request, slug, project_id):
         project = Project.objects.get(pk=project_id)
+        request_data = request.data.copy()
+        field_values = request_data.pop("field_values", None)
 
         serializer = IssueCreateSerializer(
-            data=request.data,
+            data=request_data,
             context={
                 "project_id": project_id,
                 "workspace_id": project.workspace_id,
@@ -404,7 +408,9 @@ class IssueViewSet(BaseViewSet):
         )
 
         if serializer.is_valid():
-            serializer.save()
+            with transaction.atomic():
+                created_issue = serializer.save()
+                IssueFieldValueService.update_issue_values(created_issue, field_values)
 
             # Track the issue
             issue_activity.delay(
@@ -459,6 +465,7 @@ class IssueViewSet(BaseViewSet):
             )
             datetime_fields = ["created_at", "updated_at"]
             issue = user_timezone_converter(issue, datetime_fields, request.user.user_timezone)
+            issue["field_values"] = IssueFieldValueService.serialize_issue_value_map(serializer.data["id"])
             # Send the model activity
             model_activity.delay(
                 model_name="issue",

@@ -4,7 +4,8 @@ from rest_framework.response import Response
 
 from plane.app.permissions import ROLE, allow_permission
 from plane.app.serializers import ProjectIssueFieldOptionSerializer, ProjectIssueFieldSerializer
-from plane.db.models import IssueFieldValueOption, ProjectIssueField, ProjectIssueFieldOption
+from plane.app.services.issue_field import IssueFieldValueService
+from plane.db.models import Issue, IssueFieldValueOption, ProjectIssueField, ProjectIssueFieldOption
 
 from .base import BaseAPIView, BaseViewSet
 
@@ -104,3 +105,16 @@ class ProjectIssueFieldOptionViewSet(BaseViewSet):
             IssueFieldValueOption.objects.filter(option=option).delete(soft=False)
             option.delete(soft=False)
         return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+class IssueFieldValueEndpoint(BaseAPIView):
+    @allow_permission([ROLE.ADMIN, ROLE.MEMBER], creator=True, model=Issue)
+    def patch(self, request, slug, project_id, issue_id):
+        issue = Issue.objects.get(workspace__slug=slug, project_id=project_id, pk=issue_id)
+        raw_values = request.data.get("field_values", request.data)
+        with transaction.atomic():
+            IssueFieldValueService.update_issue_values(issue, raw_values)
+        return Response(
+            {"field_values": IssueFieldValueService.serialize_issue_value_map(issue.id)},
+            status=status.HTTP_200_OK,
+        )
