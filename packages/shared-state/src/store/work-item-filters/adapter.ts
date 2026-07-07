@@ -22,6 +22,8 @@ import { createConditionNode, createAndGroupNode, isAndGroupNode, isConditionNod
 // local imports
 import { FilterAdapter } from "../rich-filters/adapter";
 
+type TExternalWorkItemFilterValue = TFilterValue | string[];
+
 class WorkItemFiltersAdapter extends FilterAdapter<TWorkItemFilterProperty, TWorkItemFilterExpression> {
   /**
    * Converts external work item filter expression to internal filter tree
@@ -213,7 +215,7 @@ class WorkItemFiltersAdapter extends FilterAdapter<TWorkItemFilterProperty, TWor
    * @param value - The string value to parse
    * @returns Parsed value as string or array of strings
    */
-  private _parseFilterValue = (value: TFilterValue): SingleOrArray<TFilterValue> => {
+  private _parseFilterValue = (value: TExternalWorkItemFilterValue): SingleOrArray<TFilterValue> => {
     if (!value) return value;
 
     if (typeof value !== "string") return value;
