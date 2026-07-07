@@ -16,6 +16,7 @@ from plane.db.models import (
     User,
     WorkspaceMember,
 )
+from plane.app.services.issue_field import IssueFieldValueService
 
 
 pytestmark = pytest.mark.django_db
@@ -587,3 +588,74 @@ def test_issue_retrieve_includes_field_values(api_client, workspace, project, pr
 
     assert response.status_code == status.HTTP_200_OK
     assert response.data["field_values"] == {str(field.id): "Needs API review"}
+
+
+def test_v2_issue_list_includes_field_values(api_client, workspace, project, project_member, issue):
+    api_client.force_authenticate(project_member)
+    field = ProjectIssueField.objects.create(
+        workspace=workspace,
+        project=project,
+        name="Customer note",
+        field_type=ProjectIssueField.FieldType.PLAIN_TEXT,
+    )
+    IssueFieldValue.objects.create(
+        workspace=workspace,
+        project=project,
+        issue=issue,
+        field=field,
+        text_value="Needs API review",
+    )
+
+    response = api_client.get(f"/api/workspaces/{workspace.slug}/projects/{project.id}/v2/issues/")
+
+    assert response.status_code == status.HTTP_200_OK
+    response_issue = next(item for item in response.data["results"] if item["id"] == issue.id)
+    assert response_issue["field_values"] == {str(field.id): "Needs API review"}
+
+
+def test_grouped_issue_list_includes_field_values(api_client, workspace, project, project_member, issue):
+    api_client.force_authenticate(project_member)
+    issue.priority = "high"
+    issue.save(update_fields=["priority", "updated_at"])
+    field = ProjectIssueField.objects.create(
+        workspace=workspace,
+        project=project,
+        name="Customer note",
+        field_type=ProjectIssueField.FieldType.PLAIN_TEXT,
+    )
+    IssueFieldValue.objects.create(
+        workspace=workspace,
+        project=project,
+        issue=issue,
+        field=field,
+        text_value="Needs API review",
+    )
+
+    response = api_client.get(f"/api/workspaces/{workspace.slug}/projects/{project.id}/issues/?group_by=priority")
+
+    assert response.status_code == status.HTTP_200_OK
+    response_issue = next(item for item in response.data["results"]["high"]["results"] if item["id"] == issue.id)
+    assert response_issue["field_values"] == {str(field.id): "Needs API review"}
+
+
+def test_issue_dict_field_value_attachment_handles_falsy_issue_dict():
+    assert IssueFieldValueService.attach_field_values_to_issue_dict(None) == {}
+
+
+def test_issue_list_batches_field_value_serialization_once(
+    api_client, workspace, project, project_member, issue, monkeypatch
+):
+    api_client.force_authenticate(project_member)
+    calls = []
+    serialize_values = IssueFieldValueService.serialize_values
+
+    def spy_serialize_values(cls, issue_ids):
+        calls.append(list(issue_ids))
+        return serialize_values(issue_ids)
+
+    monkeypatch.setattr(IssueFieldValueService, "serialize_values", classmethod(spy_serialize_values))
+
+    response = api_client.get(f"/api/workspaces/{workspace.slug}/projects/{project.id}/issues/")
+
+    assert response.status_code == status.HTTP_200_OK
+    assert calls == [[issue.id]]

@@ -41,6 +41,8 @@ class IssueFieldValueService:
 
     @classmethod
     def attach_field_values_to_issue_dict(cls, issue_dict):
+        if not issue_dict:
+            return {}
         issue_dict["field_values"] = cls.serialize_issue_value_map(issue_dict.get("id"))
         return issue_dict
 

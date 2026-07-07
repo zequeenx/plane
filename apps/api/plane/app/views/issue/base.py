@@ -862,6 +862,7 @@ class IssuePaginatedViewSet(BaseViewSet):
         # converting the datetime fields in paginated data
         datetime_fields = ["created_at", "updated_at"]
         paginated_data = user_timezone_converter(paginated_data, datetime_fields, timezone)
+        paginated_data = IssueFieldValueService.attach_field_values_to_issue_dicts(paginated_data)
 
         return paginated_data
 
