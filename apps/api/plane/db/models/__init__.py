@@ -19,6 +19,13 @@ from .estimate import Estimate, EstimatePoint
 from .exporter import ExporterHistory
 from .importer import Importer
 from .intake import Intake, IntakeIssue
+from .issue_field import (
+    IssueFieldValue,
+    IssueFieldValueOption,
+    IssueFieldValueUser,
+    ProjectIssueField,
+    ProjectIssueFieldOption,
+)
 from .integration import (
     GithubCommentSync,
     GithubIssueSync,
