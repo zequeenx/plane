@@ -5,6 +5,7 @@
  */
 
 import type { IProjectMemberNavigationPreferences } from "./project";
+import type { TCustomPropertyKey } from "./issues/issue-fields";
 import type { TIssue } from "./issues/issue";
 import type { LOGICAL_OPERATOR, TSupportedOperators } from "./rich-filters";
 import type { CompleteOrEmpty } from "./utils";
@@ -112,12 +113,13 @@ export const WORK_ITEM_FILTER_PROPERTY_KEYS = [
   "created_at",
   "updated_at",
 ] as const;
-export type TWorkItemFilterProperty = (typeof WORK_ITEM_FILTER_PROPERTY_KEYS)[number];
+export type TSystemWorkItemFilterProperty = (typeof WORK_ITEM_FILTER_PROPERTY_KEYS)[number];
+export type TWorkItemFilterProperty = TSystemWorkItemFilterProperty | TCustomPropertyKey;
 
 export type TWorkItemFilterConditionKey = `${TWorkItemFilterProperty}__${TSupportedOperators}`;
 
 export type TWorkItemFilterConditionData = Partial<{
-  [K in TWorkItemFilterConditionKey]: string | boolean | number;
+  [K in TWorkItemFilterConditionKey]: string | boolean | number | string[];
 }>;
 
 export type TWorkItemFilterAndGroup = {

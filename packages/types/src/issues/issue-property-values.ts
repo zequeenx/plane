@@ -4,5 +4,7 @@
  * See the LICENSE file for details.
  */
 
-export type TIssuePropertyValues = Record<string, unknown>;
+import type { TIssueFieldValues } from "./issue-fields";
+
+export type TIssuePropertyValues = TIssueFieldValues;
 export type TIssuePropertyValueErrors = Record<string, unknown>;

@@ -19,6 +19,8 @@ import type {
 } from "./view-props";
 import type { IWorkspaceLite } from "./workspace";
 
+export type * from "./issues/issue-fields";
+
 export interface IIssueCycle {
   id: string;
   cycle_detail: ICycle;

@@ -7,6 +7,7 @@
 import type { TIssuePriorities } from "../issues";
 import type { TStateGroups } from "../state";
 import type { TIssuePublicComment } from "./activity/issue_comment";
+import type { TIssueFieldValues } from "./issue-fields";
 import type { TIssueAttachment } from "./issue_attachment";
 import type { TIssueLink } from "./issue_link";
 import type { TIssueReaction, IIssuePublicReaction, IPublicVote } from "./issue_reaction";
@@ -64,6 +65,7 @@ export type TBaseIssue = {
   cycle_id: string | null;
   module_ids: string[] | null;
   type_id: string | null;
+  field_values: TIssueFieldValues;
 
   created_at: string;
   updated_at: string;
