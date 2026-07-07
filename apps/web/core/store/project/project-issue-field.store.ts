@@ -9,12 +9,14 @@ import { action, makeObservable, observable, runInAction } from "mobx";
 import { computedFn } from "mobx-utils";
 // types
 import type {
+  TIssueFieldValue,
   TIssueFieldValuesUpdatePayload,
   TProjectIssueField,
   TProjectIssueFieldOption,
   TProjectIssueFieldPayload,
   TProjectIssueFieldUpdatePayload,
 } from "@plane/types";
+import { EProjectIssueFieldType } from "@plane/types";
 // services
 import { ProjectIssueFieldService } from "@/services/project";
 // store
@@ -186,6 +188,11 @@ export class ProjectIssueFieldStore implements IProjectIssueFieldStore {
 
       if (data.is_disabled === true || data.is_disabled === false) {
         await Promise.all([this.getFields(workspaceSlug, projectId), this.getDisabledFields(workspaceSlug, projectId)]);
+        if (data.is_disabled === true) {
+          runInAction(() => {
+            this.removeFieldValuesFromCachedIssues(projectId, fieldId);
+          });
+        }
       } else {
         runInAction(() => {
           this.upsertField(projectId, response);
@@ -251,6 +258,7 @@ export class ProjectIssueFieldStore implements IProjectIssueFieldStore {
 
       runInAction(() => {
         this.removeOption(projectId, fieldId, optionId);
+        this.removeOptionValuesFromCachedIssues(projectId, fieldId, optionId);
         this.loader = false;
       });
     } catch (error) {
@@ -296,6 +304,59 @@ export class ProjectIssueFieldStore implements IProjectIssueFieldStore {
   private removeOption = (projectId: string, fieldId: string, optionId: string) => {
     this.removeFieldOption(this.fieldsMap, projectId, fieldId, optionId);
     this.removeFieldOption(this.disabledFieldsMap, projectId, fieldId, optionId);
+  };
+
+  private removeFieldValuesFromCachedIssues = (projectId: string, fieldId: string) => {
+    const issuesMap = this.projectRootStore.rootStore.issue.issues.issuesMap;
+
+    Object.values(issuesMap).forEach((issue) => {
+      if (issue.project_id !== projectId || !issue.field_values || !(fieldId in issue.field_values)) return;
+
+      const fieldValues = Object.assign({}, issue.field_values);
+      delete fieldValues[fieldId];
+      set(issuesMap, [issue.id, "field_values"], fieldValues);
+    });
+  };
+
+  private removeOptionValuesFromCachedIssues = (projectId: string, fieldId: string, optionId: string) => {
+    if (!this.isOptionField(projectId, fieldId)) return;
+
+    const issuesMap = this.projectRootStore.rootStore.issue.issues.issuesMap;
+
+    Object.values(issuesMap).forEach((issue) => {
+      if (issue.project_id !== projectId || !issue.field_values || !(fieldId in issue.field_values)) return;
+
+      const nextValue = this.removeOptionFromValue(issue.field_values[fieldId], optionId);
+      const fieldValues = Object.assign({}, issue.field_values);
+
+      if (typeof nextValue === "undefined") delete fieldValues[fieldId];
+      else fieldValues[fieldId] = nextValue;
+
+      set(issuesMap, [issue.id, "field_values"], fieldValues);
+    });
+  };
+
+  private isOptionField = (projectId: string, fieldId: string) => {
+    const field = this.getFieldById(projectId, fieldId) ?? this.getDisabledFieldById(projectId, fieldId);
+
+    return (
+      field?.field_type === EProjectIssueFieldType.SINGLE_SELECT ||
+      field?.field_type === EProjectIssueFieldType.MULTI_SELECT
+    );
+  };
+
+  private removeOptionFromValue = (
+    fieldValue: TIssueFieldValue | undefined,
+    optionId: string
+  ): TIssueFieldValue | undefined => {
+    if (fieldValue === optionId) return undefined;
+
+    if (Array.isArray(fieldValue)) {
+      const filteredValue = fieldValue.filter((currentOptionId) => currentOptionId !== optionId);
+      return filteredValue.length > 0 ? filteredValue : undefined;
+    }
+
+    return fieldValue;
   };
 
   private upsertFieldOption = (
