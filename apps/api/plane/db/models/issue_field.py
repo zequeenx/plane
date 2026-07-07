@@ -1,7 +1,22 @@
 from django.conf import settings
+from django.core.exceptions import ValidationError
 from django.db import models
 
 from .base import BaseModel
+
+
+def _add_update_fields(kwargs, *field_names):
+    update_fields = kwargs.get("update_fields")
+    if update_fields is not None:
+        kwargs["update_fields"] = set(update_fields).union(field_names)
+
+
+def _full_clean_issue_field_model(instance):
+    instance.full_clean(
+        exclude=["created_by", "updated_by"],
+        validate_unique=False,
+        validate_constraints=False,
+    )
 
 
 class ProjectIssueField(BaseModel):
@@ -37,6 +52,16 @@ class ProjectIssueField(BaseModel):
     def __str__(self):
         return f"{self.name} <{self.project_id}>"
 
+    def save(self, *args, **kwargs):
+        if self.project_id:
+            workspace_id = self.project.workspace_id
+            if self.workspace_id != workspace_id:
+                self.workspace_id = workspace_id
+                _add_update_fields(kwargs, "workspace")
+
+        _full_clean_issue_field_model(self)
+        return super().save(*args, **kwargs)
+
 
 class ProjectIssueFieldOption(BaseModel):
     workspace = models.ForeignKey("db.Workspace", on_delete=models.CASCADE, related_name="project_issue_field_options")
@@ -58,6 +83,24 @@ class ProjectIssueFieldOption(BaseModel):
 
     def __str__(self):
         return f"{self.value} <{self.field_id}>"
+
+    def save(self, *args, **kwargs):
+        if self.field_id:
+            field = self.field
+            if self.project_id != field.project_id:
+                self.project_id = field.project_id
+                _add_update_fields(kwargs, "project")
+            if self.workspace_id != field.workspace_id:
+                self.workspace_id = field.workspace_id
+                _add_update_fields(kwargs, "workspace")
+        elif self.project_id:
+            workspace_id = self.project.workspace_id
+            if self.workspace_id != workspace_id:
+                self.workspace_id = workspace_id
+                _add_update_fields(kwargs, "workspace")
+
+        _full_clean_issue_field_model(self)
+        return super().save(*args, **kwargs)
 
 
 class IssueFieldValue(BaseModel):
@@ -84,6 +127,34 @@ class IssueFieldValue(BaseModel):
     def __str__(self):
         return f"{self.issue_id}::{self.field_id}"
 
+    def clean(self):
+        errors = {}
+
+        if self.issue_id and self.field_id:
+            issue = self.issue
+            field = self.field
+
+            if issue.project_id != field.project_id:
+                errors["field"] = "Field must belong to the issue project."
+            if issue.workspace_id != field.workspace_id:
+                errors["field"] = "Field must belong to the issue workspace."
+
+        if errors:
+            raise ValidationError(errors)
+
+    def save(self, *args, **kwargs):
+        if self.issue_id:
+            issue = self.issue
+            if self.project_id != issue.project_id:
+                self.project_id = issue.project_id
+                _add_update_fields(kwargs, "project")
+            if self.workspace_id != issue.workspace_id:
+                self.workspace_id = issue.workspace_id
+                _add_update_fields(kwargs, "workspace")
+
+        _full_clean_issue_field_model(self)
+        return super().save(*args, **kwargs)
+
 
 class IssueFieldValueOption(BaseModel):
     workspace = models.ForeignKey("db.Workspace", on_delete=models.CASCADE, related_name="issue_field_value_options")
@@ -102,6 +173,36 @@ class IssueFieldValueOption(BaseModel):
             )
         ]
 
+    def clean(self):
+        errors = {}
+
+        if self.value_id and self.option_id:
+            value = self.value
+            option = self.option
+
+            if option.field_id != value.field_id:
+                errors["option"] = "Option must belong to the value field."
+            if option.project_id != value.project_id:
+                errors["option"] = "Option must belong to the value project."
+            if option.workspace_id != value.workspace_id:
+                errors["option"] = "Option must belong to the value workspace."
+
+        if errors:
+            raise ValidationError(errors)
+
+    def save(self, *args, **kwargs):
+        if self.value_id:
+            value = self.value
+            if self.project_id != value.project_id:
+                self.project_id = value.project_id
+                _add_update_fields(kwargs, "project")
+            if self.workspace_id != value.workspace_id:
+                self.workspace_id = value.workspace_id
+                _add_update_fields(kwargs, "workspace")
+
+        _full_clean_issue_field_model(self)
+        return super().save(*args, **kwargs)
+
 
 class IssueFieldValueUser(BaseModel):
     workspace = models.ForeignKey("db.Workspace", on_delete=models.CASCADE, related_name="issue_field_value_users")
@@ -119,3 +220,29 @@ class IssueFieldValueUser(BaseModel):
                 name="issue_field_value_user_unique_value_user_when_not_deleted",
             )
         ]
+
+    def clean(self):
+        errors = {}
+
+        if self.value_id:
+            value = self.value
+            if self.project_id and self.project_id != value.project_id:
+                errors["project"] = "Project must match the field value project."
+            if self.workspace_id and self.workspace_id != value.workspace_id:
+                errors["workspace"] = "Workspace must match the field value workspace."
+
+        if errors:
+            raise ValidationError(errors)
+
+    def save(self, *args, **kwargs):
+        if self.value_id:
+            value = self.value
+            if self.project_id != value.project_id:
+                self.project_id = value.project_id
+                _add_update_fields(kwargs, "project")
+            if self.workspace_id != value.workspace_id:
+                self.workspace_id = value.workspace_id
+                _add_update_fields(kwargs, "workspace")
+
+        _full_clean_issue_field_model(self)
+        return super().save(*args, **kwargs)
