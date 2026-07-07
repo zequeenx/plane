@@ -4,9 +4,9 @@
  * See the LICENSE file for details.
  */
 
-import type { IProjectMemberNavigationPreferences } from "./project";
-import type { TCustomPropertyKey } from "./issues/issue-fields";
+import type { TCustomPropertyFilterOperator, TCustomPropertyKey } from "./issues/issue-fields";
 import type { TIssue } from "./issues/issue";
+import type { IProjectMemberNavigationPreferences } from "./project";
 import type { LOGICAL_OPERATOR, TSupportedOperators } from "./rich-filters";
 import type { CompleteOrEmpty } from "./utils";
 
@@ -116,7 +116,9 @@ export const WORK_ITEM_FILTER_PROPERTY_KEYS = [
 export type TSystemWorkItemFilterProperty = (typeof WORK_ITEM_FILTER_PROPERTY_KEYS)[number];
 export type TWorkItemFilterProperty = TSystemWorkItemFilterProperty | TCustomPropertyKey;
 
-export type TWorkItemFilterConditionKey = `${TWorkItemFilterProperty}__${TSupportedOperators}`;
+export type TSystemWorkItemFilterConditionKey = `${TSystemWorkItemFilterProperty}__${TSupportedOperators}`;
+export type TCustomPropertyFilterConditionKey = `${TCustomPropertyKey}__${TCustomPropertyFilterOperator}`;
+export type TWorkItemFilterConditionKey = TSystemWorkItemFilterConditionKey | TCustomPropertyFilterConditionKey;
 
 export type TWorkItemFilterConditionData = Partial<{
   [K in TWorkItemFilterConditionKey]: string | boolean | number | string[];
