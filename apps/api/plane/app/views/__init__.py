@@ -154,6 +154,8 @@ from .issue.subscriber import IssueSubscriberViewSet
 
 from .issue.version import IssueVersionEndpoint, WorkItemDescriptionVersionEndpoint
 
+from .issue_field import DisabledProjectIssueFieldsEndpoint, ProjectIssueFieldOptionViewSet, ProjectIssueFieldViewSet
+
 from .module.base import (
     ModuleViewSet,
     ModuleLinkViewSet,

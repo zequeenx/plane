@@ -5,8 +5,11 @@
 from django.urls import path
 
 from plane.app.views import (
-    ProjectViewSet,
     DeployBoardViewSet,
+    DisabledProjectIssueFieldsEndpoint,
+    ProjectIssueFieldOptionViewSet,
+    ProjectIssueFieldViewSet,
+    ProjectViewSet,
     ProjectInvitationsViewset,
     ProjectMemberViewSet,
     ProjectMemberUserEndpoint,
@@ -128,5 +131,30 @@ urlpatterns = [
         "workspaces/<str:slug>/projects/<uuid:project_id>/preferences/member/<uuid:member_id>/",
         ProjectMemberPreferenceEndpoint.as_view(),
         name="project-member-preference",
+    ),
+    path(
+        "workspaces/<str:slug>/projects/<uuid:project_id>/issue-fields/",
+        ProjectIssueFieldViewSet.as_view({"get": "list", "post": "create"}),
+        name="project-issue-fields",
+    ),
+    path(
+        "workspaces/<str:slug>/projects/<uuid:project_id>/issue-fields/disabled/",
+        DisabledProjectIssueFieldsEndpoint.as_view(),
+        name="project-issue-fields-disabled",
+    ),
+    path(
+        "workspaces/<str:slug>/projects/<uuid:project_id>/issue-fields/<uuid:pk>/",
+        ProjectIssueFieldViewSet.as_view({"patch": "partial_update", "delete": "destroy"}),
+        name="project-issue-field",
+    ),
+    path(
+        "workspaces/<str:slug>/projects/<uuid:project_id>/issue-fields/<uuid:field_id>/options/",
+        ProjectIssueFieldOptionViewSet.as_view({"post": "create"}),
+        name="project-issue-field-options",
+    ),
+    path(
+        "workspaces/<str:slug>/projects/<uuid:project_id>/issue-fields/<uuid:field_id>/options/<uuid:pk>/",
+        ProjectIssueFieldOptionViewSet.as_view({"delete": "destroy"}),
+        name="project-issue-field-option",
     ),
 ]
