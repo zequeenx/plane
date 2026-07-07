@@ -88,7 +88,7 @@ export const ProjectFieldTextSelectEditor = observer(function ProjectFieldTextSe
         ? selectedOptionIds.filter((currentOptionId) => currentOptionId !== optionId)
         : [...selectedOptionIds, optionId];
 
-      onChange(field.id, nextValue.length > 0 ? nextValue : null);
+      onChange(field.id, nextValue);
       return;
     }
 
@@ -130,7 +130,7 @@ export const ProjectFieldTextSelectEditor = observer(function ProjectFieldTextSe
       await deleteOption(workspaceSlug, projectId, field.id, optionId);
       if (selectedOptionIds.includes(optionId)) {
         const nextValue = selectedOptionIds.filter((currentOptionId) => currentOptionId !== optionId);
-        onChange(field.id, isMultiple ? (nextValue.length > 0 ? nextValue : null) : null);
+        onChange(field.id, isMultiple ? nextValue : null);
       }
     } catch {
       setToast({
@@ -184,7 +184,7 @@ export const ProjectFieldTextSelectEditor = observer(function ProjectFieldTextSe
                 className="hidden h-3 w-3 text-secondary group-hover:inline"
                 onClick={(event) => {
                   event.stopPropagation();
-                  onChange(field.id, null);
+                  onChange(field.id, isMultiple ? [] : null);
                 }}
               />
             )}

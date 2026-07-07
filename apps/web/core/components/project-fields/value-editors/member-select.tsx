@@ -24,7 +24,7 @@ export const ProjectFieldMemberSelectEditor = observer(function ProjectFieldMemb
     return (
       <MemberDropdown
         value={memberIds}
-        onChange={(nextValue) => onChange(field.id, nextValue.length > 0 ? nextValue : null)}
+        onChange={(nextValue) => onChange(field.id, nextValue)}
         disabled={disabled}
         projectId={projectId}
         placeholder={field.name}

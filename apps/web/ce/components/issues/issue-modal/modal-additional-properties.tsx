@@ -14,6 +14,23 @@ import { ProjectFieldValueEditors } from "@/components/project-fields/value-edit
 // hooks
 import { useProjectIssueFields } from "@/hooks/store/use-project-issue-fields";
 
+const isEmptyFieldValue = (value: TIssueFieldValue | undefined) => {
+  if (value === null || typeof value === "undefined") return true;
+  if (typeof value === "string") return value.trim() === "";
+  if (Array.isArray(value)) return value.length === 0;
+
+  return !value.start && !value.end;
+};
+
+const getSparseFieldValues = (values: TIssueFieldValues, fieldId: string, value: TIssueFieldValue) => {
+  const nextFieldValues: TIssueFieldValues = { ...values };
+
+  if (isEmptyFieldValue(value)) delete nextFieldValues[fieldId];
+  else nextFieldValues[fieldId] = value;
+
+  return nextFieldValues;
+};
+
 export type TWorkItemModalAdditionalPropertiesProps = {
   isDraft?: boolean;
   onFormChange?: () => void;
@@ -43,10 +60,9 @@ export const WorkItemModalAdditionalProperties = observer(function WorkItemModal
 
   const handleChange = async (fieldId: string, value: TIssueFieldValue) => {
     const shouldPersistImmediately = !!workItemId && !isDraft;
-    const nextFieldValues: TIssueFieldValues = {
-      ...fieldValues,
-      [fieldId]: value,
-    };
+    const nextFieldValues = shouldPersistImmediately
+      ? { ...fieldValues, [fieldId]: value }
+      : getSparseFieldValues(fieldValues, fieldId, value);
 
     setValue("field_values", nextFieldValues, { shouldDirty: !shouldPersistImmediately, shouldValidate: true });
     if (!shouldPersistImmediately) onFormChange?.();
