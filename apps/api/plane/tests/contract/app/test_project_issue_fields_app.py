@@ -5,10 +5,14 @@ from django.utils import timezone
 from rest_framework import status
 
 from plane.db.models import (
+    Cycle,
+    CycleIssue,
     Issue,
     IssueFieldValue,
     IssueFieldValueOption,
     IssueFieldValueUser,
+    Module,
+    ModuleIssue,
     Project,
     ProjectMember,
     ProjectIssueField,
@@ -38,6 +42,14 @@ def project_member(workspace, project):
     user = User.objects.create_user(email="issue-field-member@example.com", username="issue-field-member")
     WorkspaceMember.objects.create(workspace=workspace, member=user, role=15, is_active=True)
     ProjectMember.objects.create(workspace=workspace, project=project, member=user, role=15, is_active=True)
+    return user
+
+
+@pytest.fixture
+def project_guest(workspace, project):
+    user = User.objects.create_user(email="issue-field-guest@example.com", username="issue-field-guest")
+    WorkspaceMember.objects.create(workspace=workspace, member=user, role=5, is_active=True)
+    ProjectMember.objects.create(workspace=workspace, project=project, member=user, role=5, is_active=True)
     return user
 
 
@@ -374,6 +386,32 @@ def test_work_item_editor_can_create_and_delete_text_option(api_client, workspac
     assert not IssueFieldValueOption.all_objects.filter(id=selected_option.id).exists()
 
 
+def test_guest_can_create_and_delete_text_option(api_client, workspace, project, project_guest):
+    api_client.force_authenticate(project_guest)
+    field = ProjectIssueField.objects.create(
+        workspace=workspace,
+        project=project,
+        name="Area",
+        field_type=ProjectIssueField.FieldType.SINGLE_SELECT,
+    )
+
+    created = api_client.post(
+        f"/api/workspaces/{workspace.slug}/projects/{project.id}/issue-fields/{field.id}/options/",
+        {"value": "Escalated"},
+        format="json",
+    )
+
+    assert created.status_code == status.HTTP_201_CREATED
+    assert created.data["value"] == "Escalated"
+
+    deleted = api_client.delete(
+        f"/api/workspaces/{workspace.slug}/projects/{project.id}/issue-fields/{field.id}/options/{created.data['id']}/"
+    )
+
+    assert deleted.status_code == status.HTTP_204_NO_CONTENT
+    assert not ProjectIssueFieldOption.objects.filter(id=created.data["id"]).exists()
+
+
 def test_member_can_update_issue_field_values(api_client, workspace, project, project_member, issue):
     api_client.force_authenticate(project_member)
     text_field = ProjectIssueField.objects.create(
@@ -636,6 +674,85 @@ def test_grouped_issue_list_includes_field_values(api_client, workspace, project
     assert response.status_code == status.HTTP_200_OK
     response_issue = next(item for item in response.data["results"]["high"]["results"] if item["id"] == issue.id)
     assert response_issue["field_values"] == {str(field.id): "Needs API review"}
+
+
+def test_cycle_issue_list_includes_field_values(api_client, workspace, project, project_member, issue):
+    api_client.force_authenticate(project_member)
+    cycle = Cycle.objects.create(workspace=workspace, project=project, name="Cycle 1", owned_by=project_member)
+    CycleIssue.objects.create(workspace=workspace, project=project, cycle=cycle, issue=issue)
+    field = ProjectIssueField.objects.create(
+        workspace=workspace,
+        project=project,
+        name="Customer note",
+        field_type=ProjectIssueField.FieldType.PLAIN_TEXT,
+    )
+    IssueFieldValue.objects.create(
+        workspace=workspace,
+        project=project,
+        issue=issue,
+        field=field,
+        text_value="Needs cycle review",
+    )
+
+    response = api_client.get(
+        f"/api/workspaces/{workspace.slug}/projects/{project.id}/cycles/{cycle.id}/cycle-issues/"
+    )
+
+    assert response.status_code == status.HTTP_200_OK
+    response_issue = next(item for item in response.data["results"] if item["id"] == issue.id)
+    assert response_issue["field_values"] == {str(field.id): "Needs cycle review"}
+
+
+def test_module_issue_list_includes_field_values(api_client, workspace, project, project_member, issue):
+    api_client.force_authenticate(project_member)
+    module = Module.objects.create(workspace=workspace, project=project, name="Module 1")
+    ModuleIssue.objects.create(workspace=workspace, project=project, module=module, issue=issue)
+    field = ProjectIssueField.objects.create(
+        workspace=workspace,
+        project=project,
+        name="Customer note",
+        field_type=ProjectIssueField.FieldType.PLAIN_TEXT,
+    )
+    IssueFieldValue.objects.create(
+        workspace=workspace,
+        project=project,
+        issue=issue,
+        field=field,
+        text_value="Needs module review",
+    )
+
+    response = api_client.get(
+        f"/api/workspaces/{workspace.slug}/projects/{project.id}/modules/{module.id}/issues/"
+    )
+
+    assert response.status_code == status.HTTP_200_OK
+    response_issue = next(item for item in response.data["results"] if item["id"] == issue.id)
+    assert response_issue["field_values"] == {str(field.id): "Needs module review"}
+
+
+def test_archived_issue_list_includes_field_values(api_client, workspace, project, project_member, issue):
+    api_client.force_authenticate(project_member)
+    issue.archived_at = timezone.now()
+    issue.save(update_fields=["archived_at", "updated_at"])
+    field = ProjectIssueField.objects.create(
+        workspace=workspace,
+        project=project,
+        name="Customer note",
+        field_type=ProjectIssueField.FieldType.PLAIN_TEXT,
+    )
+    IssueFieldValue.objects.create(
+        workspace=workspace,
+        project=project,
+        issue=issue,
+        field=field,
+        text_value="Needs archive review",
+    )
+
+    response = api_client.get(f"/api/workspaces/{workspace.slug}/projects/{project.id}/archived-issues/")
+
+    assert response.status_code == status.HTTP_200_OK
+    response_issue = next(item for item in response.data["results"] if item["id"] == issue.id)
+    assert response_issue["field_values"] == {str(field.id): "Needs archive review"}
 
 
 def test_issue_dict_field_value_attachment_handles_falsy_issue_dict():

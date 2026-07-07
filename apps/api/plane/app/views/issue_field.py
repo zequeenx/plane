@@ -84,7 +84,7 @@ class ProjectIssueFieldOptionViewSet(BaseViewSet):
             is_disabled=False,
         )
 
-    @allow_permission([ROLE.ADMIN, ROLE.MEMBER])
+    @allow_permission([ROLE.ADMIN, ROLE.MEMBER, ROLE.GUEST])
     def create(self, request, slug, project_id, field_id):
         field = self._get_field(slug, project_id, field_id)
         if field.field_type not in TEXT_OPTION_FIELD_TYPES:
@@ -97,7 +97,7 @@ class ProjectIssueFieldOptionViewSet(BaseViewSet):
         serializer.save(workspace_id=field.workspace_id, project_id=field.project_id, field=field)
         return Response(serializer.data, status=status.HTTP_201_CREATED)
 
-    @allow_permission([ROLE.ADMIN, ROLE.MEMBER])
+    @allow_permission([ROLE.ADMIN, ROLE.MEMBER, ROLE.GUEST])
     def destroy(self, request, slug, project_id, field_id, pk=None):
         field = self._get_field(slug, project_id, field_id)
         option = ProjectIssueFieldOption.objects.get(field=field, pk=pk)
