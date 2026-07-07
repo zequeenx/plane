@@ -102,6 +102,7 @@ export const FilterValueInput = observer(function FilterValueInput<P extends TFi
       <NoValueFilterValueInput<P>
         config={filterFieldConfig as TNoValueFilterFieldConfig}
         condition={condition as TFilterConditionNodeForDisplay<P, boolean>}
+        isDisabled={isDisabled}
         onChange={(value) => onChange(value as SingleOrArray<V>)}
       />
     );

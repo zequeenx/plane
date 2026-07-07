@@ -47,17 +47,18 @@ export const TextFilterValueInput = observer(function TextFilterValueInput<P ext
 type TNoValueFilterValueInputProps<P extends TFilterProperty> = {
   config: TNoValueFilterFieldConfig;
   condition: TFilterConditionNodeForDisplay<P, boolean>;
+  isDisabled?: boolean;
   onChange: (value: boolean) => void;
 };
 
 export const NoValueFilterValueInput = observer(function NoValueFilterValueInput<P extends TFilterProperty>(
   props: TNoValueFilterValueInputProps<P>
 ) {
-  const { config, condition, onChange } = props;
+  const { config, condition, isDisabled, onChange } = props;
 
   useEffect(() => {
-    if (condition.value !== true) onChange(config.defaultValue ?? true);
-  }, [condition.value, config.defaultValue, onChange]);
+    if (!isDisabled && condition.value !== true) onChange(config.defaultValue ?? true);
+  }, [condition.value, config.defaultValue, isDisabled, onChange]);
 
   return null;
 });

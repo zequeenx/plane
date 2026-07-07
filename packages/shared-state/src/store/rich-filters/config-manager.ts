@@ -148,6 +148,12 @@ export class FilterConfigManager<
    * @param configs - The configs to register.
    */
   registerAll: IFilterConfigManager<P>["registerAll"] = action((configs) => {
+    const configIds = new Set(configs.map((config) => config.id));
+
+    Array.from(this.filterConfigs.keys()).forEach((configId) => {
+      if (!configIds.has(configId)) this.filterConfigs.delete(configId);
+    });
+
     configs.forEach((config) => this.register(config));
   });
 

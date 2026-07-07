@@ -12,7 +12,9 @@ export const EXTENDED_LOGICAL_OPERATOR = {} as const;
 /**
  * Extended equality operators
  */
-export const EXTENDED_EQUALITY_OPERATOR = {} as const;
+export const EXTENDED_EQUALITY_OPERATOR = {
+  NOT_EXACT: "not_exact",
+} as const;
 export const EXTENDED_EMPTY_OPERATOR = {
   IS_EMPTY: "is_empty",
   IS_NOT_EMPTY: "is_not_empty",
@@ -22,6 +24,8 @@ export const EXTENDED_EMPTY_OPERATOR = {
  * Extended collection operators
  */
 export const EXTENDED_COLLECTION_OPERATOR = {
+  CONTAINS_ANY: "contains_any",
+  NOT_CONTAINS_ANY: "not_contains_any",
   NOT_IN: "not_in",
 } as const;
 
@@ -30,6 +34,7 @@ export const EXTENDED_COLLECTION_OPERATOR = {
  */
 export const EXTENDED_COMPARISON_OPERATOR = {
   CONTAINS: "contains",
+  ICONTAINS: "icontains",
   NOT_CONTAINS: "not_contains",
   OVERLAPS: "overlaps",
   NOT_OVERLAPS: "not_overlaps",
@@ -39,6 +44,8 @@ export const EXTENDED_COMPARISON_OPERATOR = {
  * Extended operators that support multiple values
  */
 export const EXTENDED_MULTI_VALUE_OPERATORS = [
+  EXTENDED_COLLECTION_OPERATOR.CONTAINS_ANY,
+  EXTENDED_COLLECTION_OPERATOR.NOT_CONTAINS_ANY,
   EXTENDED_COLLECTION_OPERATOR.NOT_IN,
   EXTENDED_COMPARISON_OPERATOR.OVERLAPS,
   EXTENDED_COMPARISON_OPERATOR.NOT_OVERLAPS,

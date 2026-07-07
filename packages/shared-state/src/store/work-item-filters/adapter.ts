@@ -10,6 +10,7 @@ import type {
   SingleOrArray,
   TFilterExpression,
   TFilterValue,
+  TCustomPropertyFilterOperator,
   TSupportedOperators,
   TWorkItemFilterConditionData,
   TWorkItemFilterConditionKey,
@@ -17,23 +18,30 @@ import type {
   TWorkItemFilterExpressionData,
   TWorkItemFilterProperty,
 } from "@plane/types";
-import {
-  CORE_OPERATORS,
-  EXTENDED_OPERATORS,
-  LOGICAL_OPERATOR,
-  MULTI_VALUE_OPERATORS,
-  WORK_ITEM_FILTER_PROPERTY_KEYS,
-} from "@plane/types";
+import { CORE_OPERATORS, LOGICAL_OPERATOR, MULTI_VALUE_OPERATORS, WORK_ITEM_FILTER_PROPERTY_KEYS } from "@plane/types";
 import { createConditionNode, createAndGroupNode, isAndGroupNode, isConditionNode } from "@plane/utils";
 // local imports
 import { FilterAdapter } from "../rich-filters/adapter";
 
 type TExternalWorkItemFilterValue = TFilterValue | string[];
 const CUSTOM_PROPERTY_PREFIX = "customproperty_";
-const SUPPORTED_WORK_ITEM_FILTER_OPERATORS = new Set<string>([
-  ...Object.values(CORE_OPERATORS),
-  ...Object.values(EXTENDED_OPERATORS),
-]);
+const SYSTEM_WORK_ITEM_FILTER_OPERATORS = new Set<string>(Object.values(CORE_OPERATORS));
+const CUSTOM_PROPERTY_FILTER_OPERATORS = new Set<string>([
+  "contains",
+  "icontains",
+  "not_contains",
+  "exact",
+  "in",
+  "not_exact",
+  "not_in",
+  "contains_any",
+  "not_contains_any",
+  "range",
+  "is_empty",
+  "is_not_empty",
+  "overlaps",
+  "not_overlaps",
+] satisfies TCustomPropertyFilterOperator[]);
 
 class WorkItemFiltersAdapter extends FilterAdapter<TWorkItemFilterProperty, TWorkItemFilterExpression> {
   /**
@@ -179,17 +187,16 @@ class WorkItemFiltersAdapter extends FilterAdapter<TWorkItemFilterProperty, TWor
     const operator = key.substring(lastDoubleUnderscoreIndex + 2);
 
     const isCustomProperty = property.startsWith(CUSTOM_PROPERTY_PREFIX);
+    const isSystemProperty = WORK_ITEM_FILTER_PROPERTY_KEYS.includes(
+      property as (typeof WORK_ITEM_FILTER_PROPERTY_KEYS)[number]
+    );
 
-    // Validate property is in allowed list or is a custom property key with a non-empty suffix.
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    if (
-      !WORK_ITEM_FILTER_PROPERTY_KEYS.includes(property as any) &&
-      (!isCustomProperty || property.length === CUSTOM_PROPERTY_PREFIX.length)
-    ) {
-      return false;
-    }
+    if (isSystemProperty) return SYSTEM_WORK_ITEM_FILTER_OPERATORS.has(operator);
 
-    return SUPPORTED_WORK_ITEM_FILTER_OPERATORS.has(operator);
+    if (isCustomProperty && property.length > CUSTOM_PROPERTY_PREFIX.length)
+      return CUSTOM_PROPERTY_FILTER_OPERATORS.has(operator);
+
+    return false;
   };
 
   /**

@@ -4,7 +4,7 @@
  * See the LICENSE file for details.
  */
 
-import { useCallback, useEffect, useMemo } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { AtSign, Briefcase, CalendarDays, CalendarRange, ListChecks, TextCursorInput, User, Users } from "lucide-react";
 // plane imports
 import { Logo } from "@plane/propel/emoji-icon-picker";
@@ -138,6 +138,8 @@ const getSelectedStateIds = (richFilters: TWorkItemFilterExpression | undefined)
   return Array.from(new Set(values.filter(Boolean)));
 };
 
+const CUSTOM_PROPERTY_FILTER_PREFIX = "customproperty_";
+
 export const useWorkItemFiltersConfig = (props: TUseWorkItemFiltersConfigProps): TWorkItemFiltersConfig => {
   const {
     allowedFilters,
@@ -164,6 +166,10 @@ export const useWorkItemFiltersConfig = (props: TUseWorkItemFiltersConfigProps):
   const filtersToShow = useMemo(() => new Set(allowedFilters), [allowedFilters]);
   const project = useMemo(() => getProjectById(projectId), [projectId, getProjectById]);
   const projectIssueFields = projectId ? getFieldsByProjectId(projectId) : undefined;
+  const projectIssueFieldsLoadKey = workspaceSlug && projectId ? `${workspaceSlug}:${projectId}` : undefined;
+  const [failedProjectIssueFieldsKeys, setFailedProjectIssueFieldsKeys] = useState<Set<string>>(() => new Set());
+  const hasProjectIssueFieldsLoadFailed =
+    !!projectIssueFieldsLoadKey && failedProjectIssueFieldsKeys.has(projectIssueFieldsLoadKey);
   const members: IUserLite[] | undefined = useMemo(
     () =>
       memberIds
@@ -228,17 +234,36 @@ export const useWorkItemFiltersConfig = (props: TUseWorkItemFiltersConfigProps):
     [projectIds, getProjectById]
   );
   const areAllConfigsInitialized = useMemo(
-    () => isLoaderReady(projectLoader) && (!projectId || projectIssueFields !== undefined),
-    [projectId, projectIssueFields, projectLoader]
+    () =>
+      isLoaderReady(projectLoader) &&
+      (!projectId || projectIssueFields !== undefined || hasProjectIssueFieldsLoadFailed),
+    [hasProjectIssueFieldsLoadFailed, projectId, projectIssueFields, projectLoader]
   );
 
   useEffect(() => {
-    if (!workspaceSlug || !projectId || projectIssueFields !== undefined || projectIssueFieldsLoader[projectId]) return;
+    if (
+      !workspaceSlug ||
+      !projectId ||
+      !projectIssueFieldsLoadKey ||
+      projectIssueFields !== undefined ||
+      projectIssueFieldsLoader[projectId] ||
+      hasProjectIssueFieldsLoadFailed
+    )
+      return;
 
     getFields(workspaceSlug, projectId).catch((error) => {
       console.error("Failed to load project issue fields:", error);
+      setFailedProjectIssueFieldsKeys((currentKeys) => new Set(currentKeys).add(projectIssueFieldsLoadKey));
     });
-  }, [getFields, projectId, projectIssueFields, projectIssueFieldsLoader, workspaceSlug]);
+  }, [
+    getFields,
+    hasProjectIssueFieldsLoadFailed,
+    projectId,
+    projectIssueFields,
+    projectIssueFieldsLoadKey,
+    projectIssueFieldsLoader,
+    workspaceSlug,
+  ]);
 
   /**
    * Checks if a filter is enabled based on the filters to show.
@@ -247,6 +272,11 @@ export const useWorkItemFiltersConfig = (props: TUseWorkItemFiltersConfigProps):
    * @returns True if the filter is enabled, false otherwise.
    */
   const isFilterEnabled = useCallback((key: TWorkItemFilterProperty) => filtersToShow.has(key), [filtersToShow]);
+  const isCustomPropertyFilterEnabled = useCallback(
+    (key: TWorkItemFilterProperty) =>
+      allowedFilters.length === 0 || filtersToShow.has(CUSTOM_PROPERTY_FILTER_PREFIX) || filtersToShow.has(key),
+    [allowedFilters.length, filtersToShow]
+  );
 
   // state group filter config
   const stateGroupFilterConfig = useMemo(
@@ -493,7 +523,7 @@ export const useWorkItemFiltersConfig = (props: TUseWorkItemFiltersConfigProps):
 
     return projectIssueFields.flatMap((field) => {
       const config = getCustomPropertyFilterConfig(field)({
-        isEnabled: true,
+        isEnabled: isCustomPropertyFilterEnabled(`${CUSTOM_PROPERTY_FILTER_PREFIX}${field.id}`),
         filterIcon: fieldIconMap[field.field_type],
         members: customPropertyMembers,
         getOptionIcon: (value: string | Date | IUserLite) => {
@@ -514,7 +544,7 @@ export const useWorkItemFiltersConfig = (props: TUseWorkItemFiltersConfigProps):
 
       return config ? [config] : [];
     });
-  }, [customPropertyMembers, operatorConfigs, projectIssueFields]);
+  }, [customPropertyMembers, isCustomPropertyFilterEnabled, operatorConfigs, projectIssueFields]);
   const customPropertyConfigMap = useMemo(
     () =>
       Object.fromEntries(customPropertyFilterConfigs.map((config) => [config.id, config])) as Partial<
