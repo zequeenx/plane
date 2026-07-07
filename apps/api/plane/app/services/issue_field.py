@@ -1,5 +1,6 @@
 from uuid import UUID
 
+from django.db import transaction
 from rest_framework import serializers
 
 from plane.db.models import (
@@ -16,7 +17,7 @@ class IssueFieldValueService:
     @classmethod
     def serialize_values(cls, issue_ids):
         values = (
-            IssueFieldValue.objects.filter(issue_id__in=issue_ids)
+            IssueFieldValue.objects.filter(issue_id__in=issue_ids, field__is_disabled=False)
             .select_related("field")
             .prefetch_related("selected_options", "selected_users")
         )
@@ -30,6 +31,7 @@ class IssueFieldValueService:
         return cls.serialize_values([issue_id]).get(str(issue_id), {})
 
     @classmethod
+    @transaction.atomic
     def update_issue_values(cls, issue, raw_values):
         if raw_values is None:
             return
@@ -55,6 +57,12 @@ class IssueFieldValueService:
                 raise serializers.ValidationError({"field_values": f"Field {field_id} is not valid."})
             if field.is_disabled:
                 raise serializers.ValidationError({"field_values": f"Field {field_id} is disabled."})
+
+        for field_id, submitted_value in normalized_values.items():
+            cls._validate_submitted_value(fields[field_id], submitted_value)
+
+        for field_id, submitted_value in normalized_values.items():
+            field = fields[field_id]
             cls._upsert_value(issue, field, submitted_value)
 
     @classmethod
@@ -139,6 +147,30 @@ class IssueFieldValueService:
             raise serializers.ValidationError({"field_values": "Expected a list of values."})
         return submitted_value
 
+    @classmethod
+    def _validate_submitted_value(cls, field, submitted_value):
+        if submitted_value is None:
+            return
+
+        field_type = field.field_type
+        if field_type == ProjectIssueField.FieldType.SINGLE_SELECT:
+            cls._get_option(field, submitted_value)
+        elif field_type == ProjectIssueField.FieldType.MULTI_SELECT:
+            cls._get_options(field, submitted_value)
+        elif field_type == ProjectIssueField.FieldType.SINGLE_MEMBER:
+            cls._get_member_id(field, submitted_value)
+        elif field_type == ProjectIssueField.FieldType.MULTI_MEMBER:
+            cls._get_member_ids(field, submitted_value)
+        elif field_type == ProjectIssueField.FieldType.DATE:
+            cls._parse_date(submitted_value)
+        elif field_type == ProjectIssueField.FieldType.DATE_RANGE:
+            cls._parse_date_range(submitted_value)
+        elif field_type == ProjectIssueField.FieldType.PLAIN_TEXT:
+            if not isinstance(submitted_value, str):
+                raise serializers.ValidationError({"field_values": "Text field value must be a string."})
+        else:
+            raise serializers.ValidationError({"field_values": "Field type is not supported."})
+
     @staticmethod
     def _normalize_id(submitted_value, error_message):
         if isinstance(submitted_value, (dict, list)):
@@ -222,15 +254,15 @@ class IssueFieldValueService:
     def _serialize_value(value):
         field_type = value.field.field_type
         if field_type == ProjectIssueField.FieldType.SINGLE_SELECT:
-            option = value.selected_options.first()
+            option = next(iter(value.selected_options.all()), None)
             return str(option.option_id) if option else None
         if field_type == ProjectIssueField.FieldType.MULTI_SELECT:
-            return [str(option_id) for option_id in value.selected_options.values_list("option_id", flat=True)]
+            return [str(selected_option.option_id) for selected_option in value.selected_options.all()]
         if field_type == ProjectIssueField.FieldType.SINGLE_MEMBER:
-            selected_user = value.selected_users.first()
+            selected_user = next(iter(value.selected_users.all()), None)
             return str(selected_user.user_id) if selected_user else None
         if field_type == ProjectIssueField.FieldType.MULTI_MEMBER:
-            return [str(user_id) for user_id in value.selected_users.values_list("user_id", flat=True)]
+            return [str(selected_user.user_id) for selected_user in value.selected_users.all()]
         if field_type == ProjectIssueField.FieldType.DATE:
             return value.date_value.isoformat() if value.date_value else None
         if field_type == ProjectIssueField.FieldType.DATE_RANGE:

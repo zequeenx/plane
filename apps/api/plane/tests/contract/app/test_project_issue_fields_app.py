@@ -459,6 +459,68 @@ def test_disabled_field_rejects_value_update(api_client, workspace, project, pro
     assert not IssueFieldValue.objects.filter(issue=issue, field=field).exists()
 
 
+def test_disabled_field_value_is_not_returned_from_field_values_patch(api_client, workspace, project, project_member, issue):
+    api_client.force_authenticate(project_member)
+    disabled_field = ProjectIssueField.objects.create(
+        workspace=workspace,
+        project=project,
+        name="Archived note",
+        field_type=ProjectIssueField.FieldType.PLAIN_TEXT,
+        is_disabled=True,
+        disabled_at=timezone.now(),
+    )
+    enabled_field = ProjectIssueField.objects.create(
+        workspace=workspace,
+        project=project,
+        name="Current note",
+        field_type=ProjectIssueField.FieldType.PLAIN_TEXT,
+    )
+    IssueFieldValue.objects.create(
+        workspace=workspace,
+        project=project,
+        issue=issue,
+        field=disabled_field,
+        text_value="Hidden",
+    )
+
+    response = api_client.patch(
+        f"/api/workspaces/{workspace.slug}/projects/{project.id}/issues/{issue.id}/field-values/",
+        {"field_values": {str(enabled_field.id): "Visible"}},
+        format="json",
+    )
+
+    assert response.status_code == status.HTTP_200_OK
+    assert response.data["field_values"] == {str(enabled_field.id): "Visible"}
+
+
+def test_invalid_field_value_update_preserves_existing_value(api_client, workspace, project, project_member, issue):
+    api_client.force_authenticate(project_member)
+    field = ProjectIssueField.objects.create(
+        workspace=workspace,
+        project=project,
+        name="Severity",
+        field_type=ProjectIssueField.FieldType.SINGLE_SELECT,
+    )
+    current_option = ProjectIssueFieldOption.objects.create(
+        workspace=workspace,
+        project=project,
+        field=field,
+        value="Current",
+    )
+    value = IssueFieldValue.objects.create(workspace=workspace, project=project, issue=issue, field=field)
+    IssueFieldValueOption.objects.create(workspace=workspace, project=project, value=value, option=current_option)
+
+    response = api_client.patch(
+        f"/api/workspaces/{workspace.slug}/projects/{project.id}/issues/{issue.id}/field-values/",
+        {"field_values": {str(field.id): "not-a-valid-option-id"}},
+        format="json",
+    )
+
+    value.refresh_from_db()
+    assert response.status_code == status.HTTP_400_BAD_REQUEST
+    assert list(value.selected_options.values_list("option_id", flat=True)) == [current_option.id]
+
+
 def test_create_issue_accepts_field_values(api_client, workspace, project, project_member):
     api_client.force_authenticate(project_member)
     field = ProjectIssueField.objects.create(
