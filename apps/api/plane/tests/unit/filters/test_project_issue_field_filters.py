@@ -34,6 +34,10 @@ def _issue_list_url(workspace, project):
     return f"/api/workspaces/{workspace.slug}/projects/{project.id}/issues/"
 
 
+def _sub_issues_url(workspace, project, issue):
+    return f"/api/workspaces/{workspace.slug}/projects/{project.id}/issues/{issue.id}/sub-issues/"
+
+
 def _issue_names(response):
     return {issue["name"] for issue in response.data["results"]}
 
@@ -95,6 +99,7 @@ def test_single_select_in_filter_finds_only_issue_with_selected_option(
     )
     high = ProjectIssueFieldOption.objects.create(workspace=workspace, project=project, field=field, value="High")
     low = ProjectIssueFieldOption.objects.create(workspace=workspace, project=project, field=field, value="Low")
+    medium = ProjectIssueFieldOption.objects.create(workspace=workspace, project=project, field=field, value="Medium")
     matching_issue = Issue.objects.create(workspace=workspace, project=project, name="High issue")
     other_issue = Issue.objects.create(workspace=workspace, project=project, name="Low issue")
     matching_value = IssueFieldValue.objects.create(workspace=workspace, project=project, issue=matching_issue, field=field)
@@ -223,6 +228,19 @@ def test_cross_project_custom_field_grouping_does_not_activate(
     assert str(option.id) not in response.data["results"]
 
 
+def test_invalid_custom_field_grouping_id_does_not_error(api_client, workspace, project, project_member):
+    api_client.force_authenticate(project_member)
+    issue = Issue.objects.create(workspace=workspace, project=project, name="Current project issue")
+
+    response = api_client.get(
+        _issue_list_url(workspace, project),
+        {"group_by": "customproperty_not-a-uuid"},
+    )
+
+    assert response.status_code == 200
+    assert _group_result_names(response) == {"Current project issue"}
+
+
 def test_date_custom_field_sorting(api_client, workspace, project, project_member):
     api_client.force_authenticate(project_member)
     field = ProjectIssueField.objects.create(
@@ -287,6 +305,59 @@ def test_cross_project_custom_field_sorting_does_not_activate(
     assert [issue["name"] for issue in response.data["results"]] == ["Newer issue", "Older issue"]
 
 
+def test_invalid_custom_field_sorting_id_does_not_error(api_client, workspace, project, project_member):
+    api_client.force_authenticate(project_member)
+    newer_issue = Issue.objects.create(workspace=workspace, project=project, name="Newer issue")
+    older_issue = Issue.objects.create(workspace=workspace, project=project, name="Older issue")
+    newer_issue.created_at = datetime(2026, 7, 2, tzinfo=timezone.utc)
+    newer_issue.save(update_fields=["created_at"])
+    older_issue.created_at = datetime(2026, 7, 1, tzinfo=timezone.utc)
+    older_issue.save(update_fields=["created_at"])
+
+    response = api_client.get(
+        _issue_list_url(workspace, project),
+        {"order_by": "customproperty_not-a-uuid"},
+    )
+
+    assert response.status_code == 200
+    assert [issue["name"] for issue in response.data["results"]] == ["Newer issue", "Older issue"]
+
+
+def test_sub_issues_support_project_scoped_custom_field_sorting(api_client, workspace, project, project_member):
+    api_client.force_authenticate(project_member)
+    parent = Issue.objects.create(workspace=workspace, project=project, name="Parent issue")
+    field = ProjectIssueField.objects.create(
+        workspace=workspace,
+        project=project,
+        name="Release date",
+        field_type=ProjectIssueField.FieldType.DATE,
+    )
+    earlier_issue = Issue.objects.create(workspace=workspace, project=project, parent=parent, name="Earlier sub issue")
+    later_issue = Issue.objects.create(workspace=workspace, project=project, parent=parent, name="Later sub issue")
+    IssueFieldValue.objects.create(
+        workspace=workspace,
+        project=project,
+        issue=later_issue,
+        field=field,
+        date_value="2026-08-01",
+    )
+    IssueFieldValue.objects.create(
+        workspace=workspace,
+        project=project,
+        issue=earlier_issue,
+        field=field,
+        date_value="2026-07-01",
+    )
+
+    response = api_client.get(
+        _sub_issues_url(workspace, project, parent),
+        {"order_by": f"customproperty_{field.id}"},
+    )
+
+    assert response.status_code == 200
+    assert [issue["name"] for issue in response.data["sub_issues"]] == ["Earlier sub issue", "Later sub issue"]
+
+
 def test_multi_select_contains_any_filter_does_not_duplicate_matching_issue(
     api_client,
     workspace,
@@ -320,6 +391,33 @@ def test_multi_select_contains_any_filter_does_not_duplicate_matching_issue(
     assert [issue["name"] for issue in response.data["results"]] == ["Multi match issue"]
 
 
+def test_single_select_in_filter_accepts_comma_separated_string(api_client, workspace, project, project_member):
+    api_client.force_authenticate(project_member)
+    field = ProjectIssueField.objects.create(
+        workspace=workspace,
+        project=project,
+        name="Severity",
+        field_type=ProjectIssueField.FieldType.SINGLE_SELECT,
+    )
+    high = ProjectIssueFieldOption.objects.create(workspace=workspace, project=project, field=field, value="High")
+    low = ProjectIssueFieldOption.objects.create(workspace=workspace, project=project, field=field, value="Low")
+    medium = ProjectIssueFieldOption.objects.create(workspace=workspace, project=project, field=field, value="Medium")
+    matching_issue = Issue.objects.create(workspace=workspace, project=project, name="High issue")
+    other_issue = Issue.objects.create(workspace=workspace, project=project, name="Low issue")
+    matching_value = IssueFieldValue.objects.create(workspace=workspace, project=project, issue=matching_issue, field=field)
+    other_value = IssueFieldValue.objects.create(workspace=workspace, project=project, issue=other_issue, field=field)
+    IssueFieldValueOption.objects.create(workspace=workspace, project=project, value=matching_value, option=high)
+    IssueFieldValueOption.objects.create(workspace=workspace, project=project, value=other_value, option=low)
+
+    response = api_client.get(
+        _issue_list_url(workspace, project),
+        {"filters": json.dumps({f"customproperty_{field.id}__in": f"{high.id},{medium.id}"})},
+    )
+
+    assert response.status_code == 200
+    assert _issue_names(response) == {"High issue"}
+
+
 def test_multi_member_contains_any_filter_does_not_duplicate_matching_issue(
     api_client,
     workspace,
@@ -350,3 +448,68 @@ def test_multi_member_contains_any_filter_does_not_duplicate_matching_issue(
 
     assert response.status_code == 200
     assert [issue["name"] for issue in response.data["results"]] == ["Multi member issue"]
+
+
+def test_multi_member_contains_any_filter_accepts_comma_separated_string(
+    api_client,
+    workspace,
+    project,
+    project_member,
+):
+    api_client.force_authenticate(project_member)
+    field = ProjectIssueField.objects.create(
+        workspace=workspace,
+        project=project,
+        name="Reviewers",
+        field_type=ProjectIssueField.FieldType.MULTI_MEMBER,
+    )
+    issue = Issue.objects.create(workspace=workspace, project=project, name="Multi member issue")
+    value = IssueFieldValue.objects.create(workspace=workspace, project=project, issue=issue, field=field)
+    second_user = User.objects.create_user(email="string-reviewer@example.com", username="string-reviewer")
+    IssueFieldValueUser.objects.create(workspace=workspace, project=project, value=value, user=second_user)
+
+    response = api_client.get(
+        _issue_list_url(workspace, project),
+        {
+            "filters": json.dumps(
+                {f"customproperty_{field.id}__contains_any": f"{project_member.id},{second_user.id}"}
+            )
+        },
+    )
+
+    assert response.status_code == 200
+    assert [issue["name"] for issue in response.data["results"]] == ["Multi member issue"]
+
+
+def test_date_range_filter_accepts_comma_separated_string(api_client, workspace, project, project_member):
+    api_client.force_authenticate(project_member)
+    field = ProjectIssueField.objects.create(
+        workspace=workspace,
+        project=project,
+        name="Release date",
+        field_type=ProjectIssueField.FieldType.DATE,
+    )
+    matching_issue = Issue.objects.create(workspace=workspace, project=project, name="Matching issue")
+    other_issue = Issue.objects.create(workspace=workspace, project=project, name="Other issue")
+    IssueFieldValue.objects.create(
+        workspace=workspace,
+        project=project,
+        issue=matching_issue,
+        field=field,
+        date_value="2026-07-15",
+    )
+    IssueFieldValue.objects.create(
+        workspace=workspace,
+        project=project,
+        issue=other_issue,
+        field=field,
+        date_value="2026-08-15",
+    )
+
+    response = api_client.get(
+        _issue_list_url(workspace, project),
+        {"filters": json.dumps({f"customproperty_{field.id}__range": "2026-07-01,2026-07-31"})},
+    )
+
+    assert response.status_code == 200
+    assert _issue_names(response) == {"Matching issue"}

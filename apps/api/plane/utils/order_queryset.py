@@ -2,6 +2,8 @@
 # SPDX-License-Identifier: AGPL-3.0-only
 # See the LICENSE file for details.
 
+from uuid import UUID
+
 from django.db.models import Case, CharField, Min, OuterRef, Subquery, Value, When
 
 from plane.db.models import IssueFieldValue, ProjectIssueField
@@ -114,6 +116,10 @@ def custom_property_order_field(order_by_param):
         return None, is_desc
     field_id = bare[len(CUSTOM_PROPERTY_PREFIX) :]
     if not field_id:
+        return None, is_desc
+    try:
+        UUID(str(field_id))
+    except (AttributeError, TypeError, ValueError):
         return None, is_desc
     return field_id, is_desc
 

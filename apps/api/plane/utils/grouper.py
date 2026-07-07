@@ -2,6 +2,9 @@
 # SPDX-License-Identifier: AGPL-3.0-only
 # See the LICENSE file for details.
 
+# Python imports
+from uuid import UUID
+
 # Django imports
 from django.contrib.postgres.aggregates import ArrayAgg
 from django.contrib.postgres.fields import ArrayField
@@ -242,7 +245,13 @@ def _custom_property_field_id(field: Optional[str]) -> Optional[str]:
     if not isinstance(field, str) or not field.startswith("customproperty_"):
         return None
     field_id = field[len("customproperty_") :]
-    return field_id or None
+    if not field_id:
+        return None
+    try:
+        UUID(str(field_id))
+    except (AttributeError, TypeError, ValueError):
+        return None
+    return field_id
 
 
 def resolve_issue_group_by(
@@ -250,8 +259,9 @@ def resolve_issue_group_by(
     slug: Optional[str] = None,
     project_id: Optional[str] = None,
 ) -> Optional[str]:
+    is_custom_property = isinstance(field, str) and field.startswith("customproperty_")
     if _custom_property_field_id(field) is None:
-        return field
+        return None if is_custom_property else field
     if _custom_property_group_field(field, slug=slug, project_id=project_id) is None:
         return None
     return field

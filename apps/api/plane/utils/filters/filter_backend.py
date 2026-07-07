@@ -381,6 +381,8 @@ class ComplexFilterBackend(filters.BaseFilterBackend):
     def _ensure_list_value(self, value):
         if isinstance(value, (list, tuple)):
             return list(value)
+        if isinstance(value, str):
+            return [item.strip() for item in value.split(",") if item.strip()]
         return [value]
 
     def _build_plain_text_custom_property_q(self, base_q, operator, value):

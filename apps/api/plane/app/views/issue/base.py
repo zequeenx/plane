@@ -1122,7 +1122,12 @@ class IssueDetailEndpoint(BaseAPIView):
         order_by_param = request.GET.get("order_by", "-created_at")
 
         # Issue queryset
-        issue, order_by_param = order_issue_queryset(issue_queryset=issue, order_by_param=order_by_param)
+        issue, order_by_param = order_issue_queryset(
+            issue_queryset=issue,
+            order_by_param=order_by_param,
+            slug=slug,
+            project_id=project_id,
+        )
         return self.paginate(
             request=request,
             order_by=order_by_param,
