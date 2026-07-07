@@ -75,16 +75,17 @@ export const SpreadsheetView = observer(function SpreadsheetView(props: Props) {
   const isEstimateEnabled: boolean = currentProjectDetails?.estimate !== null;
 
   const currentProjectId = projectId?.toString();
-  const projectIssueFields = currentProjectId ? getFieldsByProjectId(currentProjectId) : undefined;
+  const isProjectScopedView = !isWorkspaceLevel && !!workspaceSlug && !!currentProjectId;
+  const projectIssueFields = isProjectScopedView ? getFieldsByProjectId(currentProjectId) : undefined;
 
   useEffect(() => {
-    if (!workspaceSlug || !currentProjectId) return;
+    if (!isProjectScopedView) return;
     if (projectIssueFields || fieldsLoader[currentProjectId]) return;
 
     getFields(workspaceSlug.toString(), currentProjectId).catch((error) => {
       console.error("Failed to load project issue fields:", error);
     });
-  }, [currentProjectId, fieldsLoader, getFields, projectIssueFields, workspaceSlug]);
+  }, [currentProjectId, fieldsLoader, getFields, isProjectScopedView, projectIssueFields, workspaceSlug]);
 
   const spreadsheetColumnsList = useMemo(() => {
     const systemColumns = isWorkspaceLevel
@@ -95,12 +96,14 @@ export const SpreadsheetView = observer(function SpreadsheetView(props: Props) {
           return true;
         });
 
-    const customColumns = projectIssueFields?.reduce<(keyof IIssueDisplayProperties)[]>((acc, field) => {
-      const property = `customproperty_${field.id}` as keyof IIssueDisplayProperties;
-      if (displayProperties[property]) acc.push(property);
+    const customColumns = isProjectScopedView
+      ? projectIssueFields?.reduce<(keyof IIssueDisplayProperties)[]>((acc, field) => {
+          const property = `customproperty_${field.id}` as keyof IIssueDisplayProperties;
+          if (displayProperties[property]) acc.push(property);
 
-      return acc;
-    }, []);
+          return acc;
+        }, [])
+      : undefined;
 
     return [...systemColumns, ...(customColumns ?? [])];
   }, [
@@ -108,6 +111,7 @@ export const SpreadsheetView = observer(function SpreadsheetView(props: Props) {
     currentProjectDetails?.module_view,
     displayProperties,
     isWorkspaceLevel,
+    isProjectScopedView,
     projectIssueFields,
   ]);
 

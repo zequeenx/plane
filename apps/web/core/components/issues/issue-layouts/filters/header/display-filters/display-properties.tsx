@@ -43,16 +43,17 @@ export const FilterDisplayProperties = observer(function FilterDisplayProperties
   const [previewEnabled, setPreviewEnabled] = React.useState(true);
   // derived values
   const currentProjectId = projectId?.toString();
-  const fields = currentProjectId ? getFieldsByProjectId(currentProjectId) : undefined;
+  const isProjectScopedView = !!workspaceSlug && !!currentProjectId;
+  const fields = isProjectScopedView ? getFieldsByProjectId(currentProjectId) : undefined;
 
   useEffect(() => {
-    if (!workspaceSlug || !currentProjectId) return;
+    if (!isProjectScopedView) return;
     if (fields || fieldsLoader[currentProjectId]) return;
 
     getFields(workspaceSlug.toString(), currentProjectId).catch((error) => {
       console.error("Failed to load project issue fields:", error);
     });
-  }, [currentProjectId, fields, fieldsLoader, getFields, workspaceSlug]);
+  }, [currentProjectId, fields, fieldsLoader, getFields, isProjectScopedView, workspaceSlug]);
 
   // Filter out "cycle" and "module" keys if cycleViewDisabled or moduleViewDisabled is true
   // Also filter out display properties that should not be rendered

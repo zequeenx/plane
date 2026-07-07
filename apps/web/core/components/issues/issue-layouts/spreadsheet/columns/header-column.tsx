@@ -47,9 +47,9 @@ export function HeaderColumn(props: Props) {
     ? {
         i18n_title: customField.name,
         ascendingOrderKey: property as TIssueOrderByOptions,
-        ascendingOrderTitle: customField.field_type === EProjectIssueFieldType.DATE ? "Old" : "A",
+        ascendingOrderTitle: t("common.sort.asc"),
         descendingOrderKey: `-${property}` as TIssueOrderByOptions,
-        descendingOrderTitle: customField.field_type === EProjectIssueFieldType.DATE ? "New" : "Z",
+        descendingOrderTitle: t("common.sort.desc"),
         icon: customField.field_type === EProjectIssueFieldType.DATE ? "CalendarDays" : "TextCursorInput",
         isSortable:
           customField.field_type === EProjectIssueFieldType.DATE ||

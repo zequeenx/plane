@@ -101,10 +101,10 @@ export const WorkItemLayoutAdditionalProperties = observer(function WorkItemLayo
   props: TWorkItemLayoutAdditionalProperties
 ) {
   const { displayProperties, issue } = props;
-  const { workspaceSlug } = useParams();
+  const { workspaceSlug, projectId: routeProjectId } = useParams();
   const { fieldsLoader, getFields, getFieldsByProjectId } = useProjectIssueFields();
 
-  const projectId = issue.project_id;
+  const projectId = routeProjectId?.toString() === issue.project_id ? issue.project_id : undefined;
   const fields = projectId ? getFieldsByProjectId(projectId) : undefined;
 
   useEffect(() => {

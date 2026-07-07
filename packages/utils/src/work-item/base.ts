@@ -14,6 +14,7 @@ import type {
   IGanttBlock,
   IIssueDisplayFilterOptions,
   IIssueDisplayProperties,
+  TCustomPropertyKey,
   TGroupedIssues,
   TIssue,
   TIssueGroupByOptions,
@@ -294,25 +295,38 @@ export const getComputedDisplayFilters = (
  */
 export const getComputedDisplayProperties = (
   displayProperties: IIssueDisplayProperties = {}
-): IIssueDisplayProperties => ({
-  assignee: displayProperties?.assignee ?? true,
-  start_date: displayProperties?.start_date ?? true,
-  due_date: displayProperties?.due_date ?? true,
-  labels: displayProperties?.labels ?? true,
-  priority: displayProperties?.priority ?? true,
-  state: displayProperties?.state ?? true,
-  sub_state: displayProperties?.sub_state ?? true,
-  sub_issue_count: displayProperties?.sub_issue_count ?? true,
-  attachment_count: displayProperties?.attachment_count ?? true,
-  link: displayProperties?.link ?? true,
-  estimate: displayProperties?.estimate ?? true,
-  key: displayProperties?.key ?? true,
-  created_on: displayProperties?.created_on ?? true,
-  updated_on: displayProperties?.updated_on ?? true,
-  modules: displayProperties?.modules ?? true,
-  cycle: displayProperties?.cycle ?? true,
-  issue_type: displayProperties?.issue_type ?? true,
-});
+): IIssueDisplayProperties => {
+  const customDisplayProperties = Object.entries(displayProperties).reduce<
+    Partial<Record<TCustomPropertyKey, boolean | undefined>>
+  >((acc, [key, value]) => {
+    if (key.startsWith("customproperty_") && typeof value === "boolean") {
+      acc[key as TCustomPropertyKey] = value;
+    }
+
+    return acc;
+  }, {});
+
+  return {
+    assignee: displayProperties?.assignee ?? true,
+    start_date: displayProperties?.start_date ?? true,
+    due_date: displayProperties?.due_date ?? true,
+    labels: displayProperties?.labels ?? true,
+    priority: displayProperties?.priority ?? true,
+    state: displayProperties?.state ?? true,
+    sub_state: displayProperties?.sub_state ?? true,
+    sub_issue_count: displayProperties?.sub_issue_count ?? true,
+    attachment_count: displayProperties?.attachment_count ?? true,
+    link: displayProperties?.link ?? true,
+    estimate: displayProperties?.estimate ?? true,
+    key: displayProperties?.key ?? true,
+    created_on: displayProperties?.created_on ?? true,
+    updated_on: displayProperties?.updated_on ?? true,
+    modules: displayProperties?.modules ?? true,
+    cycle: displayProperties?.cycle ?? true,
+    issue_type: displayProperties?.issue_type ?? true,
+    ...customDisplayProperties,
+  };
+};
 
 export const generateWorkItemLink = ({
   workspaceSlug,
