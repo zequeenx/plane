@@ -4,8 +4,8 @@
  * See the LICENSE file for details.
  */
 
-import { useCallback, useMemo } from "react";
-import { AtSign, Briefcase } from "lucide-react";
+import { useCallback, useEffect, useMemo } from "react";
+import { AtSign, Briefcase, CalendarDays, CalendarRange, ListChecks, TextCursorInput, User, Users } from "lucide-react";
 // plane imports
 import { Logo } from "@plane/propel/emoji-icon-picker";
 import {
@@ -35,11 +35,13 @@ import type {
   TWorkItemFilterExpression,
   TWorkItemFilterProperty,
 } from "@plane/types";
+import { EProjectIssueFieldType } from "@plane/types";
 import { Avatar } from "@plane/ui";
 import {
   getAssigneeFilterConfig,
   getCreatedAtFilterConfig,
   getCreatedByFilterConfig,
+  getCustomPropertyFilterConfig,
   getCycleFilterConfig,
   getFileURL,
   getLabelFilterConfig,
@@ -62,6 +64,7 @@ import { useLabel } from "@/hooks/store/use-label";
 import { useMember } from "@/hooks/store/use-member";
 import { useModule } from "@/hooks/store/use-module";
 import { useProject } from "@/hooks/store/use-project";
+import { useProjectIssueFields } from "@/hooks/store/use-project-issue-fields";
 import { useProjectState } from "@/hooks/store/use-project-state";
 // plane web imports
 import { useFiltersOperatorConfigs } from "@/hooks/rich-filters/use-filters-operator-configs";
@@ -153,18 +156,24 @@ export const useWorkItemFiltersConfig = (props: TUseWorkItemFiltersConfigProps):
   const { getCycleById } = useCycle();
   const { getLabelById } = useLabel();
   const { getModuleById } = useModule();
+  const { fieldsLoader: projectIssueFieldsLoader, getFields, getFieldsByProjectId } = useProjectIssueFields();
   const { getStateById, getSubStatesByStateId } = useProjectState();
   const { getUserDetails } = useMember();
   // derived values
   const operatorConfigs = useFiltersOperatorConfigs({ workspaceSlug });
   const filtersToShow = useMemo(() => new Set(allowedFilters), [allowedFilters]);
   const project = useMemo(() => getProjectById(projectId), [projectId, getProjectById]);
+  const projectIssueFields = projectId ? getFieldsByProjectId(projectId) : undefined;
   const members: IUserLite[] | undefined = useMemo(
     () =>
       memberIds
         ? (memberIds.map((memberId) => getUserDetails(memberId)).filter((member) => member) as IUserLite[])
         : undefined,
     [memberIds, getUserDetails]
+  );
+  const customPropertyMembers = useMemo(
+    () => (memberIds && members?.length === memberIds.length ? members : undefined),
+    [memberIds, members]
   );
   const workItemStates: IState[] | undefined = useMemo(
     () =>
@@ -218,7 +227,18 @@ export const useWorkItemFiltersConfig = (props: TUseWorkItemFiltersConfigProps):
         : [],
     [projectIds, getProjectById]
   );
-  const areAllConfigsInitialized = useMemo(() => isLoaderReady(projectLoader), [projectLoader]);
+  const areAllConfigsInitialized = useMemo(
+    () => isLoaderReady(projectLoader) && (!projectId || projectIssueFields !== undefined),
+    [projectId, projectIssueFields, projectLoader]
+  );
+
+  useEffect(() => {
+    if (!workspaceSlug || !projectId || projectIssueFields !== undefined || projectIssueFieldsLoader[projectId]) return;
+
+    getFields(workspaceSlug, projectId).catch((error) => {
+      console.error("Failed to load project issue fields:", error);
+    });
+  }, [getFields, projectId, projectIssueFields, projectIssueFieldsLoader, workspaceSlug]);
 
   /**
    * Checks if a filter is enabled based on the filters to show.
@@ -458,6 +478,51 @@ export const useWorkItemFiltersConfig = (props: TUseWorkItemFiltersConfigProps):
     [isFilterEnabled, projects, operatorConfigs]
   );
 
+  const customPropertyFilterConfigs = useMemo(() => {
+    if (!projectIssueFields) return [];
+
+    const fieldIconMap = {
+      [EProjectIssueFieldType.SINGLE_SELECT]: ListChecks,
+      [EProjectIssueFieldType.MULTI_SELECT]: ListChecks,
+      [EProjectIssueFieldType.SINGLE_MEMBER]: User,
+      [EProjectIssueFieldType.MULTI_MEMBER]: Users,
+      [EProjectIssueFieldType.DATE]: CalendarDays,
+      [EProjectIssueFieldType.DATE_RANGE]: CalendarRange,
+      [EProjectIssueFieldType.PLAIN_TEXT]: TextCursorInput,
+    } as const;
+
+    return projectIssueFields.flatMap((field) => {
+      const config = getCustomPropertyFilterConfig(field)({
+        isEnabled: true,
+        filterIcon: fieldIconMap[field.field_type],
+        members: customPropertyMembers,
+        getOptionIcon: (value: string | Date | IUserLite) => {
+          if (typeof value === "string") {
+            return <span className="bg-custom-background-80 flex size-2.5 flex-shrink-0 rounded-full" />;
+          }
+
+          if (value && typeof value === "object" && "display_name" in value) {
+            return (
+              <Avatar name={value.display_name} src={getFileURL(value.avatar_url)} showTooltip={false} size="sm" />
+            );
+          }
+
+          return undefined;
+        },
+        ...operatorConfigs,
+      });
+
+      return config ? [config] : [];
+    });
+  }, [customPropertyMembers, operatorConfigs, projectIssueFields]);
+  const customPropertyConfigMap = useMemo(
+    () =>
+      Object.fromEntries(customPropertyFilterConfigs.map((config) => [config.id, config])) as Partial<
+        Record<TWorkItemFilterProperty, TFilterConfig<TWorkItemFilterProperty>>
+      >,
+    [customPropertyFilterConfigs]
+  );
+
   return {
     areAllConfigsInitialized,
     canValidateSubStateFilters,
@@ -478,6 +543,7 @@ export const useWorkItemFiltersConfig = (props: TUseWorkItemFiltersConfigProps):
       updatedAtFilterConfig,
       createdByFilterConfig,
       subscriberFilterConfig,
+      ...customPropertyFilterConfigs,
     ],
     configMap: {
       project_id: projectFilterConfig,
@@ -496,6 +562,7 @@ export const useWorkItemFiltersConfig = (props: TUseWorkItemFiltersConfigProps):
       target_date: targetDateFilterConfig,
       created_at: createdAtFilterConfig,
       updated_at: updatedAtFilterConfig,
+      ...customPropertyConfigMap,
     },
     isFilterEnabled,
     members: members ?? [],

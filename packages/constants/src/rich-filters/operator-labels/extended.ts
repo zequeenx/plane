@@ -5,16 +5,33 @@
  */
 
 import type { TExtendedSupportedOperators } from "@plane/types";
+import { COLLECTION_OPERATOR, COMPARISON_OPERATOR, EXTENDED_EMPTY_OPERATOR } from "@plane/types";
 
 /**
  * Extended operator labels
  */
-export const EXTENDED_OPERATOR_LABELS_MAP: Record<TExtendedSupportedOperators, string> = {} as const;
+export const EXTENDED_OPERATOR_LABELS_MAP: Record<TExtendedSupportedOperators, string> = {
+  [COLLECTION_OPERATOR.NOT_IN]: "is none of",
+  [COMPARISON_OPERATOR.CONTAINS]: "contains",
+  [COMPARISON_OPERATOR.NOT_CONTAINS]: "does not contain",
+  [COMPARISON_OPERATOR.OVERLAPS]: "overlaps",
+  [COMPARISON_OPERATOR.NOT_OVERLAPS]: "does not overlap",
+  [EXTENDED_EMPTY_OPERATOR.IS_EMPTY]: "is empty",
+  [EXTENDED_EMPTY_OPERATOR.IS_NOT_EMPTY]: "is not empty",
+} as const;
 
 /**
  * Extended date-specific operator labels
  */
-export const EXTENDED_DATE_OPERATOR_LABELS_MAP: Record<TExtendedSupportedOperators, string> = {} as const;
+export const EXTENDED_DATE_OPERATOR_LABELS_MAP: Record<TExtendedSupportedOperators, string> = {
+  [COLLECTION_OPERATOR.NOT_IN]: "is none of",
+  [COMPARISON_OPERATOR.CONTAINS]: "contains",
+  [COMPARISON_OPERATOR.NOT_CONTAINS]: "does not contain",
+  [COMPARISON_OPERATOR.OVERLAPS]: "overlaps",
+  [COMPARISON_OPERATOR.NOT_OVERLAPS]: "does not overlap",
+  [EXTENDED_EMPTY_OPERATOR.IS_EMPTY]: "is empty",
+  [EXTENDED_EMPTY_OPERATOR.IS_NOT_EMPTY]: "is not empty",
+} as const;
 
 /**
  * Negated operator labels for all operators

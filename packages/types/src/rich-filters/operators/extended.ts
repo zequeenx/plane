@@ -13,27 +13,43 @@ export const EXTENDED_LOGICAL_OPERATOR = {} as const;
  * Extended equality operators
  */
 export const EXTENDED_EQUALITY_OPERATOR = {} as const;
+export const EXTENDED_EMPTY_OPERATOR = {
+  IS_EMPTY: "is_empty",
+  IS_NOT_EMPTY: "is_not_empty",
+} as const;
 
 /**
  * Extended collection operators
  */
-export const EXTENDED_COLLECTION_OPERATOR = {} as const;
+export const EXTENDED_COLLECTION_OPERATOR = {
+  NOT_IN: "not_in",
+} as const;
 
 /**
  * Extended comparison operators
  */
-export const EXTENDED_COMPARISON_OPERATOR = {} as const;
+export const EXTENDED_COMPARISON_OPERATOR = {
+  CONTAINS: "contains",
+  NOT_CONTAINS: "not_contains",
+  OVERLAPS: "overlaps",
+  NOT_OVERLAPS: "not_overlaps",
+} as const;
 
 /**
  * Extended operators that support multiple values
  */
-export const EXTENDED_MULTI_VALUE_OPERATORS = [] as const;
+export const EXTENDED_MULTI_VALUE_OPERATORS = [
+  EXTENDED_COLLECTION_OPERATOR.NOT_IN,
+  EXTENDED_COMPARISON_OPERATOR.OVERLAPS,
+  EXTENDED_COMPARISON_OPERATOR.NOT_OVERLAPS,
+] as const;
 
 /**
  * All extended operators
  */
 export const EXTENDED_OPERATORS = {
   ...EXTENDED_EQUALITY_OPERATOR,
+  ...EXTENDED_EMPTY_OPERATOR,
   ...EXTENDED_COLLECTION_OPERATOR,
   ...EXTENDED_COMPARISON_OPERATOR,
 } as const;

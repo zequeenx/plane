@@ -5,7 +5,17 @@
  */
 
 // plane imports
-import type { TFilterValue, TSupportedOperators, TBaseFilterFieldConfig } from "@plane/types";
+import type {
+  TBaseFilterFieldConfig,
+  TDateFilterFieldConfig,
+  TDateRangeFilterFieldConfig,
+  TFilterValue,
+  TMultiSelectFilterFieldConfig,
+  TNoValueFilterFieldConfig,
+  TSingleSelectFilterFieldConfig,
+  TSupportedOperators,
+  TTextFilterFieldConfig,
+} from "@plane/types";
 import { FILTER_FIELD_TYPE } from "@plane/types";
 // local imports
 import type { IFilterIconConfig } from "./shared";
@@ -57,7 +67,7 @@ export const getSingleSelectConfig = <
         value: transforms.getValue(item),
         icon: iconConfig?.getOptionIcon?.(transforms.getIconData?.(item) as TIconData),
       })),
-  });
+  }) as TSingleSelectFilterFieldConfig<TValue>;
 
 /**
  * Multi-select filter configuration
@@ -94,7 +104,7 @@ export const getMultiSelectConfig = <
         value: transforms.getValue(item),
         icon: iconConfig?.getOptionIcon?.(transforms.getIconData?.(item) as TIconData),
       })),
-  });
+  }) as TMultiSelectFilterFieldConfig<TValue>;
 
 // ------------ Date filters ------------
 
@@ -119,19 +129,40 @@ export type TDateRangeConfig = TBaseFilterFieldConfig & {
  * @param config - Date-specific configuration
  * @returns The date picker config
  */
-export const getDatePickerConfig = (config: TDateConfig) =>
+export const getDatePickerConfig = (config: TDateConfig): TDateFilterFieldConfig<Date> =>
   createFilterFieldConfig<typeof FILTER_FIELD_TYPE.DATE, Date>({
     type: FILTER_FIELD_TYPE.DATE,
     ...config,
-  });
+  }) as TDateFilterFieldConfig<Date>;
 
 /**
  * Helper to get the date range picker config
  * @param config - Date range-specific configuration
  * @returns The date range picker config
  */
-export const getDateRangePickerConfig = (config: TDateRangeConfig) =>
+export const getDateRangePickerConfig = (config: TDateRangeConfig): TDateRangeFilterFieldConfig<Date> =>
   createFilterFieldConfig<typeof FILTER_FIELD_TYPE.DATE_RANGE, Date>({
     type: FILTER_FIELD_TYPE.DATE_RANGE,
     ...config,
-  });
+  }) as TDateRangeFilterFieldConfig<Date>;
+
+// ------------ Text filters ------------
+
+export type TTextConfig = TBaseFilterFieldConfig & {
+  placeholder?: string;
+};
+
+export const getTextInputConfig = (config: TTextConfig): TTextFilterFieldConfig<string> =>
+  createFilterFieldConfig<typeof FILTER_FIELD_TYPE.TEXT, string>({
+    type: FILTER_FIELD_TYPE.TEXT,
+    ...config,
+  }) as TTextFilterFieldConfig<string>;
+
+// ------------ No-value filters ------------
+
+export const getNoValueConfig = (config: TBaseFilterFieldConfig): TNoValueFilterFieldConfig =>
+  createFilterFieldConfig<typeof FILTER_FIELD_TYPE.NO_VALUE, boolean>({
+    type: FILTER_FIELD_TYPE.NO_VALUE,
+    ...config,
+    defaultValue: true,
+  }) as TNoValueFilterFieldConfig;

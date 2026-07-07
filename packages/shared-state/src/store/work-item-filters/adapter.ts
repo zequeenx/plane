@@ -17,12 +17,23 @@ import type {
   TWorkItemFilterExpressionData,
   TWorkItemFilterProperty,
 } from "@plane/types";
-import { LOGICAL_OPERATOR, MULTI_VALUE_OPERATORS, WORK_ITEM_FILTER_PROPERTY_KEYS } from "@plane/types";
+import {
+  CORE_OPERATORS,
+  EXTENDED_OPERATORS,
+  LOGICAL_OPERATOR,
+  MULTI_VALUE_OPERATORS,
+  WORK_ITEM_FILTER_PROPERTY_KEYS,
+} from "@plane/types";
 import { createConditionNode, createAndGroupNode, isAndGroupNode, isConditionNode } from "@plane/utils";
 // local imports
 import { FilterAdapter } from "../rich-filters/adapter";
 
 type TExternalWorkItemFilterValue = TFilterValue | string[];
+const CUSTOM_PROPERTY_PREFIX = "customproperty_";
+const SUPPORTED_WORK_ITEM_FILTER_OPERATORS = new Set<string>([
+  ...Object.values(CORE_OPERATORS),
+  ...Object.values(EXTENDED_OPERATORS),
+]);
 
 class WorkItemFiltersAdapter extends FilterAdapter<TWorkItemFilterProperty, TWorkItemFilterExpression> {
   /**
@@ -167,14 +178,18 @@ class WorkItemFiltersAdapter extends FilterAdapter<TWorkItemFilterProperty, TWor
     const property = key.substring(0, lastDoubleUnderscoreIndex);
     const operator = key.substring(lastDoubleUnderscoreIndex + 2);
 
-    // Validate property is in allowed list
+    const isCustomProperty = property.startsWith(CUSTOM_PROPERTY_PREFIX);
+
+    // Validate property is in allowed list or is a custom property key with a non-empty suffix.
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    if (!WORK_ITEM_FILTER_PROPERTY_KEYS.includes(property as any) && !property.startsWith("customproperty_")) {
+    if (
+      !WORK_ITEM_FILTER_PROPERTY_KEYS.includes(property as any) &&
+      (!isCustomProperty || property.length === CUSTOM_PROPERTY_PREFIX.length)
+    ) {
       return false;
     }
 
-    // Validate operator is not empty
-    return operator.length > 0;
+    return SUPPORTED_WORK_ITEM_FILTER_OPERATORS.has(operator);
   };
 
   /**
