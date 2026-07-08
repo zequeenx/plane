@@ -94,6 +94,7 @@ def visible_module_ids_subquery(user):
                 ),
                 user,
             )
+            .order_by()
             .values("issue_id")
             .annotate(arr=ArrayAgg("module_id", distinct=True))
             .values("arr")

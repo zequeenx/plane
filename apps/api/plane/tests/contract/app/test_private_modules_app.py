@@ -948,6 +948,45 @@ def test_app_module_issue_group_by_module_ids_excludes_hidden_private_modules(
     assert str(private_module.id) not in collect_nested_values(response.data["results"])
 
 
+def test_app_issue_group_by_state_with_multiple_modules_returns_visible_module_ids(
+    api_client, workspace, project, project_member
+):
+    public_module = Module.objects.create(workspace=workspace, project=project, name="First State Group Module")
+    second_public_module = Module.objects.create(workspace=workspace, project=project, name="Second State Group Module")
+    state = State.objects.create(
+        workspace=workspace,
+        project=project,
+        name="State grouped modules",
+        color="#60646C",
+        group=StateGroup.UNSTARTED.value,
+        sequence=25000,
+    )
+    issue = Issue.objects.create(
+        workspace=workspace,
+        project=project,
+        state=state,
+        name="Issue with multiple visible modules",
+        priority="high",
+    )
+    ModuleIssue.objects.create(workspace=workspace, project=project, issue=issue, module=public_module)
+    ModuleIssue.objects.create(workspace=workspace, project=project, issue=issue, module=second_public_module)
+
+    api_client.force_authenticate(project_member)
+    response = api_client.get(
+        f"/api/workspaces/{workspace.slug}/projects/{project.id}/issues/"
+        "?group_by=state_id&order_by=-priority&sub_issue=true&filters={}&layout=list&cursor=50:0:0&per_page=50"
+    )
+
+    assert response.status_code == status.HTTP_200_OK
+    issue_payload = next(
+        item for item in response.data["results"][str(state.id)]["results"] if item["id"] == issue.id
+    )
+    assert {str(module_id) for module_id in issue_payload["module_ids"]} == {
+        str(public_module.id),
+        str(second_public_module.id),
+    }
+
+
 def test_app_issue_group_by_module_ids_excludes_hidden_private_modules(
     api_client, workspace, project, project_member
 ):
