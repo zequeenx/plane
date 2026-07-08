@@ -289,6 +289,22 @@ def test_app_module_list_hides_private_modules_from_unrelated_members(
     assert str(private_module.id) not in module_ids
 
 
+def test_app_workspace_module_list_hides_private_modules_from_unrelated_members(
+    api_client, workspace, project, project_member
+):
+    unrelated_user = make_project_member(workspace, project, "unrelated-workspace-list@example.com")
+    public_module = Module.objects.create(workspace=workspace, project=project, name="Workspace Public")
+    private_module = make_created_private_module(workspace, project, "Workspace Private", project_member)
+
+    api_client.force_authenticate(unrelated_user)
+    response = api_client.get(f"/api/workspaces/{workspace.slug}/modules/")
+
+    assert response.status_code == status.HTTP_200_OK
+    module_ids = {str(item["id"]) for item in response.data}
+    assert str(public_module.id) in module_ids
+    assert str(private_module.id) not in module_ids
+
+
 def test_app_module_list_includes_private_modules_for_creator(api_client, workspace, project, project_member):
     private_module = make_created_private_module(workspace, project, "Creator Private", project_member)
 

@@ -12,6 +12,7 @@ from rest_framework.response import Response
 # Module imports
 from plane.app.views.base import BaseAPIView
 from plane.db.models import Module, ModuleLink
+from plane.db.utils.module_visibility import filter_visible_modules
 from plane.app.permissions import WorkspaceViewerPermission
 from plane.app.serializers.module import ModuleSerializer
 
@@ -21,7 +22,10 @@ class WorkspaceModulesEndpoint(BaseAPIView):
 
     def get(self, request, slug):
         modules = (
-            Module.objects.filter(workspace__slug=slug)
+            filter_visible_modules(
+                Module.objects.filter(workspace__slug=slug),
+                request.user,
+            )
             .select_related("project")
             .select_related("workspace")
             .select_related("lead")
