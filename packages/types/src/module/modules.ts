@@ -9,6 +9,7 @@ import type { TIssue } from "../issues/issue";
 import type { IIssueFilterOptions } from "../view-props";
 
 export type TModuleStatus = "backlog" | "planned" | "in-progress" | "paused" | "completed" | "cancelled";
+export type TModuleVisibility = "public" | "private";
 
 export type TModuleCompletionChartDistribution = {
   [key: string]: number | null;
@@ -85,6 +86,7 @@ export interface IModule {
     filters: IIssueFilterOptions;
   };
   status?: TModuleStatus;
+  visibility?: TModuleVisibility;
   archived_at: string | null;
   start_date: string | null;
   target_date: string | null;

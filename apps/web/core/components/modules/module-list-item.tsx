@@ -15,7 +15,7 @@ import { CircularProgressIndicator } from "@plane/ui";
 // components
 import { generateQueryParams } from "@plane/utils";
 import { ListItem } from "@/components/core/list";
-import { ModuleListItemAction, ModuleQuickActions } from "@/components/modules";
+import { ModuleListItemAction, ModuleQuickActions, ModuleVisibilityBadge } from "@/components/modules";
 // helpers
 // hooks
 import { useModule } from "@/hooks/store/use-module";
@@ -91,12 +91,15 @@ export const ModuleListItem = observer(function ModuleListItem(props: Props) {
         </CircularProgressIndicator>
       }
       appendTitleElement={
-        <button
-          onClick={openModuleOverview}
-          className={`z-[5] flex-shrink-0 ${isMobile ? "flex" : "hidden group-hover:flex"}`}
-        >
-          <Info className="h-4 w-4 text-placeholder" />
-        </button>
+        <div className="flex flex-shrink-0 items-center gap-1.5">
+          <ModuleVisibilityBadge visibility={moduleDetails.visibility} />
+          <button
+            onClick={openModuleOverview}
+            className={`z-[5] flex-shrink-0 ${isMobile ? "flex" : "hidden group-hover:flex"}`}
+          >
+            <Info className="h-4 w-4 text-placeholder" />
+          </button>
+        </div>
       }
       actionableItems={<ModuleListItemAction moduleId={moduleId} moduleDetails={moduleDetails} parentRef={parentRef} />}
       quickActionElement={

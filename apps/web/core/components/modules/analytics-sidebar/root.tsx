@@ -8,7 +8,7 @@ import { useEffect, useState } from "react";
 import { observer } from "mobx-react";
 import { useParams } from "next/navigation";
 import { Controller, useForm } from "react-hook-form";
-import { Info, SquareUser } from "lucide-react";
+import { Eye, Info, SquareUser } from "lucide-react";
 import { Disclosure, Transition } from "@headlessui/react";
 import { MODULE_STATUS, EUserPermissions, EUserPermissionsLevel, EEstimateSystem } from "@plane/constants";
 // plane types
@@ -31,7 +31,13 @@ import { Loader, CustomSelect, TextArea } from "@plane/ui";
 import { getDate, renderFormattedPayloadDate } from "@plane/utils";
 import { DateRangeDropdown } from "@/components/dropdowns/date-range";
 import { MemberDropdown } from "@/components/dropdowns/member/dropdown";
-import { CreateUpdateModuleLinkModal, ModuleAnalyticsProgress, ModuleLinksList } from "@/components/modules";
+import {
+  CreateUpdateModuleLinkModal,
+  ModuleAnalyticsProgress,
+  ModuleLinksList,
+  ModuleVisibilityBadge,
+  ModuleVisibilityControl,
+} from "@/components/modules";
 // hooks
 import { useProjectEstimates } from "@/hooks/store/estimates";
 import { useModule } from "@/hooks/store/use-module";
@@ -43,6 +49,7 @@ const defaultValues: Partial<IModule> = {
   start_date: null,
   target_date: null,
   status: "backlog",
+  visibility: "public",
 };
 
 type Props = {
@@ -71,7 +78,7 @@ export const ModuleAnalyticsSidebar = observer(function ModuleAnalyticsSidebar(p
   const moduleDetails = getModuleById(moduleId);
   const areEstimateEnabled = projectId && areEstimateEnabledByProjectId(projectId.toString());
   const estimateType = areEstimateEnabled && currentActiveEstimateId && estimateById(currentActiveEstimateId);
-  const isEstimatePointValid = estimateType && estimateType?.type == EEstimateSystem.POINTS ? true : false;
+  const isEstimatePointValid = !!(estimateType && estimateType.type === EEstimateSystem.POINTS);
 
   const { reset, control } = useForm({
     defaultValues,
@@ -215,8 +222,8 @@ export const ModuleAnalyticsSidebar = observer(function ModuleAnalyticsSidebar(p
                     </span>
                   }
                   value={value}
-                  onChange={(value: any) => {
-                    submitChanges({ status: value });
+                  onChange={(statusValue: any) => {
+                    submitChanges({ status: statusValue });
                   }}
                   disabled={!isEditingAllowed || isArchived}
                 >
@@ -232,7 +239,10 @@ export const ModuleAnalyticsSidebar = observer(function ModuleAnalyticsSidebar(p
               )}
             />
           </div>
-          <h4 className="w-full text-18 font-semibold break-words text-primary">{moduleDetails.name}</h4>
+          <div className="flex items-start gap-1.5">
+            <h4 className="min-w-0 text-18 font-semibold break-words text-primary">{moduleDetails.name}</h4>
+            <ModuleVisibilityBadge visibility={moduleDetails.visibility} className="mt-1" />
+          </div>
         </div>
 
         {moduleDetails.description && (
@@ -244,6 +254,28 @@ export const ModuleAnalyticsSidebar = observer(function ModuleAnalyticsSidebar(p
         )}
 
         <div className="flex flex-col gap-5 pt-2.5 pb-6">
+          <div className="flex items-center justify-start gap-1">
+            <div className="flex w-2/5 items-center justify-start gap-2 text-tertiary">
+              <Eye className="h-4 w-4" />
+              <span className="text-14">Visibility</span>
+            </div>
+            <Controller
+              control={control}
+              name="visibility"
+              render={({ field: { value, onChange } }) => (
+                <div className="h-7 w-3/5">
+                  <ModuleVisibilityControl
+                    value={value ?? "public"}
+                    onChange={(val) => {
+                      onChange(val);
+                      submitChanges({ visibility: val });
+                    }}
+                    disabled={!isEditingAllowed || isArchived}
+                  />
+                </div>
+              )}
+            />
+          </div>
           <div className="flex items-center justify-start gap-1">
             <div className="flex w-2/5 items-center justify-start gap-2 text-tertiary">
               <StartDatePropertyIcon className="h-4 w-4" />

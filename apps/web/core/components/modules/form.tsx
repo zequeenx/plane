@@ -18,7 +18,7 @@ import { getDate, renderFormattedPayloadDate, getTabIndex } from "@plane/utils";
 import { DateRangeDropdown } from "@/components/dropdowns/date-range";
 import { MemberDropdown } from "@/components/dropdowns/member/dropdown";
 import { ProjectDropdown } from "@/components/dropdowns/project/dropdown";
-import { ModuleStatusSelect } from "@/components/modules";
+import { ModuleStatusSelect, ModuleVisibilityControl } from "@/components/modules";
 // hooks
 import { useUser } from "@/hooks/store/user/user-user";
 
@@ -36,6 +36,7 @@ const defaultValues: Partial<IModule> = {
   name: "",
   description: "",
   status: "backlog",
+  visibility: "public",
   lead_id: null,
   member_ids: [],
 };
@@ -56,6 +57,7 @@ export function ModuleForm(props: Props) {
       name: data?.name || "",
       description: data?.description || "",
       status: data?.status || "backlog",
+      visibility: data?.visibility || "public",
       lead_id: data?.lead_id || null,
       member_ids: data?.member_ids || [],
     },
@@ -100,7 +102,7 @@ export function ModuleForm(props: Props) {
                     }}
                     multiple={false}
                     buttonVariant="border-with-text"
-                    renderCondition={(projectId) => !!projectsWithCreatePermissions?.[projectId]}
+                    renderCondition={(currentProjectId) => !!projectsWithCreatePermissions?.[currentProjectId]}
                     tabIndex={getIndex("cover_image")}
                   />
                 </div>
@@ -134,7 +136,6 @@ export function ModuleForm(props: Props) {
                   placeholder={t("title")}
                   className="w-full text-14"
                   tabIndex={getIndex("name")}
-                  autoFocus
                 />
               )}
             />
@@ -194,6 +195,13 @@ export function ModuleForm(props: Props) {
             <div className="h-7">
               <ModuleStatusSelect control={control} error={errors.status} tabIndex={getIndex("status")} />
             </div>
+            <Controller
+              control={control}
+              name="visibility"
+              render={({ field: { value, onChange } }) => (
+                <ModuleVisibilityControl value={value ?? "public"} onChange={onChange} />
+              )}
+            />
             <Controller
               control={control}
               name="lead_id"

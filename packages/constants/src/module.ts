@@ -5,7 +5,7 @@
  */
 
 // types
-import type { TModuleLayoutOptions, TModuleOrderByOptions, TModuleStatus } from "@plane/types";
+import type { TModuleLayoutOptions, TModuleOrderByOptions, TModuleStatus, TModuleVisibility } from "@plane/types";
 
 export const MODULE_STATUS_COLORS: {
   [key in TModuleStatus]: string;
@@ -66,6 +66,23 @@ export const MODULE_STATUS: {
     color: MODULE_STATUS_COLORS.cancelled,
     textColor: "text-danger-primary",
     bgColor: "bg-danger-subtle",
+  },
+];
+
+export const MODULE_VISIBILITY_OPTIONS: {
+  key: TModuleVisibility;
+  label: string;
+  description: string;
+}[] = [
+  {
+    key: "public",
+    label: "Public",
+    description: "Visible to everyone in the project.",
+  },
+  {
+    key: "private",
+    label: "Private",
+    description: "Visible only to the creator, lead, and members.",
   },
 ];
 

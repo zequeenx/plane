@@ -21,6 +21,7 @@ export * from "./quick-actions";
 export * from "./module-list-item-action";
 export * from "./module-view-header";
 export * from "./module-layout-icon";
+export * from "./visibility";
 export * from "./analytics-sidebar";
 // archived modules
 export * from "./archived-modules";

@@ -31,6 +31,7 @@ const defaultValues: Partial<IModule> = {
   name: "",
   description: "",
   status: "backlog",
+  visibility: "public",
   lead_id: null,
   member_ids: [],
 };
@@ -65,6 +66,7 @@ export const CreateUpdateModuleModal = observer(function CreateUpdateModuleModal
           title: "Success!",
           message: "Module created successfully.",
         });
+        return undefined;
       })
       .catch((err) => {
         setToast({
@@ -88,6 +90,7 @@ export const CreateUpdateModuleModal = observer(function CreateUpdateModuleModal
           title: "Success!",
           message: "Module updated successfully.",
         });
+        return undefined;
       })
       .catch((err) => {
         setToast({
@@ -138,7 +141,7 @@ export const CreateUpdateModuleModal = observer(function CreateUpdateModuleModal
       <ModuleForm
         handleFormSubmit={handleFormSubmit}
         handleClose={handleClose}
-        status={data ? true : false}
+        status={!!data}
         projectId={activeProject ?? ""}
         setActiveProject={setActiveProject}
         data={data}
