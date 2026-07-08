@@ -32,6 +32,7 @@ from django.utils import timezone
 
 # Third party imports
 from rest_framework import status
+from rest_framework.exceptions import NotFound
 from rest_framework.response import Response
 
 # Module imports
@@ -44,6 +45,7 @@ from plane.app.permissions import (
 
 from plane.app.serializers import (
     ModuleDetailSerializer,
+    UserFavoriteSerializer,
     ModuleLinkSerializer,
     ModuleSerializer,
     ModuleUserPropertiesSerializer,
@@ -60,12 +62,20 @@ from plane.db.models import (
     Project,
     UserRecentVisit,
 )
+from plane.db.utils.module_visibility import filter_visible_modules
 from plane.utils.analytics_plot import burndown_plot
 from plane.utils.timezone_converter import user_timezone_converter
 from plane.bgtasks.webhook_task import model_activity
 from .. import BaseAPIView, BaseViewSet
 from plane.bgtasks.recent_visited_task import recent_visited_task
 from plane.utils.host import base_host
+
+
+def get_visible_module_or_none(slug, project_id, module_id, user):
+    return filter_visible_modules(
+        Module.objects.filter(workspace__slug=slug, project_id=project_id, pk=module_id),
+        user,
+    ).first()
 
 
 class ModuleViewSet(BaseViewSet):
@@ -208,11 +218,14 @@ class ModuleViewSet(BaseViewSet):
             .annotate(cancelled_estimate_point=Sum(Cast("estimate_point__value", FloatField())))
             .values("cancelled_estimate_point")[:1]
         )
-        return (
+        queryset = (
             super()
             .get_queryset()
             .filter(project_id=self.kwargs.get("project_id"))
             .filter(workspace__slug=self.kwargs.get("slug"))
+        )
+        return (
+            filter_visible_modules(queryset, self.request.user)
             .annotate(is_favorite=Exists(favorite_subquery))
             .prefetch_related("members")
             .prefetch_related(
@@ -314,6 +327,7 @@ class ModuleViewSet(BaseViewSet):
                     "start_date",
                     "target_date",
                     "status",
+                    "visibility",
                     "lead_id",
                     "member_ids",
                     "view_props",
@@ -368,6 +382,7 @@ class ModuleViewSet(BaseViewSet):
                 "start_date",
                 "target_date",
                 "status",
+                "visibility",
                 "lead_id",
                 "member_ids",
                 "view_props",
@@ -683,6 +698,7 @@ class ModuleViewSet(BaseViewSet):
                 "start_date",
                 "target_date",
                 "status",
+                "visibility",
                 "lead_id",
                 "member_ids",
                 "view_props",
@@ -766,12 +782,30 @@ class ModuleLinkViewSet(BaseViewSet):
     serializer_class = ModuleLinkSerializer
 
     def perform_create(self, serializer):
+        module = get_visible_module_or_none(
+            self.kwargs.get("slug"),
+            self.kwargs.get("project_id"),
+            self.kwargs.get("module_id"),
+            self.request.user,
+        )
+        if not module:
+            raise NotFound("Module not found")
+
         serializer.save(
             project_id=self.kwargs.get("project_id"),
             module_id=self.kwargs.get("module_id"),
         )
 
     def get_queryset(self):
+        module = get_visible_module_or_none(
+            self.kwargs.get("slug"),
+            self.kwargs.get("project_id"),
+            self.kwargs.get("module_id"),
+            self.request.user,
+        )
+        if not module:
+            return ModuleLink.objects.none()
+
         return (
             super()
             .get_queryset()
@@ -790,18 +824,28 @@ class ModuleLinkViewSet(BaseViewSet):
 
 class ModuleFavoriteViewSet(BaseViewSet):
     model = UserFavorite
+    serializer_class = UserFavoriteSerializer
     permission_classes = [ProjectLitePermission]
 
     def get_queryset(self):
+        visible_module_ids = filter_visible_modules(
+            Module.objects.filter(project_id=self.kwargs.get("project_id"), workspace__slug=self.kwargs.get("slug")),
+            self.request.user,
+        ).values("id")
         return self.filter_queryset(
             super()
             .get_queryset()
             .filter(workspace__slug=self.kwargs.get("slug"))
+            .filter(project_id=self.kwargs.get("project_id"))
             .filter(user=self.request.user)
-            .select_related("module")
+            .filter(entity_type="module", entity_identifier__in=Subquery(visible_module_ids))
         )
 
     def create(self, request, slug, project_id):
+        module = get_visible_module_or_none(slug, project_id, request.data.get("module"), request.user)
+        if not module:
+            return Response({"error": "Module not found"}, status=status.HTTP_404_NOT_FOUND)
+
         _ = UserFavorite.objects.create(
             project_id=project_id,
             user=request.user,
@@ -811,6 +855,10 @@ class ModuleFavoriteViewSet(BaseViewSet):
         return Response(status=status.HTTP_204_NO_CONTENT)
 
     def destroy(self, request, slug, project_id, module_id):
+        module = get_visible_module_or_none(slug, project_id, module_id, request.user)
+        if not module:
+            return Response({"error": "Module not found"}, status=status.HTTP_404_NOT_FOUND)
+
         module_favorite = UserFavorite.objects.get(
             project_id=project_id,
             user=request.user,
@@ -825,6 +873,10 @@ class ModuleFavoriteViewSet(BaseViewSet):
 class ModuleUserPropertiesEndpoint(BaseAPIView):
     @allow_permission([ROLE.ADMIN, ROLE.MEMBER, ROLE.GUEST])
     def patch(self, request, slug, project_id, module_id):
+        module = get_visible_module_or_none(slug, project_id, module_id, request.user)
+        if not module:
+            return Response({"error": "Module not found"}, status=status.HTTP_404_NOT_FOUND)
+
         module_properties = ModuleUserProperties.objects.get(
             user=request.user,
             module_id=module_id,
@@ -845,6 +897,10 @@ class ModuleUserPropertiesEndpoint(BaseAPIView):
 
     @allow_permission([ROLE.ADMIN, ROLE.MEMBER, ROLE.GUEST])
     def get(self, request, slug, project_id, module_id):
+        module = get_visible_module_or_none(slug, project_id, module_id, request.user)
+        if not module:
+            return Response({"error": "Module not found"}, status=status.HTTP_404_NOT_FOUND)
+
         module_properties, _ = ModuleUserProperties.objects.get_or_create(
             user=request.user,
             project_id=project_id,

@@ -31,6 +31,7 @@ from rest_framework.response import Response
 from plane.app.permissions import ProjectEntityPermission
 from plane.app.serializers import ModuleDetailSerializer
 from plane.db.models import Issue, Module, ModuleLink, UserFavorite, Project
+from plane.db.utils.module_visibility import filter_visible_modules
 from plane.utils.analytics_plot import burndown_plot
 from plane.utils.timezone_converter import user_timezone_converter
 
@@ -175,10 +176,13 @@ class ModuleArchiveUnarchiveEndpoint(BaseAPIView):
             .annotate(cancelled_estimate_point=Sum(Cast("estimate_point__value", FloatField())))
             .values("cancelled_estimate_point")[:1]
         )
-        return (
+        queryset = (
             Module.objects.filter(workspace__slug=self.kwargs.get("slug"))
             .filter(project_id=self.kwargs.get("project_id"))
             .filter(archived_at__isnull=False)
+        )
+        return (
+            filter_visible_modules(queryset, self.request.user)
             .annotate(is_favorite=Exists(favorite_subquery))
             .select_related("workspace", "project", "lead")
             .prefetch_related("members")
@@ -270,6 +274,7 @@ class ModuleArchiveUnarchiveEndpoint(BaseAPIView):
                 "start_date",
                 "target_date",
                 "status",
+                "visibility",
                 "lead_id",
                 "member_ids",
                 "view_props",
@@ -307,6 +312,9 @@ class ModuleArchiveUnarchiveEndpoint(BaseAPIView):
                     .values("count")
                 )
             )
+
+            if not queryset.exists():
+                return Response({"error": "Module not found"}, status=status.HTTP_404_NOT_FOUND)
 
             estimate_type = Project.objects.filter(
                 workspace__slug=slug,
@@ -542,7 +550,12 @@ class ModuleArchiveUnarchiveEndpoint(BaseAPIView):
             return Response(data, status=status.HTTP_200_OK)
 
     def post(self, request, slug, project_id, module_id):
-        module = Module.objects.get(pk=module_id, project_id=project_id, workspace__slug=slug)
+        module = filter_visible_modules(
+            Module.objects.filter(pk=module_id, project_id=project_id, workspace__slug=slug), request.user
+        ).first()
+        if not module:
+            return Response({"error": "Module not found"}, status=status.HTTP_404_NOT_FOUND)
+
         if module.status not in ["completed", "cancelled"]:
             return Response(
                 {"error": "Only completed or cancelled modules can be archived"},
@@ -559,7 +572,12 @@ class ModuleArchiveUnarchiveEndpoint(BaseAPIView):
         return Response({"archived_at": str(module.archived_at)}, status=status.HTTP_200_OK)
 
     def delete(self, request, slug, project_id, module_id):
-        module = Module.objects.get(pk=module_id, project_id=project_id, workspace__slug=slug)
+        module = filter_visible_modules(
+            Module.objects.filter(pk=module_id, project_id=project_id, workspace__slug=slug), request.user
+        ).first()
+        if not module:
+            return Response({"error": "Module not found"}, status=status.HTTP_404_NOT_FOUND)
+
         module.archived_at = None
         module.save()
         return Response(status=status.HTTP_204_NO_CONTENT)

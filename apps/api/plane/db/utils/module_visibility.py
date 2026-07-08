@@ -1,20 +1,28 @@
-from django.db.models import Q
+from django.db.models import Exists, OuterRef, Q
 
 from plane.db.models import Module, ModuleMember
 
 
 def module_visible_to_user_q(user, prefix=""):
     visibility_key = f"{prefix}visibility"
-    module_member_key = f"{prefix}modulemember"
 
     if not user or not getattr(user, "is_authenticated", False):
         return Q(**{visibility_key: Module.ModuleVisibility.PUBLIC})
+
+    module_id_field = f"{prefix[:-2]}_id" if prefix else "id"
+    module_member_exists = Exists(
+        ModuleMember.objects.filter(
+            module_id=OuterRef(module_id_field),
+            member_id=user.id,
+            deleted_at__isnull=True,
+        )
+    )
 
     return (
         Q(**{visibility_key: Module.ModuleVisibility.PUBLIC})
         | Q(**{f"{prefix}created_by_id": user.id})
         | Q(**{f"{prefix}lead_id": user.id})
-        | Q(**{f"{module_member_key}__member_id": user.id, f"{module_member_key}__deleted_at__isnull": True})
+        | module_member_exists
     )
 
 

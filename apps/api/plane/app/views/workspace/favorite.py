@@ -7,14 +7,34 @@ from rest_framework import status
 from rest_framework.response import Response
 
 # Django modules
-from django.db.models import Q
+from django.db.models import Q, Subquery
 from django.db import IntegrityError
 
 # Module imports
 from plane.app.views.base import BaseAPIView
-from plane.db.models import UserFavorite, Workspace
+from plane.db.models import Module, UserFavorite, Workspace
+from plane.db.utils.module_visibility import filter_visible_modules
 from plane.app.serializers import UserFavoriteSerializer
 from plane.app.permissions import allow_permission, ROLE
+
+
+def visible_module_ids_for_user(slug, user):
+    return filter_visible_modules(Module.objects.filter(workspace__slug=slug), user).values("id")
+
+
+def is_hidden_module_favorite(slug, user, entity_type, entity_identifier):
+    if entity_type != "module" or not entity_identifier:
+        return False
+
+    return not filter_visible_modules(
+        Module.objects.filter(workspace__slug=slug, pk=entity_identifier),
+        user,
+    ).exists()
+
+
+def filter_visible_module_favorites(queryset, slug, user):
+    visible_module_ids = visible_module_ids_for_user(slug, user)
+    return queryset.filter(~Q(entity_type="module") | Q(entity_identifier__in=Subquery(visible_module_ids)))
 
 
 class WorkspaceFavoriteEndpoint(BaseAPIView):
@@ -31,6 +51,7 @@ class WorkspaceFavoriteEndpoint(BaseAPIView):
                 & Q(project__project_projectmember__is_active=True)
             )
         )
+        favorites = filter_visible_module_favorites(favorites, slug, request.user)
         serializer = UserFavoriteSerializer(favorites, many=True)
         return Response(serializer.data, status=status.HTTP_200_OK)
 
@@ -38,14 +59,19 @@ class WorkspaceFavoriteEndpoint(BaseAPIView):
     def post(self, request, slug):
         try:
             workspace = Workspace.objects.get(slug=slug)
+            entity_type = request.data.get("entity_type")
+            entity_identifier = request.data.get("entity_identifier")
+
+            if is_hidden_module_favorite(slug, request.user, entity_type, entity_identifier):
+                return Response({"error": "Module not found"}, status=status.HTTP_404_NOT_FOUND)
 
             # If the favorite exists return
-            if request.data.get("entity_identifier"):
+            if entity_identifier:
                 user_favorites = UserFavorite.objects.filter(
                     workspace=workspace,
                     user_id=request.user.id,
-                    entity_type=request.data.get("entity_type"),
-                    entity_identifier=request.data.get("entity_identifier"),
+                    entity_type=entity_type,
+                    entity_identifier=entity_identifier,
                 ).first()
 
                 # If the favorite exists return
@@ -69,6 +95,13 @@ class WorkspaceFavoriteEndpoint(BaseAPIView):
     @allow_permission(allowed_roles=[ROLE.ADMIN, ROLE.MEMBER], level="WORKSPACE")
     def patch(self, request, slug, favorite_id):
         favorite = UserFavorite.objects.get(user=request.user, workspace__slug=slug, pk=favorite_id)
+        if is_hidden_module_favorite(slug, request.user, favorite.entity_type, favorite.entity_identifier):
+            return Response({"error": "Module not found"}, status=status.HTTP_404_NOT_FOUND)
+        entity_type = request.data.get("entity_type", favorite.entity_type)
+        entity_identifier = request.data.get("entity_identifier", favorite.entity_identifier)
+        if is_hidden_module_favorite(slug, request.user, entity_type, entity_identifier):
+            return Response({"error": "Module not found"}, status=status.HTTP_404_NOT_FOUND)
+
         serializer = UserFavoriteSerializer(favorite, data=request.data, partial=True)
         if serializer.is_valid():
             serializer.save()
@@ -78,6 +111,9 @@ class WorkspaceFavoriteEndpoint(BaseAPIView):
     @allow_permission(allowed_roles=[ROLE.ADMIN, ROLE.MEMBER], level="WORKSPACE")
     def delete(self, request, slug, favorite_id):
         favorite = UserFavorite.objects.get(user=request.user, workspace__slug=slug, pk=favorite_id)
+        if is_hidden_module_favorite(slug, request.user, favorite.entity_type, favorite.entity_identifier):
+            return Response({"error": "Module not found"}, status=status.HTTP_404_NOT_FOUND)
+
         favorite.delete(soft=False)
         return Response(status=status.HTTP_204_NO_CONTENT)
 
@@ -93,5 +129,6 @@ class WorkspaceFavoriteGroupEndpoint(BaseAPIView):
                 & Q(project__project_projectmember__is_active=True)
             )
         )
+        favorites = filter_visible_module_favorites(favorites, slug, request.user)
         serializer = UserFavoriteSerializer(favorites, many=True)
         return Response(serializer.data, status=status.HTTP_200_OK)
