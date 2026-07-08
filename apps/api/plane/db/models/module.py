@@ -67,12 +67,21 @@ class ModuleStatus(models.TextChoices):
 
 
 class Module(ProjectBaseModel):
+    class ModuleVisibility(models.TextChoices):
+        PUBLIC = "public", "Public"
+        PRIVATE = "private", "Private"
+
     name = models.CharField(max_length=255, verbose_name="Module Name")
     description = models.TextField(verbose_name="Module Description", blank=True)
     description_text = models.JSONField(verbose_name="Module Description RT", blank=True, null=True)
     description_html = models.JSONField(verbose_name="Module Description HTML", blank=True, null=True)
     start_date = models.DateField(null=True)
     target_date = models.DateField(null=True)
+    visibility = models.CharField(
+        choices=ModuleVisibility.choices,
+        default=ModuleVisibility.PUBLIC,
+        max_length=20,
+    )
     status = models.CharField(
         choices=(
             ("backlog", "Backlog"),
