@@ -1,3 +1,5 @@
+import json
+
 import pytest
 from django.utils import timezone
 from rest_framework import status
@@ -11,6 +13,8 @@ from plane.db.models import (
     ModuleUserProperties,
     Project,
     ProjectMember,
+    State,
+    StateGroup,
     User,
     UserFavorite,
     WorkspaceMember,
@@ -58,6 +62,20 @@ def make_created_private_module(workspace, project, name, creator):
     )
     module.save(created_by_id=creator.id)
     return module
+
+
+def collect_nested_values(data):
+    if isinstance(data, dict):
+        values = set(data.keys())
+        for value in data.values():
+            values.update(collect_nested_values(value))
+        return values
+    if isinstance(data, list):
+        values = set()
+        for item in data:
+            values.update(collect_nested_values(item))
+        return values
+    return {str(data)}
 
 
 def test_existing_modules_default_to_public(workspace, project):
@@ -817,3 +835,680 @@ def test_workspace_user_favorites_related_user_can_patch_and_delete_private_modu
 
     assert delete_response.status_code == status.HTTP_204_NO_CONTENT
     assert not UserFavorite.objects.filter(pk=favorite.pk).exists()
+
+
+def test_app_issue_module_assignment_returns_404_for_hidden_private_module(
+    api_client, workspace, project, project_member
+):
+    unrelated_user = make_project_member(workspace, project, "unrelated-issue-module-assign@example.com")
+    issue = Issue.objects.create(workspace=workspace, project=project, name="Assign hidden private module")
+    private_module = make_created_private_module(workspace, project, "Private Issue Assignment", project_member)
+
+    api_client.force_authenticate(unrelated_user)
+    response = api_client.post(
+        f"/api/workspaces/{workspace.slug}/projects/{project.id}/issues/{issue.id}/modules/",
+        {"modules": [str(private_module.id)]},
+        format="json",
+    )
+
+    assert response.status_code == status.HTTP_404_NOT_FOUND
+    assert not ModuleIssue.objects.filter(issue=issue, module=private_module).exists()
+
+
+def test_app_issue_module_assignment_allows_related_private_module(
+    api_client, workspace, project, project_member
+):
+    issue = Issue.objects.create(workspace=workspace, project=project, name="Assign related private module")
+    private_module = make_created_private_module(workspace, project, "Related Private Issue Assignment", project_member)
+
+    api_client.force_authenticate(project_member)
+    response = api_client.post(
+        f"/api/workspaces/{workspace.slug}/projects/{project.id}/issues/{issue.id}/modules/",
+        {"modules": [str(private_module.id)]},
+        format="json",
+    )
+
+    assert response.status_code == status.HTTP_201_CREATED
+    assert ModuleIssue.objects.filter(issue=issue, module=private_module).exists()
+
+
+def test_app_module_issue_list_returns_404_for_hidden_private_module(
+    api_client, workspace, project, project_member
+):
+    unrelated_user = make_project_member(workspace, project, "unrelated-module-issue-list@example.com")
+    issue = Issue.objects.create(workspace=workspace, project=project, name="Hidden module issue list")
+    private_module = make_created_private_module(workspace, project, "Private Module Issue List", project_member)
+    ModuleIssue.objects.create(workspace=workspace, project=project, issue=issue, module=private_module)
+
+    api_client.force_authenticate(unrelated_user)
+    response = api_client.get(
+        f"/api/workspaces/{workspace.slug}/projects/{project.id}/modules/{private_module.id}/issues/"
+    )
+
+    assert response.status_code == status.HTTP_404_NOT_FOUND
+
+
+def test_app_module_issue_list_masks_other_hidden_private_module_ids(
+    api_client, workspace, project, project_member
+):
+    unrelated_user = make_project_member(workspace, project, "unrelated-visible-module-issue-list@example.com")
+    issue = Issue.objects.create(workspace=workspace, project=project, name="Visible module issue list")
+    public_module = Module.objects.create(workspace=workspace, project=project, name="Public Module Issue List")
+    private_module = make_created_private_module(workspace, project, "Hidden Module Issue List", project_member)
+    ModuleIssue.objects.create(workspace=workspace, project=project, issue=issue, module=public_module)
+    ModuleIssue.objects.create(workspace=workspace, project=project, issue=issue, module=private_module)
+
+    api_client.force_authenticate(unrelated_user)
+    response = api_client.get(f"/api/workspaces/{workspace.slug}/projects/{project.id}/modules/{public_module.id}/issues/")
+
+    assert response.status_code == status.HTTP_200_OK
+    response_issue = next(item for item in response.data["results"] if item["id"] == issue.id)
+    assert str(public_module.id) in {str(module_id) for module_id in response_issue["module_ids"]}
+    assert str(private_module.id) not in {str(module_id) for module_id in response_issue["module_ids"]}
+
+
+def test_app_module_issue_list_hidden_private_module_filter_returns_no_matches(
+    api_client, workspace, project, project_member
+):
+    unrelated_user = make_project_member(workspace, project, "unrelated-module-issue-hidden-filter@example.com")
+    issue = Issue.objects.create(workspace=workspace, project=project, name="Module issue hidden filter")
+    public_module = Module.objects.create(workspace=workspace, project=project, name="Public Module Filter")
+    private_module = make_created_private_module(workspace, project, "Hidden Module Filter", project_member)
+    ModuleIssue.objects.create(workspace=workspace, project=project, issue=issue, module=public_module)
+    ModuleIssue.objects.create(workspace=workspace, project=project, issue=issue, module=private_module)
+
+    api_client.force_authenticate(unrelated_user)
+    response = api_client.get(
+        f"/api/workspaces/{workspace.slug}/projects/{project.id}/modules/{public_module.id}/issues/"
+        f"?module={private_module.id}"
+    )
+
+    assert response.status_code == status.HTTP_200_OK
+    assert issue.id not in {item["id"] for item in response.data["results"]}
+
+
+def test_app_module_issue_group_by_module_ids_excludes_hidden_private_modules(
+    api_client, workspace, project, project_member
+):
+    unrelated_user = make_project_member(workspace, project, "unrelated-module-issue-group-by-module@example.com")
+    issue = Issue.objects.create(workspace=workspace, project=project, name="Module issue grouped hidden modules")
+    public_module = Module.objects.create(workspace=workspace, project=project, name="Public Module Issue Group")
+    private_module = make_created_private_module(workspace, project, "Hidden Module Issue Group", project_member)
+    ModuleIssue.objects.create(workspace=workspace, project=project, issue=issue, module=public_module)
+    ModuleIssue.objects.create(workspace=workspace, project=project, issue=issue, module=private_module)
+
+    api_client.force_authenticate(unrelated_user)
+    response = api_client.get(
+        f"/api/workspaces/{workspace.slug}/projects/{project.id}/modules/{public_module.id}/issues/"
+        "?group_by=module_ids"
+    )
+
+    assert response.status_code == status.HTTP_200_OK
+    assert str(public_module.id) in collect_nested_values(response.data["results"])
+    assert str(private_module.id) not in collect_nested_values(response.data["results"])
+
+
+def test_app_issue_group_by_module_ids_excludes_hidden_private_modules(
+    api_client, workspace, project, project_member
+):
+    unrelated_user = make_project_member(workspace, project, "unrelated-group-by-module@example.com")
+    issue = Issue.objects.create(workspace=workspace, project=project, name="Grouped hidden modules")
+    public_module = Module.objects.create(workspace=workspace, project=project, name="Public Group Module")
+    private_module = make_created_private_module(workspace, project, "Hidden Group Module", project_member)
+    ModuleIssue.objects.create(workspace=workspace, project=project, issue=issue, module=public_module)
+    ModuleIssue.objects.create(workspace=workspace, project=project, issue=issue, module=private_module)
+
+    api_client.force_authenticate(unrelated_user)
+    response = api_client.get(f"/api/workspaces/{workspace.slug}/projects/{project.id}/issues/?group_by=module_ids")
+
+    assert response.status_code == status.HTTP_200_OK
+    assert str(public_module.id) in collect_nested_values(response.data["results"])
+    assert str(private_module.id) not in collect_nested_values(response.data["results"])
+
+
+def test_app_issue_group_by_module_ids_keeps_hidden_only_issues_under_no_visible_module(
+    api_client, workspace, project, project_member
+):
+    unrelated_user = make_project_member(workspace, project, "unrelated-group-hidden-only-module@example.com")
+    hidden_only_issue = Issue.objects.create(workspace=workspace, project=project, name="Hidden only grouped issue")
+    public_issue = Issue.objects.create(workspace=workspace, project=project, name="Public grouped issue")
+    public_module = Module.objects.create(workspace=workspace, project=project, name="Public Visible Group Module")
+    private_module = make_created_private_module(workspace, project, "Hidden Only Group Module", project_member)
+    ModuleIssue.objects.create(workspace=workspace, project=project, issue=hidden_only_issue, module=private_module)
+    ModuleIssue.objects.create(workspace=workspace, project=project, issue=public_issue, module=public_module)
+
+    api_client.force_authenticate(unrelated_user)
+    response = api_client.get(f"/api/workspaces/{workspace.slug}/projects/{project.id}/issues/?group_by=module_ids")
+
+    assert response.status_code == status.HTTP_200_OK
+    nested_values = collect_nested_values(response.data["results"])
+    assert str(hidden_only_issue.id) in nested_values
+    assert str(public_issue.id) in nested_values
+    assert str(public_module.id) in nested_values
+    assert str(private_module.id) not in nested_values
+    assert "None" in response.data["results"]
+
+
+def test_app_issue_group_by_module_ids_deduplicates_multiple_hidden_modules_under_none(
+    api_client, workspace, project, project_member
+):
+    unrelated_user = make_project_member(workspace, project, "unrelated-group-duplicate-hidden-module@example.com")
+    issue = Issue.objects.create(workspace=workspace, project=project, name="Multiple hidden grouped issue")
+    first_private_module = make_created_private_module(workspace, project, "First Hidden Group Module", project_member)
+    second_private_module = make_created_private_module(workspace, project, "Second Hidden Group Module", project_member)
+    ModuleIssue.objects.create(workspace=workspace, project=project, issue=issue, module=first_private_module)
+    ModuleIssue.objects.create(workspace=workspace, project=project, issue=issue, module=second_private_module)
+
+    api_client.force_authenticate(unrelated_user)
+    response = api_client.get(f"/api/workspaces/{workspace.slug}/projects/{project.id}/issues/?group_by=module_ids")
+
+    assert response.status_code == status.HTTP_200_OK
+    none_results = response.data["results"]["None"]["results"]
+    issue_ids = [item["id"] for item in none_results]
+    assert issue_ids.count(issue.id) == 1
+    assert response.data["results"]["None"]["total_results"] == len(none_results)
+    nested_values = collect_nested_values(response.data["results"])
+    assert str(first_private_module.id) not in nested_values
+    assert str(second_private_module.id) not in nested_values
+
+
+def test_app_issue_group_by_module_ids_uses_migrated_page_count_for_hidden_group_total_results(
+    api_client, workspace, project, project_member
+):
+    unrelated_user = make_project_member(workspace, project, "unrelated-group-hidden-total@example.com")
+    private_module = make_created_private_module(workspace, project, "Hidden Total Group Module", project_member)
+    first_issue = Issue.objects.create(workspace=workspace, project=project, name="First hidden total issue")
+    second_issue = Issue.objects.create(workspace=workspace, project=project, name="Second hidden total issue")
+    ModuleIssue.objects.create(workspace=workspace, project=project, issue=first_issue, module=private_module)
+    ModuleIssue.objects.create(workspace=workspace, project=project, issue=second_issue, module=private_module)
+
+    api_client.force_authenticate(unrelated_user)
+    response = api_client.get(
+        f"/api/workspaces/{workspace.slug}/projects/{project.id}/issues/?group_by=module_ids&per_page=1"
+    )
+
+    assert response.status_code == status.HTTP_200_OK
+    assert response.data["results"]["None"]["total_results"] == 1
+    assert len(response.data["results"]["None"]["results"]) == 1
+
+
+def test_app_issue_group_by_module_ids_does_not_count_visible_module_issues_under_none(
+    api_client, workspace, project, project_member
+):
+    unrelated_user = make_project_member(workspace, project, "unrelated-group-visible-hidden-total@example.com")
+    hidden_only_issue = Issue.objects.create(workspace=workspace, project=project, name="Hidden only total issue")
+    visible_issue = Issue.objects.create(workspace=workspace, project=project, name="Visible plus hidden total issue")
+    public_module = Module.objects.create(workspace=workspace, project=project, name="Public Visible Total Module")
+    private_module = make_created_private_module(workspace, project, "Hidden Mixed Total Module", project_member)
+    ModuleIssue.objects.create(workspace=workspace, project=project, issue=hidden_only_issue, module=private_module)
+    ModuleIssue.objects.create(workspace=workspace, project=project, issue=visible_issue, module=public_module)
+    ModuleIssue.objects.create(workspace=workspace, project=project, issue=visible_issue, module=private_module)
+
+    api_client.force_authenticate(unrelated_user)
+    response = api_client.get(
+        f"/api/workspaces/{workspace.slug}/projects/{project.id}/issues/?group_by=module_ids&per_page=1"
+    )
+
+    assert response.status_code == status.HTTP_200_OK
+    none_group = response.data["results"]["None"]
+    assert none_group["total_results"] == 0
+    assert hidden_only_issue.id not in {item["id"] for item in none_group["results"]}
+    assert visible_issue.id not in {item["id"] for item in none_group["results"]}
+
+
+def test_app_issue_group_by_module_ids_uses_true_visible_modules_when_visible_row_is_off_page(
+    api_client, workspace, project, project_member
+):
+    unrelated_user = make_project_member(workspace, project, "unrelated-group-visible-hidden-off-page@example.com")
+    hidden_only_issue = Issue.objects.create(workspace=workspace, project=project, name="Hidden only first page issue")
+    visible_issue = Issue.objects.create(workspace=workspace, project=project, name="Visible hidden off page issue")
+    competing_public_issue = Issue.objects.create(
+        workspace=workspace, project=project, name="Competing public first page issue"
+    )
+    public_module = Module.objects.create(workspace=workspace, project=project, name="Public Off Page Module")
+    private_module = make_created_private_module(workspace, project, "Hidden Off Page Module", project_member)
+    ModuleIssue.objects.create(workspace=workspace, project=project, issue=hidden_only_issue, module=private_module)
+    ModuleIssue.objects.create(workspace=workspace, project=project, issue=visible_issue, module=public_module)
+    ModuleIssue.objects.create(workspace=workspace, project=project, issue=visible_issue, module=private_module)
+    ModuleIssue.objects.create(workspace=workspace, project=project, issue=competing_public_issue, module=public_module)
+
+    api_client.force_authenticate(unrelated_user)
+    response = api_client.get(
+        f"/api/workspaces/{workspace.slug}/projects/{project.id}/issues/?group_by=module_ids&per_page=1"
+    )
+
+    assert response.status_code == status.HTTP_200_OK
+    none_group = response.data["results"]["None"]
+    assert none_group["total_results"] == 0
+    assert hidden_only_issue.id not in {item["id"] for item in none_group["results"]}
+    assert visible_issue.id not in {item["id"] for item in none_group["results"]}
+    public_group_issue_ids = {item["id"] for item in response.data["results"][str(public_module.id)]["results"]}
+    assert competing_public_issue.id in public_group_issue_ids
+    assert visible_issue.id not in public_group_issue_ids
+
+
+def test_app_issue_subgroup_by_state_then_module_ids_excludes_hidden_private_modules(
+    api_client, workspace, project, project_member
+):
+    unrelated_user = make_project_member(workspace, project, "unrelated-state-module-subgroup@example.com")
+    state = State.objects.create(
+        workspace=workspace,
+        project=project,
+        name="Todo",
+        color="#60646C",
+        group=StateGroup.UNSTARTED.value,
+        sequence=25000,
+        default=True,
+    )
+    issue = Issue.objects.create(workspace=workspace, project=project, state=state, name="State module subgroup")
+    public_module = Module.objects.create(workspace=workspace, project=project, name="Public State Subgroup Module")
+    private_module = make_created_private_module(workspace, project, "Hidden State Subgroup Module", project_member)
+    ModuleIssue.objects.create(workspace=workspace, project=project, issue=issue, module=public_module)
+    ModuleIssue.objects.create(workspace=workspace, project=project, issue=issue, module=private_module)
+
+    api_client.force_authenticate(unrelated_user)
+    response = api_client.get(
+        f"/api/workspaces/{workspace.slug}/projects/{project.id}/issues/"
+        "?group_by=state&sub_group_by=module_ids"
+    )
+
+    assert response.status_code == status.HTTP_200_OK
+    nested_values = collect_nested_values(response.data["results"])
+    assert str(state.id) in nested_values
+    assert str(public_module.id) in nested_values
+    assert str(private_module.id) not in nested_values
+
+
+def test_app_issue_subgroup_by_state_then_module_ids_keeps_hidden_only_issues_under_none(
+    api_client, workspace, project, project_member
+):
+    unrelated_user = make_project_member(workspace, project, "unrelated-state-hidden-only-subgroup@example.com")
+    state = State.objects.create(
+        workspace=workspace,
+        project=project,
+        name="Hidden Only State",
+        color="#60646C",
+        group=StateGroup.UNSTARTED.value,
+        sequence=25000,
+    )
+    issue = Issue.objects.create(workspace=workspace, project=project, state=state, name="State hidden only subgroup")
+    private_module = make_created_private_module(workspace, project, "Hidden State Only Module", project_member)
+    ModuleIssue.objects.create(workspace=workspace, project=project, issue=issue, module=private_module)
+
+    api_client.force_authenticate(unrelated_user)
+    response = api_client.get(
+        f"/api/workspaces/{workspace.slug}/projects/{project.id}/issues/"
+        "?group_by=state&sub_group_by=module_ids"
+    )
+
+    assert response.status_code == status.HTTP_200_OK
+    state_group = response.data["results"][str(state.id)]
+    none_results = state_group["results"]["None"]["results"]
+    assert issue.id in {item["id"] for item in none_results}
+    assert str(private_module.id) not in collect_nested_values(response.data["results"])
+
+
+def test_app_issue_subgroup_by_state_then_module_ids_uses_migrated_page_count_for_hidden_subgroup_total_results(
+    api_client, workspace, project, project_member
+):
+    unrelated_user = make_project_member(workspace, project, "unrelated-subgroup-hidden-total@example.com")
+    state = State.objects.create(
+        workspace=workspace,
+        project=project,
+        name="Hidden Total State",
+        color="#60646C",
+        group=StateGroup.UNSTARTED.value,
+        sequence=25000,
+    )
+    private_module = make_created_private_module(workspace, project, "Hidden Total Subgroup Module", project_member)
+    first_issue = Issue.objects.create(workspace=workspace, project=project, state=state, name="First subgroup total issue")
+    second_issue = Issue.objects.create(workspace=workspace, project=project, state=state, name="Second subgroup total issue")
+    ModuleIssue.objects.create(workspace=workspace, project=project, issue=first_issue, module=private_module)
+    ModuleIssue.objects.create(workspace=workspace, project=project, issue=second_issue, module=private_module)
+
+    api_client.force_authenticate(unrelated_user)
+    response = api_client.get(
+        f"/api/workspaces/{workspace.slug}/projects/{project.id}/issues/"
+        "?group_by=state&sub_group_by=module_ids&per_page=1"
+    )
+
+    assert response.status_code == status.HTTP_200_OK
+    state_group = response.data["results"][str(state.id)]
+    assert state_group["total_results"] == 1
+    assert state_group["results"]["None"]["total_results"] == 1
+    assert len(state_group["results"]["None"]["results"]) == 1
+
+
+def test_app_issue_subgroup_by_state_then_module_ids_does_not_count_visible_module_issues_under_none(
+    api_client, workspace, project, project_member
+):
+    unrelated_user = make_project_member(workspace, project, "unrelated-subgroup-visible-hidden-total@example.com")
+    state = State.objects.create(
+        workspace=workspace,
+        project=project,
+        name="Visible Hidden Total State",
+        color="#60646C",
+        group=StateGroup.UNSTARTED.value,
+        sequence=25000,
+    )
+    hidden_only_issue = Issue.objects.create(workspace=workspace, project=project, state=state, name="Hidden only subgroup total issue")
+    visible_issue = Issue.objects.create(workspace=workspace, project=project, state=state, name="Visible hidden subgroup total issue")
+    public_module = Module.objects.create(workspace=workspace, project=project, name="Public Subgroup Total Module")
+    private_module = make_created_private_module(workspace, project, "Hidden Mixed Subgroup Total Module", project_member)
+    ModuleIssue.objects.create(workspace=workspace, project=project, issue=hidden_only_issue, module=private_module)
+    ModuleIssue.objects.create(workspace=workspace, project=project, issue=visible_issue, module=public_module)
+    ModuleIssue.objects.create(workspace=workspace, project=project, issue=visible_issue, module=private_module)
+
+    api_client.force_authenticate(unrelated_user)
+    response = api_client.get(
+        f"/api/workspaces/{workspace.slug}/projects/{project.id}/issues/"
+        "?group_by=state&sub_group_by=module_ids&per_page=1"
+    )
+
+    assert response.status_code == status.HTTP_200_OK
+    none_subgroup = response.data["results"][str(state.id)]["results"]["None"]
+    assert none_subgroup["total_results"] == 0
+    assert hidden_only_issue.id not in {item["id"] for item in none_subgroup["results"]}
+    assert visible_issue.id not in {item["id"] for item in none_subgroup["results"]}
+
+
+def test_app_issue_subgroup_by_state_then_module_ids_uses_true_visible_modules_when_visible_row_is_off_page(
+    api_client, workspace, project, project_member
+):
+    unrelated_user = make_project_member(workspace, project, "unrelated-subgroup-visible-hidden-off-page@example.com")
+    state = State.objects.create(
+        workspace=workspace,
+        project=project,
+        name="Visible Hidden Off Page State",
+        color="#60646C",
+        group=StateGroup.UNSTARTED.value,
+        sequence=25000,
+    )
+    hidden_only_issue = Issue.objects.create(workspace=workspace, project=project, state=state, name="Hidden only subgroup first page issue")
+    visible_issue = Issue.objects.create(workspace=workspace, project=project, state=state, name="Visible subgroup off page issue")
+    competing_public_issue = Issue.objects.create(
+        workspace=workspace, project=project, state=state, name="Competing public subgroup first page issue"
+    )
+    public_module = Module.objects.create(workspace=workspace, project=project, name="Public Subgroup Off Page Module")
+    private_module = make_created_private_module(workspace, project, "Hidden Subgroup Off Page Module", project_member)
+    ModuleIssue.objects.create(workspace=workspace, project=project, issue=hidden_only_issue, module=private_module)
+    ModuleIssue.objects.create(workspace=workspace, project=project, issue=visible_issue, module=public_module)
+    ModuleIssue.objects.create(workspace=workspace, project=project, issue=visible_issue, module=private_module)
+    ModuleIssue.objects.create(workspace=workspace, project=project, issue=competing_public_issue, module=public_module)
+
+    api_client.force_authenticate(unrelated_user)
+    response = api_client.get(
+        f"/api/workspaces/{workspace.slug}/projects/{project.id}/issues/"
+        "?group_by=state&sub_group_by=module_ids&per_page=1"
+    )
+
+    assert response.status_code == status.HTTP_200_OK
+    none_subgroup = response.data["results"][str(state.id)]["results"]["None"]
+    assert none_subgroup["total_results"] == 0
+    assert hidden_only_issue.id not in {item["id"] for item in none_subgroup["results"]}
+    assert visible_issue.id not in {item["id"] for item in none_subgroup["results"]}
+    public_subgroup_issue_ids = {
+        item["id"] for item in response.data["results"][str(state.id)]["results"][str(public_module.id)]["results"]
+    }
+    assert competing_public_issue.id in public_subgroup_issue_ids
+    assert visible_issue.id not in public_subgroup_issue_ids
+
+
+def test_app_issue_subgroup_by_module_ids_then_state_excludes_hidden_private_modules(
+    api_client, workspace, project, project_member
+):
+    unrelated_user = make_project_member(workspace, project, "unrelated-module-state-subgroup@example.com")
+    state = State.objects.create(
+        workspace=workspace,
+        project=project,
+        name="Started",
+        color="#F59E0B",
+        group=StateGroup.STARTED.value,
+        sequence=35000,
+    )
+    issue = Issue.objects.create(workspace=workspace, project=project, state=state, name="Module state subgroup")
+    public_module = Module.objects.create(workspace=workspace, project=project, name="Public Module Subgroup State")
+    private_module = make_created_private_module(workspace, project, "Hidden Module Subgroup State", project_member)
+    ModuleIssue.objects.create(workspace=workspace, project=project, issue=issue, module=public_module)
+    ModuleIssue.objects.create(workspace=workspace, project=project, issue=issue, module=private_module)
+
+    api_client.force_authenticate(unrelated_user)
+    response = api_client.get(
+        f"/api/workspaces/{workspace.slug}/projects/{project.id}/issues/"
+        "?group_by=module_ids&sub_group_by=state"
+    )
+
+    assert response.status_code == status.HTTP_200_OK
+    nested_values = collect_nested_values(response.data["results"])
+    assert str(public_module.id) in nested_values
+    assert str(state.id) in nested_values
+    assert str(private_module.id) not in nested_values
+
+
+def test_app_issue_list_hidden_private_module_filter_returns_no_matches(
+    api_client, workspace, project, project_member
+):
+    unrelated_user = make_project_member(workspace, project, "unrelated-hidden-module-filter@example.com")
+    issue = Issue.objects.create(workspace=workspace, project=project, name="Hidden module filter")
+    private_module = make_created_private_module(workspace, project, "Hidden Filter Module", project_member)
+    ModuleIssue.objects.create(workspace=workspace, project=project, issue=issue, module=private_module)
+
+    api_client.force_authenticate(unrelated_user)
+    response = api_client.get(f"/api/workspaces/{workspace.slug}/projects/{project.id}/issues/?module={private_module.id}")
+
+    assert response.status_code == status.HTTP_200_OK
+    assert issue.id not in {item["id"] for item in response.data["results"]}
+
+
+def test_app_issue_list_rich_module_id_filter_hides_hidden_private_module(
+    api_client, workspace, project, project_member
+):
+    unrelated_user = make_project_member(workspace, project, "unrelated-rich-hidden-module-filter@example.com")
+    issue = Issue.objects.create(workspace=workspace, project=project, name="Hidden rich module filter")
+    private_module = make_created_private_module(workspace, project, "Hidden Rich Filter Module", project_member)
+    ModuleIssue.objects.create(workspace=workspace, project=project, issue=issue, module=private_module)
+
+    api_client.force_authenticate(unrelated_user)
+    response = api_client.get(
+        f"/api/workspaces/{workspace.slug}/projects/{project.id}/issues/",
+        {"filters": json.dumps({"module_id": str(private_module.id)})},
+    )
+
+    assert response.status_code == status.HTTP_200_OK
+    assert issue.id not in {item["id"] for item in response.data["results"]}
+
+
+def test_app_issue_list_rich_module_id_in_filter_hides_hidden_private_module(
+    api_client, workspace, project, project_member
+):
+    unrelated_user = make_project_member(workspace, project, "unrelated-rich-hidden-module-in-filter@example.com")
+    issue = Issue.objects.create(workspace=workspace, project=project, name="Hidden rich module in filter")
+    private_module = make_created_private_module(workspace, project, "Hidden Rich In Filter Module", project_member)
+    ModuleIssue.objects.create(workspace=workspace, project=project, issue=issue, module=private_module)
+
+    api_client.force_authenticate(unrelated_user)
+    response = api_client.get(
+        f"/api/workspaces/{workspace.slug}/projects/{project.id}/issues/",
+        {"filters": json.dumps({"module_id__in": [str(private_module.id)]})},
+    )
+
+    assert response.status_code == status.HTTP_200_OK
+    assert issue.id not in {item["id"] for item in response.data["results"]}
+
+
+def test_app_issue_list_rich_module_filter_allows_public_module(
+    api_client, workspace, project, project_member
+):
+    unrelated_user = make_project_member(workspace, project, "unrelated-rich-public-module-filter@example.com")
+    issue = Issue.objects.create(workspace=workspace, project=project, name="Public rich module filter")
+    public_module = Module.objects.create(workspace=workspace, project=project, name="Public Rich Filter Module")
+    ModuleIssue.objects.create(workspace=workspace, project=project, issue=issue, module=public_module)
+
+    api_client.force_authenticate(unrelated_user)
+    response = api_client.get(
+        f"/api/workspaces/{workspace.slug}/projects/{project.id}/issues/",
+        {"filters": json.dumps({"module_id": str(public_module.id)})},
+    )
+
+    assert response.status_code == status.HTTP_200_OK
+    assert issue.id in {item["id"] for item in response.data["results"]}
+
+
+def test_app_issue_list_rich_module_in_filter_accepts_comma_separated_public_modules(
+    api_client, workspace, project, project_member
+):
+    unrelated_user = make_project_member(workspace, project, "unrelated-rich-public-module-in-string@example.com")
+    first_issue = Issue.objects.create(workspace=workspace, project=project, name="First public rich module in filter")
+    second_issue = Issue.objects.create(workspace=workspace, project=project, name="Second public rich module in filter")
+    first_public_module = Module.objects.create(workspace=workspace, project=project, name="First Public Rich In Module")
+    second_public_module = Module.objects.create(workspace=workspace, project=project, name="Second Public Rich In Module")
+    ModuleIssue.objects.create(workspace=workspace, project=project, issue=first_issue, module=first_public_module)
+    ModuleIssue.objects.create(workspace=workspace, project=project, issue=second_issue, module=second_public_module)
+
+    api_client.force_authenticate(unrelated_user)
+    response = api_client.get(
+        f"/api/workspaces/{workspace.slug}/projects/{project.id}/issues/",
+        {"filters": json.dumps({"module_id__in": f"{first_public_module.id},{second_public_module.id}"})},
+    )
+
+    assert response.status_code == status.HTTP_200_OK
+    response_issue_ids = {item["id"] for item in response.data["results"]}
+    assert first_issue.id in response_issue_ids
+    assert second_issue.id in response_issue_ids
+
+
+def test_app_issues_detail_rich_module_id_filter_hides_hidden_private_module(
+    api_client, workspace, project, project_member
+):
+    unrelated_user = make_project_member(workspace, project, "unrelated-detail-rich-hidden-module-filter@example.com")
+    issue = Issue.objects.create(workspace=workspace, project=project, name="Hidden rich module detail filter")
+    private_module = make_created_private_module(workspace, project, "Hidden Rich Detail Filter Module", project_member)
+    ModuleIssue.objects.create(workspace=workspace, project=project, issue=issue, module=private_module)
+
+    api_client.force_authenticate(unrelated_user)
+    response = api_client.get(
+        f"/api/workspaces/{workspace.slug}/projects/{project.id}/issues-detail/",
+        {"filters": json.dumps({"module_id": str(private_module.id)})},
+    )
+
+    assert response.status_code == status.HTTP_200_OK
+    assert issue.id not in {item["id"] for item in response.data["results"]}
+
+
+def test_app_issue_list_invalid_module_filter_does_not_error(api_client, workspace, project, project_member):
+    api_client.force_authenticate(project_member)
+    response = api_client.get(f"/api/workspaces/{workspace.slug}/projects/{project.id}/issues/?module=not-a-uuid")
+
+    assert response.status_code == status.HTTP_200_OK
+
+
+def test_app_issue_list_module_null_filter_preserves_existing_no_filter_behavior(
+    api_client, workspace, project, project_member
+):
+    issue = Issue.objects.create(workspace=workspace, project=project, name="Module null filter issue")
+
+    api_client.force_authenticate(project_member)
+    response = api_client.get(f"/api/workspaces/{workspace.slug}/projects/{project.id}/issues/?module=null")
+
+    assert response.status_code == status.HTTP_200_OK
+    assert issue.id in {item["id"] for item in response.data["results"]}
+
+
+def test_app_issue_module_assignment_validates_adds_and_removes_before_side_effects(
+    api_client, workspace, project, project_member
+):
+    unrelated_user = make_project_member(workspace, project, "unrelated-mixed-module-assignment@example.com")
+    issue = Issue.objects.create(workspace=workspace, project=project, name="Mixed module assignment")
+    public_module = Module.objects.create(workspace=workspace, project=project, name="Public Mixed Assignment")
+    private_module = make_created_private_module(workspace, project, "Hidden Mixed Assignment", project_member)
+    hidden_relation = ModuleIssue.objects.create(workspace=workspace, project=project, issue=issue, module=private_module)
+
+    api_client.force_authenticate(unrelated_user)
+    response = api_client.post(
+        f"/api/workspaces/{workspace.slug}/projects/{project.id}/issues/{issue.id}/modules/",
+        {
+            "modules": [str(public_module.id)],
+            "removed_modules": [str(private_module.id)],
+        },
+        format="json",
+    )
+
+    assert response.status_code == status.HTTP_404_NOT_FOUND
+    assert not ModuleIssue.objects.filter(issue=issue, module=public_module).exists()
+    assert ModuleIssue.objects.filter(pk=hidden_relation.pk).exists()
+
+
+def test_app_issue_module_assignment_rejects_invalid_module_ids_before_side_effects(
+    api_client, workspace, project, project_member
+):
+    issue = Issue.objects.create(workspace=workspace, project=project, name="Invalid module assignment")
+    public_module = Module.objects.create(workspace=workspace, project=project, name="Public Invalid Assignment")
+
+    api_client.force_authenticate(project_member)
+    response = api_client.post(
+        f"/api/workspaces/{workspace.slug}/projects/{project.id}/issues/{issue.id}/modules/",
+        {
+            "modules": [str(public_module.id)],
+            "removed_modules": ["not-a-uuid"],
+        },
+        format="json",
+    )
+
+    assert response.status_code == status.HTTP_400_BAD_REQUEST
+    assert not ModuleIssue.objects.filter(issue=issue, module=public_module).exists()
+
+
+def test_app_issue_list_masks_hidden_private_module_ids_from_unrelated_member(
+    api_client, workspace, project, project_member
+):
+    unrelated_user = make_project_member(workspace, project, "unrelated-issue-list-mask@example.com")
+    issue = Issue.objects.create(workspace=workspace, project=project, name="Issue list masked modules")
+    public_module = Module.objects.create(workspace=workspace, project=project, name="Public Issue List Module")
+    private_module = make_created_private_module(workspace, project, "Private Issue List Module", project_member)
+    ModuleIssue.objects.create(workspace=workspace, project=project, issue=issue, module=public_module)
+    ModuleIssue.objects.create(workspace=workspace, project=project, issue=issue, module=private_module)
+
+    api_client.force_authenticate(unrelated_user)
+    response = api_client.get(f"/api/workspaces/{workspace.slug}/projects/{project.id}/issues/")
+
+    assert response.status_code == status.HTTP_200_OK
+    response_issue = next(item for item in response.data["results"] if item["id"] == issue.id)
+    assert str(public_module.id) in {str(module_id) for module_id in response_issue["module_ids"]}
+    assert str(private_module.id) not in {str(module_id) for module_id in response_issue["module_ids"]}
+
+
+def test_app_issue_detail_masks_hidden_private_module_ids_from_unrelated_member(
+    api_client, workspace, project, project_member
+):
+    unrelated_user = make_project_member(workspace, project, "unrelated-issue-detail-mask@example.com")
+    issue = Issue.objects.create(workspace=workspace, project=project, name="Issue detail masked modules")
+    public_module = Module.objects.create(workspace=workspace, project=project, name="Public Issue Detail Module")
+    private_module = make_created_private_module(workspace, project, "Private Issue Detail Module", project_member)
+    ModuleIssue.objects.create(workspace=workspace, project=project, issue=issue, module=public_module)
+    ModuleIssue.objects.create(workspace=workspace, project=project, issue=issue, module=private_module)
+
+    api_client.force_authenticate(unrelated_user)
+    response = api_client.get(f"/api/workspaces/{workspace.slug}/projects/{project.id}/issues/{issue.id}/")
+
+    assert response.status_code == status.HTTP_200_OK
+    assert str(public_module.id) in {str(module_id) for module_id in response.data["module_ids"]}
+    assert str(private_module.id) not in {str(module_id) for module_id in response.data["module_ids"]}
+
+
+def test_app_v2_issue_list_masks_hidden_private_module_ids_from_unrelated_member(
+    api_client, workspace, project, project_member
+):
+    unrelated_user = make_project_member(workspace, project, "unrelated-v2-issue-list-mask@example.com")
+    issue = Issue.objects.create(workspace=workspace, project=project, name="V2 issue list masked modules")
+    public_module = Module.objects.create(workspace=workspace, project=project, name="Public V2 Issue List Module")
+    private_module = make_created_private_module(workspace, project, "Private V2 Issue List Module", project_member)
+    ModuleIssue.objects.create(workspace=workspace, project=project, issue=issue, module=public_module)
+    ModuleIssue.objects.create(workspace=workspace, project=project, issue=issue, module=private_module)
+
+    api_client.force_authenticate(unrelated_user)
+    response = api_client.get(f"/api/workspaces/{workspace.slug}/projects/{project.id}/v2/issues/")
+
+    assert response.status_code == status.HTTP_200_OK
+    response_issue = next(item for item in response.data["results"] if item["id"] == issue.id)
+    assert str(public_module.id) in {str(module_id) for module_id in response_issue["module_ids"]}
+    assert str(private_module.id) not in {str(module_id) for module_id in response_issue["module_ids"]}

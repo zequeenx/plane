@@ -25,10 +25,12 @@ from plane.db.models import (
     Issue,
     FileAsset,
     IssueLink,
+    Module,
     ModuleIssue,
     Project,
     CycleIssue,
 )
+from plane.db.utils.module_visibility import filter_visible_modules
 from plane.utils.grouper import (
     issue_group_values,
     issue_on_results,
@@ -41,7 +43,15 @@ from plane.utils.paginator import GroupedOffsetPaginator, SubGroupedOffsetPagina
 from plane.utils.filters import ComplexFilterBackend
 from plane.utils.filters import IssueFilterSet
 from .. import BaseViewSet
+from plane.app.views.issue.base import (
+    filter_grouped_module_response,
+    filter_queryset_with_module_visibility,
+    grouping_by_modules,
+    normalize_module_group_by,
+    sanitize_module_query_params,
+)
 from plane.utils.host import base_host
+from plane.utils.uuid import is_valid_uuid
 
 
 class ModuleIssueViewSet(BaseViewSet):
@@ -51,6 +61,30 @@ class ModuleIssueViewSet(BaseViewSet):
     bulk = True
     filter_backends = (ComplexFilterBackend,)
     filterset_class = IssueFilterSet
+
+    def get_visible_module_or_none(self, slug, project_id, module_id, user):
+        return filter_visible_modules(
+            Module.objects.filter(workspace__slug=slug, project_id=project_id, pk=module_id),
+            user,
+        ).first()
+
+    def visible_module_ids(self, slug, project_id, user):
+        return {
+            str(module_id)
+            for module_id in filter_visible_modules(
+                Module.objects.filter(workspace__slug=slug, project_id=project_id),
+                user,
+            ).values_list("id", flat=True)
+        }
+
+    def attach_field_values_with_visible_modules(self, issues, group_by, sub_group_by, slug, project_id, user):
+        visible_module_ids = self.visible_module_ids(slug, project_id, user)
+        issue_results = issue_on_results(group_by=group_by, issues=issues, sub_group_by=sub_group_by)
+        for issue in issue_results:
+            issue["module_ids"] = [
+                module_id for module_id in issue.get("module_ids", []) if str(module_id) in visible_module_ids
+            ]
+        return IssueFieldValueService.attach_field_values_to_issue_dicts(issue_results)
 
     def apply_annotations(self, issues):
         return (
@@ -96,11 +130,22 @@ class ModuleIssueViewSet(BaseViewSet):
     @method_decorator(gzip_page)
     @allow_permission([ROLE.ADMIN, ROLE.MEMBER])
     def list(self, request, slug, project_id, module_id):
-        filters = issue_filters(request.query_params, "GET")
+        if not self.get_visible_module_or_none(slug, project_id, module_id, request.user):
+            return Response({"error": "Module not found"}, status=status.HTTP_404_NOT_FOUND)
+
+        query_params = sanitize_module_query_params(request.query_params.copy(), slug, project_id, request.user)
+        filters = issue_filters(query_params, "GET")
         issue_queryset = self.get_queryset()
 
         # Apply filtering from filterset
-        issue_queryset = self.filter_queryset(issue_queryset)
+        issue_queryset = filter_queryset_with_module_visibility(
+            self,
+            request,
+            issue_queryset,
+            slug,
+            project_id,
+            request.user,
+        )
 
         # Apply legacy filters
         issue_queryset = issue_queryset.filter(**filters)
@@ -126,6 +171,8 @@ class ModuleIssueViewSet(BaseViewSet):
         sub_group_by = request.GET.get("sub_group_by", False)
         group_by = resolve_issue_group_by(group_by, slug=slug, project_id=project_id)
         sub_group_by = resolve_issue_group_by(sub_group_by, slug=slug, project_id=project_id)
+        group_by = normalize_module_group_by(group_by)
+        sub_group_by = normalize_module_group_by(sub_group_by)
 
         # issue queryset
         issue_queryset = issue_queryset_grouper(
@@ -146,13 +193,13 @@ class ModuleIssueViewSet(BaseViewSet):
                     )
                 else:
                     # group and sub group pagination
-                    return self.paginate(
+                    response = self.paginate(
                         request=request,
                         order_by=order_by_param,
                         queryset=issue_queryset,
                         total_count_queryset=total_issue_queryset,
-                        on_results=lambda issues: IssueFieldValueService.attach_field_values_to_issue_dicts(
-                            issue_on_results(group_by=group_by, issues=issues, sub_group_by=sub_group_by)
+                        on_results=lambda issues: self.attach_field_values_with_visible_modules(
+                            issues, group_by, sub_group_by, slug, project_id, request.user
                         ),
                         paginator_cls=SubGroupedOffsetPaginator,
                         group_by_fields=issue_group_values(
@@ -180,16 +227,19 @@ class ModuleIssueViewSet(BaseViewSet):
                             is_draft=False,
                         ),
                     )
+                    if grouping_by_modules(group_by, sub_group_by):
+                        return filter_grouped_module_response(response, slug, project_id, request.user)
+                    return response
             # Group Paginate
             else:
                 # Group paginate
-                return self.paginate(
+                response = self.paginate(
                     request=request,
                     order_by=order_by_param,
                     queryset=issue_queryset,
                     total_count_queryset=total_issue_queryset,
-                    on_results=lambda issues: IssueFieldValueService.attach_field_values_to_issue_dicts(
-                        issue_on_results(group_by=group_by, issues=issues, sub_group_by=sub_group_by)
+                    on_results=lambda issues: self.attach_field_values_with_visible_modules(
+                        issues, group_by, sub_group_by, slug, project_id, request.user
                     ),
                     paginator_cls=GroupedOffsetPaginator,
                     group_by_fields=issue_group_values(
@@ -209,6 +259,9 @@ class ModuleIssueViewSet(BaseViewSet):
                         is_draft=False,
                     ),
                 )
+                if grouping_by_modules(group_by, sub_group_by):
+                    return filter_grouped_module_response(response, slug, project_id, request.user)
+                return response
         else:
             # List Paginate
             return self.paginate(
@@ -216,14 +269,17 @@ class ModuleIssueViewSet(BaseViewSet):
                 request=request,
                 queryset=issue_queryset,
                 total_count_queryset=total_issue_queryset,
-                on_results=lambda issues: IssueFieldValueService.attach_field_values_to_issue_dicts(
-                    issue_on_results(group_by=group_by, issues=issues, sub_group_by=sub_group_by)
+                on_results=lambda issues: self.attach_field_values_with_visible_modules(
+                    issues, group_by, sub_group_by, slug, project_id, request.user
                 ),
             )
 
     @allow_permission([ROLE.ADMIN, ROLE.MEMBER])
     # create multiple issues inside a module
     def create_module_issues(self, request, slug, project_id, module_id):
+        if not self.get_visible_module_or_none(slug, project_id, module_id, request.user):
+            return Response({"error": "Module not found"}, status=status.HTTP_404_NOT_FOUND)
+
         issues = request.data.get("issues", [])
         if not issues:
             return Response({"error": "Issues are required"}, status=status.HTTP_400_BAD_REQUEST)
@@ -274,6 +330,21 @@ class ModuleIssueViewSet(BaseViewSet):
         modules = request.data.get("modules", [])
         removed_modules = request.data.get("removed_modules", [])
         project = Project.objects.get(pk=project_id)
+        requested_module_ids = {str(module_id) for module_id in modules + removed_modules}
+
+        if any(not is_valid_uuid(module_id) for module_id in requested_module_ids):
+            return Response({"error": "Invalid module id"}, status=status.HTTP_400_BAD_REQUEST)
+
+        if requested_module_ids:
+            visible_modules = {
+                str(module_id)
+                for module_id in filter_visible_modules(
+                    Module.objects.filter(workspace__slug=slug, project_id=project_id, pk__in=requested_module_ids),
+                    request.user,
+                ).values_list("id", flat=True)
+            }
+            if visible_modules != requested_module_ids:
+                return Response({"error": "Module not found"}, status=status.HTTP_404_NOT_FOUND)
 
         if modules:
             _ = ModuleIssue.objects.bulk_create(
@@ -308,6 +379,9 @@ class ModuleIssueViewSet(BaseViewSet):
             ]
 
         for module_id in removed_modules:
+            if not self.get_visible_module_or_none(slug, project_id, module_id, request.user):
+                return Response({"error": "Module not found"}, status=status.HTTP_404_NOT_FOUND)
+
             module_issue = ModuleIssue.objects.filter(
                 workspace__slug=slug,
                 project_id=project_id,
@@ -339,6 +413,9 @@ class ModuleIssueViewSet(BaseViewSet):
 
     @allow_permission([ROLE.ADMIN, ROLE.MEMBER])
     def destroy(self, request, slug, project_id, module_id, issue_id):
+        if not self.get_visible_module_or_none(slug, project_id, module_id, request.user):
+            return Response({"error": "Module not found"}, status=status.HTTP_404_NOT_FOUND)
+
         module_issue = ModuleIssue.objects.filter(
             workspace__slug=slug,
             project_id=project_id,

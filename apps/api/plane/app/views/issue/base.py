@@ -5,6 +5,7 @@
 # Python imports
 import copy
 import json
+import uuid
 
 # Django imports
 from django.contrib.postgres.aggregates import ArrayAgg
@@ -62,7 +63,9 @@ from plane.db.models import (
     Project,
     ProjectMember,
     UserRecentVisit,
+    Module,
 )
+from plane.db.utils.module_visibility import filter_visible_module_relations, filter_visible_modules
 from plane.utils.filters import ComplexFilterBackend, IssueFilterSet
 from plane.utils.global_paginator import paginate
 from plane.utils.grouper import (
@@ -78,6 +81,308 @@ from plane.utils.paginator import GroupedOffsetPaginator, SubGroupedOffsetPagina
 from plane.utils.timezone_converter import user_timezone_converter
 
 from .. import BaseAPIView, BaseViewSet
+
+
+def visible_module_ids_subquery(user):
+    return Coalesce(
+        Subquery(
+            filter_visible_module_relations(
+                ModuleIssue.objects.filter(
+                    issue_id=OuterRef("pk"),
+                    deleted_at__isnull=True,
+                    module__archived_at__isnull=True,
+                ),
+                user,
+            )
+            .values("issue_id")
+            .annotate(arr=ArrayAgg("module_id", distinct=True))
+            .values("arr")
+        ),
+        Value([], output_field=ArrayField(UUIDField())),
+    )
+
+
+def sanitize_module_query_params(query_params, slug, project_id, user):
+    if "module" not in query_params:
+        return query_params
+
+    module_values = [item for item in query_params.get("module", "").split(",") if item]
+    if not module_values or all(item == "null" for item in module_values):
+        return query_params
+
+    requested_module_ids = []
+    for item in module_values:
+        if item in ["None", "null"]:
+            continue
+        try:
+            requested_module_ids.append(str(uuid.UUID(str(item))))
+        except (AttributeError, TypeError, ValueError):
+            continue
+
+    visible_module_ids = {
+        str(module_id)
+        for module_id in filter_visible_modules(
+            Module.objects.filter(workspace__slug=slug, project_id=project_id, pk__in=requested_module_ids),
+            user,
+        ).values_list("id", flat=True)
+    }
+
+    sanitized_module_values = [module_id for module_id in requested_module_ids if module_id in visible_module_ids]
+    if "None" in module_values:
+        sanitized_module_values.append("None")
+    if not sanitized_module_values:
+        sanitized_module_values = ["00000000-0000-0000-0000-000000000000"]
+
+    query_params["module"] = ",".join(sanitized_module_values)
+    return query_params
+
+
+def visible_module_filter_values(module_values, slug, project_id, user):
+    valid_module_ids = []
+    for item in module_values:
+        try:
+            valid_module_ids.append(str(uuid.UUID(str(item))))
+        except (AttributeError, TypeError, ValueError):
+            continue
+
+    visible_module_ids = {
+        str(module_id)
+        for module_id in filter_visible_modules(
+            Module.objects.filter(workspace__slug=slug, project_id=project_id, pk__in=valid_module_ids),
+            user,
+        ).values_list("id", flat=True)
+    }
+    return [module_id for module_id in valid_module_ids if module_id in visible_module_ids]
+
+
+def sanitize_module_filter_data(filter_data, slug, project_id, user):
+    if isinstance(filter_data, list):
+        return [sanitize_module_filter_data(item, slug, project_id, user) for item in filter_data]
+
+    if not isinstance(filter_data, dict):
+        return filter_data
+
+    sanitized_filter_data = {}
+    for key, value in filter_data.items():
+        if key in ["and", "or"] and isinstance(value, list):
+            sanitized_filter_data[key] = [sanitize_module_filter_data(item, slug, project_id, user) for item in value]
+        elif key == "not" and isinstance(value, dict):
+            sanitized_filter_data[key] = sanitize_module_filter_data(value, slug, project_id, user)
+        elif key == "module_id":
+            visible_values = visible_module_filter_values([value], slug, project_id, user)
+            sanitized_filter_data[key] = visible_values[0] if visible_values else "00000000-0000-0000-0000-000000000000"
+        elif key == "module_id__in":
+            if isinstance(value, list):
+                module_values = value
+                keep_comma_separated_value = False
+            elif isinstance(value, str):
+                module_values = [item for item in value.split(",") if item]
+                keep_comma_separated_value = True
+            else:
+                module_values = [value]
+                keep_comma_separated_value = False
+            visible_values = visible_module_filter_values(module_values, slug, project_id, user)
+            if keep_comma_separated_value:
+                sanitized_filter_data[key] = (
+                    ",".join(visible_values) if visible_values else "00000000-0000-0000-0000-000000000000"
+                )
+            else:
+                sanitized_filter_data[key] = visible_values if visible_values else ["00000000-0000-0000-0000-000000000000"]
+        else:
+            sanitized_filter_data[key] = sanitize_module_filter_data(value, slug, project_id, user)
+
+    return sanitized_filter_data
+
+
+def sanitize_rich_filter_params(request, slug, project_id, user):
+    raw_filter = request.query_params.get("filters")
+    if not raw_filter:
+        return None
+
+    try:
+        filter_data = json.loads(raw_filter)
+    except json.JSONDecodeError:
+        return raw_filter
+
+    return sanitize_module_filter_data(filter_data, slug, project_id, user)
+
+
+def filter_queryset_with_module_visibility(view, request, queryset, slug, project_id, user):
+    filter_data = sanitize_rich_filter_params(request, slug, project_id, user)
+    if filter_data is None:
+        return view.filter_queryset(queryset)
+
+    for backend in list(view.filter_backends):
+        if backend is ComplexFilterBackend:
+            queryset = backend().filter_queryset(request, queryset, view, filter_data=filter_data)
+        else:
+            queryset = backend().filter_queryset(request, queryset, view)
+    return queryset
+
+
+def grouping_by_modules(group_by, sub_group_by):
+    return "issue_module__module_id" in [group_by, sub_group_by]
+
+
+def normalize_module_group_by(field):
+    if field == "module_ids":
+        return "issue_module__module_id"
+    if field == "state":
+        return "state_id"
+    return field
+
+
+def visible_module_id_strings(slug, project_id, user):
+    return {
+        str(module_id)
+        for module_id in filter_visible_modules(
+            Module.objects.filter(workspace__slug=slug, project_id=project_id),
+            user,
+        ).values_list("id", flat=True)
+    }
+
+
+def filter_grouped_module_response(response, slug, project_id, user):
+    visible_module_ids = visible_module_id_strings(slug, project_id, user)
+    results = response.data.get("results", {})
+    if not isinstance(results, dict):
+        return response
+
+    def collect_issue_ids(value):
+        if isinstance(value, dict):
+            issue_ids = {value.get("id")} if value.get("id") else set()
+            for child in value.values():
+                issue_ids.update(collect_issue_ids(child))
+            return issue_ids
+        if isinstance(value, list):
+            issue_ids = set()
+            for child in value:
+                issue_ids.update(collect_issue_ids(child))
+            return issue_ids
+        return set()
+
+    issue_ids = collect_issue_ids(results)
+    visible_module_ids_by_issue_id = {str(issue_id): [] for issue_id in issue_ids}
+    if issue_ids:
+        visible_module_relations = filter_visible_module_relations(
+            ModuleIssue.objects.filter(
+                workspace__slug=slug,
+                project_id=project_id,
+                issue_id__in=issue_ids,
+                deleted_at__isnull=True,
+                module__archived_at__isnull=True,
+            ),
+            user,
+        ).values_list("issue_id", "module_id")
+        for issue_id, module_id in visible_module_relations:
+            visible_module_ids_by_issue_id.setdefault(str(issue_id), []).append(str(module_id))
+
+    def mask_issue(issue):
+        if not isinstance(issue, dict):
+            return
+        issue["module_ids"] = visible_module_ids_by_issue_id.get(str(issue.get("id")), [])
+        if (
+            str(issue.get("issue_module__module_id")) not in visible_module_ids
+            and str(issue.get("issue_module__module_id")) != "None"
+        ):
+            issue.pop("issue_module__module_id", None)
+
+    def filter_issue_list(group):
+        if not isinstance(group, dict):
+            return
+        for issue in group.get("results", []):
+            mask_issue(issue)
+
+    def append_unique_issue(group, issue):
+        if not isinstance(group, dict) or not isinstance(issue, dict):
+            return False
+        issue_id = issue.get("id")
+        results_list = group.setdefault("results", [])
+        existing_issue_ids = {
+            existing_issue.get("id")
+            for existing_issue in results_list
+            if isinstance(existing_issue, dict)
+        }
+        if issue_id not in existing_issue_ids:
+            results_list.append(issue)
+            return True
+        return False
+
+    def merge_total_results(target_group, appended_count=0):
+        if not isinstance(target_group, dict):
+            return
+        target_group["total_results"] = (target_group.get("total_results") or 0) + appended_count
+
+    def refresh_subgroup_total(group):
+        if not isinstance(group, dict) or not isinstance(group.get("results"), dict):
+            return
+        group["total_results"] = sum(
+            subgroup.get("total_results") or 0
+            for subgroup in group["results"].values()
+            if isinstance(subgroup, dict)
+        )
+
+    def filter_subgroups(group, subgroup_keys_are_modules=False):
+        if not isinstance(group, dict) or not isinstance(group.get("results"), dict):
+            return
+        for subgroup_id in list(group["results"].keys()):
+            if subgroup_keys_are_modules and subgroup_id not in visible_module_ids and subgroup_id != "None":
+                none_subgroup = group["results"].setdefault("None", {"results": [], "total_results": 0})
+                appended_count = 0
+                for issue in group["results"][subgroup_id].get("results", []):
+                    mask_issue(issue)
+                    if not issue.get("module_ids"):
+                        appended_count += int(append_unique_issue(none_subgroup, issue))
+                merge_total_results(none_subgroup, appended_count)
+                del group["results"][subgroup_id]
+                continue
+            filter_issue_list(group["results"][subgroup_id])
+        if subgroup_keys_are_modules:
+            refresh_subgroup_total(group)
+
+    group_by = response.data.get("grouped_by")
+    sub_group_by = response.data.get("sub_grouped_by")
+
+    if group_by == "issue_module__module_id":
+        for group_id in list(results.keys()):
+            if group_id not in visible_module_ids and group_id != "None":
+                none_group = results.setdefault("None", {"results": {} if sub_group_by else [], "total_results": 0})
+                hidden_group_results = results[group_id].get("results", {})
+                if sub_group_by and isinstance(hidden_group_results, dict):
+                    for subgroup_id, subgroup in hidden_group_results.items():
+                        none_subgroup = none_group["results"].setdefault(
+                            subgroup_id,
+                            {"results": [], "total_results": 0},
+                        )
+                        appended_count = 0
+                        for issue in subgroup.get("results", []):
+                            mask_issue(issue)
+                            if not issue.get("module_ids"):
+                                appended_count += int(append_unique_issue(none_subgroup, issue))
+                        merge_total_results(none_subgroup, appended_count)
+                    refresh_subgroup_total(none_group)
+                else:
+                    appended_count = 0
+                    for issue in hidden_group_results:
+                        mask_issue(issue)
+                        if not issue.get("module_ids"):
+                            appended_count += int(append_unique_issue(none_group, issue))
+                    merge_total_results(none_group, appended_count)
+                del results[group_id]
+                continue
+            if sub_group_by:
+                filter_subgroups(results[group_id])
+            else:
+                filter_issue_list(results[group_id])
+        return response
+
+    for group in results.values():
+        if sub_group_by == "issue_module__module_id":
+            filter_subgroups(group, subgroup_keys_are_modules=True)
+        else:
+            filter_issue_list(group)
+
+    return response
 
 
 class IssueListEndpoint(BaseAPIView):
@@ -97,10 +402,11 @@ class IssueListEndpoint(BaseAPIView):
         queryset = Issue.issue_objects.filter(workspace__slug=slug, project_id=project_id, pk__in=issue_ids)
 
         # Apply filtering from filterset
-        queryset = self.filter_queryset(queryset)
+        queryset = filter_queryset_with_module_visibility(self, request, queryset, slug, project_id, request.user)
 
         # Apply legacy filters
-        filters = issue_filters(request.query_params, "GET")
+        query_params = sanitize_module_query_params(request.query_params.copy(), slug, project_id, request.user)
+        filters = issue_filters(query_params, "GET")
         issue_queryset = queryset.filter(**filters)
         issue_queryset = issue_queryset.filter(state__deleted_at__isnull=True)
 
@@ -155,6 +461,8 @@ class IssueListEndpoint(BaseAPIView):
         sub_group_by = request.GET.get("sub_group_by", False)
         group_by = resolve_issue_group_by(group_by, slug=slug, project_id=project_id)
         sub_group_by = resolve_issue_group_by(sub_group_by, slug=slug, project_id=project_id)
+        group_by = normalize_module_group_by(group_by)
+        sub_group_by = normalize_module_group_by(sub_group_by)
 
         # issue queryset
         issue_queryset = issue_queryset_grouper(
@@ -164,6 +472,7 @@ class IssueListEndpoint(BaseAPIView):
             slug=slug,
             project_id=project_id,
         )
+        issue_queryset = issue_queryset.annotate(module_ids=visible_module_ids_subquery(request.user))
 
         recent_visited_task.delay(
             slug=slug,
@@ -278,13 +587,21 @@ class IssueViewSet(BaseViewSet):
         project = Project.objects.get(pk=project_id, workspace__slug=slug)
         query_params = request.query_params.copy()
 
+        query_params = sanitize_module_query_params(query_params, slug, project_id, request.user)
         filters = issue_filters(query_params, "GET")
         order_by_param = request.GET.get("order_by", "-created_at")
 
         issue_queryset = self.get_queryset()
 
         # Apply rich filters
-        issue_queryset = self.filter_queryset(issue_queryset)
+        issue_queryset = filter_queryset_with_module_visibility(
+            self,
+            request,
+            issue_queryset,
+            slug,
+            project_id,
+            request.user,
+        )
 
         # Apply legacy filters
         issue_queryset = issue_queryset.filter(**filters, **extra_filters)
@@ -308,6 +625,8 @@ class IssueViewSet(BaseViewSet):
         sub_group_by = request.GET.get("sub_group_by", False)
         group_by = resolve_issue_group_by(group_by, slug=slug, project_id=project_id)
         sub_group_by = resolve_issue_group_by(sub_group_by, slug=slug, project_id=project_id)
+        group_by = normalize_module_group_by(group_by)
+        sub_group_by = normalize_module_group_by(sub_group_by)
 
         # issue queryset
         issue_queryset = issue_queryset_grouper(
@@ -317,6 +636,7 @@ class IssueViewSet(BaseViewSet):
             slug=slug,
             project_id=project_id,
         )
+        issue_queryset = issue_queryset.annotate(module_ids=visible_module_ids_subquery(request.user))
 
         recent_visited_task.delay(
             slug=slug,
@@ -348,7 +668,7 @@ class IssueViewSet(BaseViewSet):
                         status=status.HTTP_400_BAD_REQUEST,
                     )
                 else:
-                    return self.paginate(
+                    response = self.paginate(
                         request=request,
                         order_by=order_by_param,
                         queryset=issue_queryset,
@@ -382,9 +702,12 @@ class IssueViewSet(BaseViewSet):
                             is_draft=False,
                         ),
                     )
+                    if grouping_by_modules(group_by, sub_group_by):
+                        return filter_grouped_module_response(response, slug, project_id, request.user)
+                    return response
             else:
                 # Group paginate
-                return self.paginate(
+                response = self.paginate(
                     request=request,
                     order_by=order_by_param,
                     queryset=issue_queryset,
@@ -410,6 +733,9 @@ class IssueViewSet(BaseViewSet):
                         is_draft=False,
                     ),
                 )
+                if grouping_by_modules(group_by, sub_group_by):
+                    return filter_grouped_module_response(response, slug, project_id, request.user)
+                return response
         else:
             return self.paginate(
                 order_by=order_by_param,
@@ -576,18 +902,7 @@ class IssueViewSet(BaseViewSet):
                     ),
                     Value([], output_field=ArrayField(UUIDField())),
                 ),
-                module_ids=Coalesce(
-                    Subquery(
-                        ModuleIssue.objects.filter(
-                            issue_id=OuterRef("pk"),
-                            module__archived_at__isnull=True,
-                        )
-                        .values("issue_id")
-                        .annotate(arr=ArrayAgg("module_id", distinct=True))
-                        .values("arr")
-                    ),
-                    Value([], output_field=ArrayField(UUIDField())),
-                ),
+                module_ids=visible_module_ids_subquery(request.user),
             )
             .prefetch_related(
                 Prefetch(
@@ -681,18 +996,7 @@ class IssueViewSet(BaseViewSet):
                     ),
                     Value([], output_field=ArrayField(UUIDField())),
                 ),
-                module_ids=Coalesce(
-                    ArrayAgg(
-                        "issue_module__module_id",
-                        distinct=True,
-                        filter=Q(
-                            ~Q(issue_module__module_id__isnull=True)
-                            & Q(issue_module__module__archived_at__isnull=True)
-                            & Q(issue_module__deleted_at__isnull=True)
-                        ),
-                    ),
-                    Value([], output_field=ArrayField(UUIDField())),
-                ),
+                module_ids=visible_module_ids_subquery(request.user),
             )
             .filter(pk=pk)
             .first()
@@ -977,18 +1281,7 @@ class IssuePaginatedViewSet(BaseViewSet):
                 ),
                 Value([], output_field=ArrayField(UUIDField())),
             ),
-            module_ids=Coalesce(
-                Subquery(
-                    ModuleIssue.objects.filter(
-                        issue_id=OuterRef("pk"),
-                        module__archived_at__isnull=True,
-                    )
-                    .values("issue_id")
-                    .annotate(arr=ArrayAgg("module_id", distinct=True))
-                    .values("arr")
-                ),
-                Value([], output_field=ArrayField(UUIDField())),
-            ),
+            module_ids=visible_module_ids_subquery(request.user),
         )
 
         paginated_data = paginate(
@@ -1007,7 +1300,11 @@ class IssueDetailEndpoint(BaseAPIView):
     filter_backends = (ComplexFilterBackend,)
     filterset_class = IssueFilterSet
 
-    def apply_annotations(self, issues):
+    def apply_annotations(self, issues, user=None):
+        module_issue_queryset = ModuleIssue.objects.all()
+        if user is not None:
+            module_issue_queryset = filter_visible_module_relations(module_issue_queryset, user)
+
         return (
             issues.annotate(
                 cycle_id=Subquery(
@@ -1050,14 +1347,15 @@ class IssueDetailEndpoint(BaseAPIView):
             .prefetch_related(
                 Prefetch(
                     "issue_module",
-                    queryset=ModuleIssue.objects.all(),
+                    queryset=module_issue_queryset,
                 )
             )
         )
 
     @allow_permission([ROLE.ADMIN, ROLE.MEMBER, ROLE.GUEST])
     def get(self, request, slug, project_id):
-        filters = issue_filters(request.query_params, "GET")
+        query_params = sanitize_module_query_params(request.query_params.copy(), slug, project_id, request.user)
+        filters = issue_filters(query_params, "GET")
 
         # check for the project member role, if the role is 5 then check for the guest_view_all_features
         #  if it is true then show all the issues else show only the issues created by the user
@@ -1108,7 +1406,7 @@ class IssueDetailEndpoint(BaseAPIView):
                 )
 
         # Apply filtering from filterset
-        issue = self.filter_queryset(issue)
+        issue = filter_queryset_with_module_visibility(self, request, issue, slug, project_id, request.user)
 
         # Apply legacy filters
         issue = issue.filter(**filters)
@@ -1117,7 +1415,7 @@ class IssueDetailEndpoint(BaseAPIView):
         total_issue_queryset = copy.deepcopy(issue)
 
         # Applying annotations to the issue queryset
-        issue = self.apply_annotations(issue)
+        issue = self.apply_annotations(issue, request.user)
 
         order_by_param = request.GET.get("order_by", "-created_at")
 
@@ -1315,18 +1613,7 @@ class IssueDetailIdentifierEndpoint(BaseAPIView):
                     ),
                     Value([], output_field=ArrayField(UUIDField())),
                 ),
-                module_ids=Coalesce(
-                    ArrayAgg(
-                        "issue_module__module_id",
-                        distinct=True,
-                        filter=Q(
-                            ~Q(issue_module__module_id__isnull=True)
-                            & Q(issue_module__module__archived_at__isnull=True)
-                            & Q(issue_module__deleted_at__isnull=True)
-                        ),
-                    ),
-                    Value([], output_field=ArrayField(UUIDField())),
-                ),
+                module_ids=visible_module_ids_subquery(request.user),
             )
             .prefetch_related(
                 Prefetch(
