@@ -23,5 +23,6 @@ export * from "./module-view-header";
 export * from "./module-layout-icon";
 export * from "./visibility";
 export * from "./analytics-sidebar";
+export * from "./fields/settings";
 // archived modules
 export * from "./archived-modules";

@@ -18,7 +18,7 @@ import { getDate, renderFormattedPayloadDate, getTabIndex } from "@plane/utils";
 import { DateRangeDropdown } from "@/components/dropdowns/date-range";
 import { MemberDropdown } from "@/components/dropdowns/member/dropdown";
 import { ProjectDropdown } from "@/components/dropdowns/project/dropdown";
-import { ModuleStatusSelect, ModuleVisibilityControl } from "@/components/modules";
+import { ModuleFieldsSettingsRoot, ModuleStatusSelect, ModuleVisibilityControl } from "@/components/modules";
 // hooks
 import { useUser } from "@/hooks/store/user/user-user";
 
@@ -26,6 +26,7 @@ type Props = {
   handleFormSubmit: (values: Partial<IModule>, dirtyFields: any) => Promise<void>;
   handleClose: () => void;
   status: boolean;
+  workspaceSlug: string;
   projectId: string;
   setActiveProject: React.Dispatch<React.SetStateAction<string | null>>;
   data?: IModule;
@@ -42,7 +43,16 @@ const defaultValues: Partial<IModule> = {
 };
 
 export function ModuleForm(props: Props) {
-  const { handleFormSubmit, handleClose, status, projectId, setActiveProject, data, isMobile = false } = props;
+  const {
+    handleFormSubmit,
+    handleClose,
+    status,
+    workspaceSlug,
+    projectId,
+    setActiveProject,
+    data,
+    isMobile = false,
+  } = props;
   // store hooks
   const { projectsWithCreatePermissions } = useUser();
   // form info
@@ -239,6 +249,14 @@ export function ModuleForm(props: Props) {
             />
           </div>
         </div>
+        {data?.id && (
+          <ModuleFieldsSettingsRoot
+            workspaceSlug={workspaceSlug}
+            projectId={projectId}
+            moduleId={data.id}
+            readOnly={false}
+          />
+        )}
       </div>
       <div className="flex items-center justify-end gap-2 border-t-[0.5px] border-subtle px-5 py-4">
         <Button variant="secondary" size="lg" onClick={handleClose} tabIndex={getIndex("cancel")}>

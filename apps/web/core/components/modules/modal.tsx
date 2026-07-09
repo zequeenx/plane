@@ -142,6 +142,7 @@ export const CreateUpdateModuleModal = observer(function CreateUpdateModuleModal
         handleFormSubmit={handleFormSubmit}
         handleClose={handleClose}
         status={!!data}
+        workspaceSlug={workspaceSlug}
         projectId={activeProject ?? ""}
         setActiveProject={setActiveProject}
         data={data}
