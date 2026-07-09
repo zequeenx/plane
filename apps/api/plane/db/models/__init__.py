@@ -23,6 +23,11 @@ from .issue_field import (
     IssueFieldValue,
     IssueFieldValueOption,
     IssueFieldValueUser,
+    ModuleIssueField,
+    ModuleIssueFieldOption,
+    ModuleIssueFieldValue,
+    ModuleIssueFieldValueOption,
+    ModuleIssueFieldValueUser,
     ProjectIssueField,
     ProjectIssueFieldOption,
 )
