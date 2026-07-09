@@ -428,6 +428,203 @@ def test_module_field_crud_api(api_client, workspace, project, project_member):
     assert list_response.data[0]["options"][0]["value"] == "High"
 
 
+def test_module_field_option_duplicate_returns_validation_error(api_client, workspace, project, project_member):
+    module = Module.objects.create(workspace=workspace, project=project, name="Launch")
+    field = ModuleIssueField.objects.create(
+        workspace=workspace,
+        project=project,
+        module=module,
+        name="Risk",
+        field_type=ModuleIssueField.FieldType.SINGLE_SELECT,
+    )
+    ModuleIssueFieldOption.objects.create(
+        workspace=workspace,
+        project=project,
+        module=module,
+        field=field,
+        value="High",
+    )
+    api_client.force_authenticate(project_member)
+
+    response = api_client.post(
+        f"/api/workspaces/{workspace.slug}/projects/{project.id}/modules/{module.id}/issue-fields/{field.id}/options/",
+        {"value": "High"},
+        format="json",
+    )
+
+    assert response.status_code == status.HTTP_400_BAD_REQUEST
+    assert "already exists" in str(response.data).lower()
+
+
+def test_disabled_module_field_lists_rejects_values_and_can_be_deleted(api_client, workspace, project, project_member):
+    module = Module.objects.create(workspace=workspace, project=project, name="Launch")
+    issue = create_issue_in_module(workspace, project, module)
+    first_field = ModuleIssueField.objects.create(
+        workspace=workspace,
+        project=project,
+        module=module,
+        name="Later",
+        field_type=ModuleIssueField.FieldType.PLAIN_TEXT,
+        sort_order=20,
+    )
+    second_field = ModuleIssueField.objects.create(
+        workspace=workspace,
+        project=project,
+        module=module,
+        name="Earlier",
+        field_type=ModuleIssueField.FieldType.PLAIN_TEXT,
+        sort_order=10,
+    )
+    api_client.force_authenticate(project_member)
+
+    for field in [first_field, second_field]:
+        disabled = api_client.patch(
+            f"/api/workspaces/{workspace.slug}/projects/{project.id}/modules/{module.id}/issue-fields/{field.id}/",
+            {"is_disabled": True},
+            format="json",
+        )
+        assert disabled.status_code == status.HTTP_200_OK
+
+    disabled_list = api_client.get(
+        f"/api/workspaces/{workspace.slug}/projects/{project.id}/modules/{module.id}/issue-fields/disabled/"
+    )
+    value_update = api_client.patch(
+        f"/api/workspaces/{workspace.slug}/projects/{project.id}/modules/{module.id}/issues/{issue.id}/field-values/",
+        {"field_values": {str(first_field.id): "Blocked"}},
+        format="json",
+    )
+    deleted = api_client.delete(
+        f"/api/workspaces/{workspace.slug}/projects/{project.id}/modules/{module.id}/issue-fields/{first_field.id}/"
+    )
+
+    assert disabled_list.status_code == status.HTTP_200_OK
+    assert [item["name"] for item in disabled_list.data] == ["Earlier", "Later"]
+    assert value_update.status_code == status.HTTP_400_BAD_REQUEST
+    assert "disabled" in str(value_update.data).lower()
+    assert deleted.status_code == status.HTTP_204_NO_CONTENT
+    assert not ModuleIssueField.objects.filter(pk=first_field.pk).exists()
+
+
+def test_module_select_and_date_values_serialize_through_api(api_client, workspace, project, project_member):
+    module = Module.objects.create(workspace=workspace, project=project, name="Launch")
+    issue = create_issue_in_module(workspace, project, module)
+    select_field = ModuleIssueField.objects.create(
+        workspace=workspace,
+        project=project,
+        module=module,
+        name="Risk",
+        field_type=ModuleIssueField.FieldType.SINGLE_SELECT,
+    )
+    option = ModuleIssueFieldOption.objects.create(
+        workspace=workspace,
+        project=project,
+        module=module,
+        field=select_field,
+        value="High",
+    )
+    date_field = ModuleIssueField.objects.create(
+        workspace=workspace,
+        project=project,
+        module=module,
+        name="Review date",
+        field_type=ModuleIssueField.FieldType.DATE,
+    )
+    date_range_field = ModuleIssueField.objects.create(
+        workspace=workspace,
+        project=project,
+        module=module,
+        name="Review window",
+        field_type=ModuleIssueField.FieldType.DATE_RANGE,
+    )
+    api_client.force_authenticate(project_member)
+
+    response = api_client.patch(
+        f"/api/workspaces/{workspace.slug}/projects/{project.id}/modules/{module.id}/issues/{issue.id}/field-values/",
+        {
+            "field_values": {
+                str(select_field.id): str(option.id),
+                str(date_field.id): "2026-07-09",
+                str(date_range_field.id): {"start": "2026-07-10", "end": "2026-07-12"},
+            }
+        },
+        format="json",
+    )
+
+    values = response.data["module_field_values"][str(module.id)]
+    assert response.status_code == status.HTTP_200_OK
+    assert values[str(select_field.id)] == str(option.id)
+    assert values[str(date_field.id)] == "2026-07-09"
+    assert values[str(date_range_field.id)] == {"start": "2026-07-10", "end": "2026-07-12"}
+
+
+def test_module_member_value_accepts_active_and_rejects_inactive_member(
+    api_client, workspace, project, project_member
+):
+    module = Module.objects.create(workspace=workspace, project=project, name="Launch")
+    issue = create_issue_in_module(workspace, project, module)
+    member_field = ModuleIssueField.objects.create(
+        workspace=workspace,
+        project=project,
+        module=module,
+        name="Reviewer",
+        field_type=ModuleIssueField.FieldType.SINGLE_MEMBER,
+    )
+    inactive_user = User.objects.create_user(
+        email="inactive-module-field-member@example.com",
+        username="inactive-module-field-member",
+    )
+    WorkspaceMember.objects.create(workspace=workspace, member=inactive_user, role=15, is_active=True)
+    ProjectMember.objects.create(
+        workspace=workspace,
+        project=project,
+        member=inactive_user,
+        role=15,
+        is_active=False,
+    )
+    api_client.force_authenticate(project_member)
+
+    accepted = api_client.patch(
+        f"/api/workspaces/{workspace.slug}/projects/{project.id}/modules/{module.id}/issues/{issue.id}/field-values/",
+        {"field_values": {str(member_field.id): str(project_member.id)}},
+        format="json",
+    )
+    rejected = api_client.patch(
+        f"/api/workspaces/{workspace.slug}/projects/{project.id}/modules/{module.id}/issues/{issue.id}/field-values/",
+        {"field_values": {str(member_field.id): str(inactive_user.id)}},
+        format="json",
+    )
+
+    assert accepted.status_code == status.HTTP_200_OK
+    assert accepted.data["module_field_values"][str(module.id)][str(member_field.id)] == str(project_member.id)
+    assert rejected.status_code == status.HTTP_400_BAD_REQUEST
+    assert "active project member" in str(rejected.data).lower()
+
+
+def test_module_field_routes_hide_private_module_from_unrelated_member(api_client, workspace, project):
+    creator = User.objects.create_user(email="module-field-creator@example.com", username="module-field-creator")
+    unrelated_user = User.objects.create_user(
+        email="module-field-unrelated@example.com",
+        username="module-field-unrelated",
+    )
+    for user in [creator, unrelated_user]:
+        WorkspaceMember.objects.create(workspace=workspace, member=user, role=15, is_active=True)
+        ProjectMember.objects.create(workspace=workspace, project=project, member=user, role=15, is_active=True)
+    module = Module(
+        workspace=workspace,
+        project=project,
+        name="Private Launch",
+        visibility=Module.ModuleVisibility.PRIVATE,
+    )
+    module.save(created_by_id=creator.id)
+    api_client.force_authenticate(unrelated_user)
+
+    response = api_client.get(
+        f"/api/workspaces/{workspace.slug}/projects/{project.id}/modules/{module.id}/issue-fields/"
+    )
+
+    assert response.status_code == status.HTTP_404_NOT_FOUND
+
+
 def test_module_field_value_update_requires_issue_in_module(api_client, workspace, project, issue, project_member):
     module = Module.objects.create(workspace=workspace, project=project, name="Launch")
     field = ModuleIssueField.objects.create(

@@ -84,9 +84,17 @@ class ModuleIssueFieldOptionSerializer(BaseSerializer):
         read_only_fields = ["id", "field", "module", "project", "workspace", "created_at", "updated_at"]
 
     def validate_value(self, value):
-        if not value.strip():
+        option_value = value.strip()
+        if not option_value:
             raise serializers.ValidationError("Option value is required")
-        return value.strip()
+        field_id = self.instance.field_id if self.instance else self.context.get("field_id")
+        if field_id:
+            options = ModuleIssueFieldOption.objects.filter(field_id=field_id, value=option_value)
+            if self.instance:
+                options = options.exclude(pk=self.instance.pk)
+            if options.exists():
+                raise serializers.ValidationError("Option value already exists")
+        return option_value
 
 
 class ModuleIssueFieldSerializer(BaseSerializer):

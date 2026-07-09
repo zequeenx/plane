@@ -162,6 +162,54 @@ class ModuleIssueFieldValueService(IssueFieldValueService):
         return value
 
     @classmethod
+    def _validate_submitted_value(cls, field, submitted_value):
+        if submitted_value is None:
+            return
+
+        field_type = field.field_type
+        if field_type == cls.field_model.FieldType.SINGLE_SELECT:
+            cls._get_option(field, submitted_value)
+        elif field_type == cls.field_model.FieldType.MULTI_SELECT:
+            cls._get_options(field, submitted_value)
+        elif field_type == cls.field_model.FieldType.SINGLE_MEMBER:
+            cls._get_member_id(field, submitted_value)
+        elif field_type == cls.field_model.FieldType.MULTI_MEMBER:
+            cls._get_member_ids(field, submitted_value)
+        elif field_type == cls.field_model.FieldType.DATE:
+            cls._parse_date(submitted_value)
+        elif field_type == cls.field_model.FieldType.DATE_RANGE:
+            cls._parse_date_range(submitted_value)
+        elif field_type == cls.field_model.FieldType.PLAIN_TEXT:
+            if not isinstance(submitted_value, str):
+                raise serializers.ValidationError({"field_values": "Text field value must be a string."})
+        else:
+            raise serializers.ValidationError({"field_values": "Field type is not supported."})
+
+    @classmethod
+    def _serialize_value(cls, value):
+        field_type = value.field.field_type
+        if field_type == cls.field_model.FieldType.SINGLE_SELECT:
+            option = next(iter(value.selected_options.all()), None)
+            return str(option.option_id) if option else None
+        if field_type == cls.field_model.FieldType.MULTI_SELECT:
+            return [str(selected_option.option_id) for selected_option in value.selected_options.all()]
+        if field_type == cls.field_model.FieldType.SINGLE_MEMBER:
+            selected_user = next(iter(value.selected_users.all()), None)
+            return str(selected_user.user_id) if selected_user else None
+        if field_type == cls.field_model.FieldType.MULTI_MEMBER:
+            return [str(selected_user.user_id) for selected_user in value.selected_users.all()]
+        if field_type == cls.field_model.FieldType.DATE:
+            return value.date_value.isoformat() if value.date_value else None
+        if field_type == cls.field_model.FieldType.DATE_RANGE:
+            return {
+                "start": value.date_range_start.isoformat() if value.date_range_start else None,
+                "end": value.date_range_end.isoformat() if value.date_range_end else None,
+            }
+        if field_type == cls.field_model.FieldType.PLAIN_TEXT:
+            return value.text_value
+        return None
+
+    @classmethod
     def _get_option(cls, field, option_id):
         option_id = cls._normalize_id(option_id, "Option is not valid for the field.")
         option = cls.option_model.objects.filter(field=field, id=option_id).first()

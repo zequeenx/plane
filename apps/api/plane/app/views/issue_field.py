@@ -201,7 +201,11 @@ class DisabledModuleIssueFieldsEndpoint(BaseAPIView):
             Module.objects.filter(workspace__slug=slug, project_id=project_id, pk=module_id),
             request.user,
         ).get()
-        fields = ModuleIssueField.objects.filter(module=module, is_disabled=True).prefetch_related("options")
+        fields = (
+            ModuleIssueField.objects.filter(module=module, is_disabled=True)
+            .prefetch_related("options")
+            .order_by("sort_order", "created_at")
+        )
         return Response(ModuleIssueFieldSerializer(fields, many=True).data, status=status.HTTP_200_OK)
 
 
@@ -223,7 +227,7 @@ class ModuleIssueFieldOptionViewSet(BaseViewSet):
                 {"error": "Options are only supported for text select fields"},
                 status=status.HTTP_400_BAD_REQUEST,
             )
-        serializer = self.serializer_class(data=request.data)
+        serializer = self.serializer_class(data=request.data, context={"field_id": field.id})
         serializer.is_valid(raise_exception=True)
         serializer.save(
             workspace_id=field.workspace_id,
