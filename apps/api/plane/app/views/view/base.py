@@ -47,6 +47,13 @@ from .. import BaseViewSet
 from plane.db.models import UserFavorite
 from plane.utils.filters import ComplexFilterBackend
 from plane.utils.filters import IssueFilterSet
+from plane.utils.grouper import (
+    issue_group_values,
+    issue_on_results,
+    issue_queryset_grouper,
+    resolve_issue_group_by,
+)
+from plane.utils.paginator import GroupedOffsetPaginator, SubGroupedOffsetPaginator
 
 
 class WorkspaceViewViewSet(BaseViewSet):
@@ -237,7 +244,7 @@ class WorkspaceViewIssuesViewSet(BaseViewSet):
     @method_decorator(gzip_page)
     @allow_permission(allowed_roles=[ROLE.ADMIN, ROLE.MEMBER, ROLE.GUEST], level="WORKSPACE")
     def list(self, request, slug, project_id=None, pk=None):
-        self._set_issue_view_context(slug, project_id, request.user)
+        issue_view = self._set_issue_view_context(slug, project_id, request.user)
         issue_queryset = self.get_queryset()
 
         # Apply filtering from filterset
@@ -266,7 +273,87 @@ class WorkspaceViewIssuesViewSet(BaseViewSet):
             issue_queryset=issue_queryset, order_by_param=order_by_param
         )
 
-        # List Paginate
+        source_module_id = issue_view.source_module_id if issue_view else None
+        group_by = request.GET.get("group_by", False)
+        sub_group_by = request.GET.get("sub_group_by", False)
+        group_by = resolve_issue_group_by(group_by, slug=slug, project_id=project_id, module_id=source_module_id)
+        sub_group_by = resolve_issue_group_by(
+            sub_group_by,
+            slug=slug,
+            project_id=project_id,
+            module_id=source_module_id,
+        )
+
+        issue_queryset = issue_queryset_grouper(
+            queryset=issue_queryset,
+            group_by=group_by,
+            sub_group_by=sub_group_by,
+            slug=slug,
+            project_id=project_id,
+            module_id=source_module_id,
+        )
+
+        if group_by:
+            if sub_group_by:
+                if group_by == sub_group_by:
+                    return Response(
+                        {"error": "Group by and sub group by cannot have same parameters"},
+                        status=status.HTTP_400_BAD_REQUEST,
+                    )
+
+                return self.paginate(
+                    request=request,
+                    order_by=order_by_param,
+                    queryset=issue_queryset,
+                    total_count_queryset=total_issue_count_queryset,
+                    on_results=lambda issues: issue_on_results(
+                        group_by=group_by,
+                        issues=issues,
+                        sub_group_by=sub_group_by,
+                    ),
+                    paginator_cls=SubGroupedOffsetPaginator,
+                    group_by_fields=issue_group_values(
+                        field=group_by,
+                        slug=slug,
+                        project_id=project_id,
+                        filters=filters,
+                        queryset=total_issue_count_queryset,
+                        module_id=source_module_id,
+                    ),
+                    sub_group_by_fields=issue_group_values(
+                        field=sub_group_by,
+                        slug=slug,
+                        project_id=project_id,
+                        filters=filters,
+                        queryset=total_issue_count_queryset,
+                        module_id=source_module_id,
+                    ),
+                    group_by_field_name=group_by,
+                    sub_group_by_field_name=sub_group_by,
+                )
+
+            return self.paginate(
+                request=request,
+                order_by=order_by_param,
+                queryset=issue_queryset,
+                total_count_queryset=total_issue_count_queryset,
+                on_results=lambda issues: issue_on_results(
+                    group_by=group_by,
+                    issues=issues,
+                    sub_group_by=sub_group_by,
+                ),
+                paginator_cls=GroupedOffsetPaginator,
+                group_by_fields=issue_group_values(
+                    field=group_by,
+                    slug=slug,
+                    project_id=project_id,
+                    filters=filters,
+                    queryset=total_issue_count_queryset,
+                    module_id=source_module_id,
+                ),
+                group_by_field_name=group_by,
+            )
+
         return self.paginate(
             order_by=order_by_param,
             request=request,

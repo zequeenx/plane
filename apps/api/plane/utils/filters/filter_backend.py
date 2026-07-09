@@ -96,6 +96,12 @@ class ComplexFilterBackend(filters.BaseFilterBackend):
         # Validate against the view's FilterSet (only declared filters are allowed)
         self._validate_fields(filter_data, view)
 
+        if (
+            self._contains_module_custom_property_filter_key(filter_data)
+            and self._module_custom_property_context_module_id(view) is None
+        ):
+            return queryset.none()
+
         # Build combined Q object from the filter tree
         combined_q = self._evaluate_node(filter_data, view, queryset)
         if combined_q is None:
@@ -350,6 +356,22 @@ class ComplexFilterBackend(filters.BaseFilterBackend):
             return field_id, operator, False
 
         return field_id, operator, True
+
+    def _contains_module_custom_property_filter_key(self, filter_data):
+        if isinstance(filter_data, dict):
+            for key, value in filter_data.items():
+                if key.lower() == "not" and isinstance(value, dict):
+                    if self._contains_module_custom_property_filter_key(value):
+                        return True
+                    continue
+                if key.lower() in ("or", "and") and isinstance(value, list):
+                    if any(self._contains_module_custom_property_filter_key(item) for item in value):
+                        return True
+                    continue
+                if self._parse_module_custom_property_filter_key(key) is not None:
+                    return True
+            return False
+        return False
 
     def _module_custom_property_context_module_id(self, view):
         kwargs = getattr(view, "kwargs", {})

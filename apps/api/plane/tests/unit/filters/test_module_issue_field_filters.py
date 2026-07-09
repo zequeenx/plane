@@ -104,6 +104,65 @@ def test_module_custom_property_filter_outside_module_context_returns_empty(
     assert len(results) == 0
 
 
+def test_module_custom_property_filter_outside_module_context_not_returns_empty(
+    api_client, workspace, project, project_member
+):
+    module = Module.objects.create(workspace=workspace, project=project, name="Launch")
+    field = ModuleIssueField.objects.create(
+        workspace=workspace,
+        project=project,
+        module=module,
+        name="Notes",
+        field_type=ModuleIssueField.FieldType.PLAIN_TEXT,
+    )
+    create_issue_with_module_value(workspace, project, module, field, text_value="Only in module")
+    Issue.objects.create(workspace=workspace, project=project, name="Other")
+    api_client.force_authenticate(project_member)
+
+    response = api_client.get(
+        f"/api/workspaces/{workspace.slug}/projects/{project.id}/issues/",
+        {"filters": json.dumps({"not": {f"modulecustomproperty_{field.id}__contains": "Only"}})},
+    )
+
+    assert response.status_code == status.HTTP_200_OK
+    results = response.data["results"] if "results" in response.data else response.data
+    assert len(results) == 0
+
+
+def test_module_custom_property_filter_outside_module_context_or_returns_empty(
+    api_client, workspace, project, project_member
+):
+    module = Module.objects.create(workspace=workspace, project=project, name="Launch")
+    field = ModuleIssueField.objects.create(
+        workspace=workspace,
+        project=project,
+        module=module,
+        name="Notes",
+        field_type=ModuleIssueField.FieldType.PLAIN_TEXT,
+    )
+    create_issue_with_module_value(workspace, project, module, field, text_value="Only in module")
+    Issue.objects.create(workspace=workspace, project=project, name="High priority", priority="high")
+    api_client.force_authenticate(project_member)
+
+    response = api_client.get(
+        f"/api/workspaces/{workspace.slug}/projects/{project.id}/issues/",
+        {
+            "filters": json.dumps(
+                {
+                    "or": [
+                        {f"modulecustomproperty_{field.id}__contains": "Only"},
+                        {"priority": "high"},
+                    ]
+                }
+            )
+        },
+    )
+
+    assert response.status_code == status.HTTP_200_OK
+    results = response.data["results"] if "results" in response.data else response.data
+    assert len(results) == 0
+
+
 def test_module_custom_property_grouping(api_client, workspace, project, project_member):
     module = Module.objects.create(workspace=workspace, project=project, name="Launch")
     field = ModuleIssueField.objects.create(
@@ -121,6 +180,39 @@ def test_module_custom_property_grouping(api_client, workspace, project, project
 
     response = api_client.get(
         f"/api/workspaces/{workspace.slug}/projects/{project.id}/modules/{module.id}/issues/",
+        {"group_by": f"modulecustomproperty_{field.id}"},
+    )
+
+    assert response.status_code == status.HTTP_200_OK
+    assert str(high.id) in str(response.data)
+
+
+def test_project_view_uses_source_module_context_for_grouping(api_client, workspace, project, project_member):
+    module = Module.objects.create(workspace=workspace, project=project, name="Launch")
+    field = ModuleIssueField.objects.create(
+        workspace=workspace,
+        project=project,
+        module=module,
+        name="Risk",
+        field_type=ModuleIssueField.FieldType.SINGLE_SELECT,
+    )
+    high = ModuleIssueFieldOption.objects.create(
+        workspace=workspace, project=project, module=module, field=field, value="High"
+    )
+    create_issue_with_module_value(workspace, project, module, field, option=high)
+    view = IssueView.objects.create(
+        workspace=workspace,
+        project=project,
+        owned_by=project_member,
+        name="Module View",
+        filters={},
+        rich_filters={},
+        source_module=module,
+    )
+    api_client.force_authenticate(project_member)
+
+    response = api_client.get(
+        f"/api/workspaces/{workspace.slug}/projects/{project.id}/views/{view.id}/issues/",
         {"group_by": f"modulecustomproperty_{field.id}"},
     )
 
