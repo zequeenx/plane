@@ -25,6 +25,7 @@ import { FilterAdapter } from "../rich-filters/adapter";
 
 type TExternalWorkItemFilterValue = TFilterValue | string[];
 const CUSTOM_PROPERTY_PREFIX = "customproperty_";
+const MODULE_CUSTOM_PROPERTY_PREFIX = "modulecustomproperty_";
 const SYSTEM_WORK_ITEM_FILTER_OPERATORS = new Set<string>(Object.values(CORE_OPERATORS));
 const CUSTOM_PROPERTY_FILTER_OPERATORS = new Set<string>([
   "contains",
@@ -187,6 +188,7 @@ class WorkItemFiltersAdapter extends FilterAdapter<TWorkItemFilterProperty, TWor
     const operator = key.substring(lastDoubleUnderscoreIndex + 2);
 
     const isCustomProperty = property.startsWith(CUSTOM_PROPERTY_PREFIX);
+    const isModuleCustomProperty = property.startsWith(MODULE_CUSTOM_PROPERTY_PREFIX);
     const isSystemProperty = WORK_ITEM_FILTER_PROPERTY_KEYS.includes(
       property as (typeof WORK_ITEM_FILTER_PROPERTY_KEYS)[number]
     );
@@ -194,6 +196,9 @@ class WorkItemFiltersAdapter extends FilterAdapter<TWorkItemFilterProperty, TWor
     if (isSystemProperty) return SYSTEM_WORK_ITEM_FILTER_OPERATORS.has(operator);
 
     if (isCustomProperty && property.length > CUSTOM_PROPERTY_PREFIX.length)
+      return CUSTOM_PROPERTY_FILTER_OPERATORS.has(operator);
+
+    if (isModuleCustomProperty && property.length > MODULE_CUSTOM_PROPERTY_PREFIX.length)
       return CUSTOM_PROPERTY_FILTER_OPERATORS.has(operator);
 
     return false;

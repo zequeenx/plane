@@ -70,6 +70,7 @@ export const SpreadsheetHeaderColumn = observer(function SpreadsheetHeaderColumn
           }}
           isEpic={isEpic}
           customField={customField ?? moduleCustomField}
+          isModuleCustomField={!!moduleCustomField}
         />
       </th>
     </WithDisplayPropertiesHOC>

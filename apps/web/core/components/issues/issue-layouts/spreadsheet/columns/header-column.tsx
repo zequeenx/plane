@@ -30,10 +30,19 @@ interface Props {
   onClose: () => void;
   isEpic?: boolean;
   customField?: TProjectIssueField | TModuleIssueField;
+  isModuleCustomField?: boolean;
 }
 
 export function HeaderColumn(props: Props) {
-  const { customField, displayFilters, handleDisplayFilterUpdate, property, onClose, isEpic = false } = props;
+  const {
+    customField,
+    displayFilters,
+    handleDisplayFilterUpdate,
+    property,
+    onClose,
+    isEpic = false,
+    isModuleCustomField = false,
+  } = props;
   // i18n
   const { t } = useTranslation();
   const { storedValue: selectedMenuItem, setValue: setSelectedMenuItem } = useLocalStorage(
@@ -53,8 +62,9 @@ export function HeaderColumn(props: Props) {
         descendingOrderTitle: t("common.sort.desc"),
         icon: customField.field_type === EProjectIssueFieldType.DATE ? "CalendarDays" : "TextCursorInput",
         isSortable:
-          customField.field_type === EProjectIssueFieldType.DATE ||
-          customField.field_type === EProjectIssueFieldType.PLAIN_TEXT,
+          !isModuleCustomField &&
+          (customField.field_type === EProjectIssueFieldType.DATE ||
+            customField.field_type === EProjectIssueFieldType.PLAIN_TEXT),
       }
     : SPREADSHEET_PROPERTY_DETAILS[property];
 
