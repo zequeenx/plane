@@ -6,12 +6,16 @@ from django.urls import path
 
 
 from plane.app.views import (
-    ModuleViewSet,
+    DisabledModuleIssueFieldsEndpoint,
+    ModuleArchiveUnarchiveEndpoint,
+    ModuleFavoriteViewSet,
+    ModuleIssueFieldOptionViewSet,
+    ModuleIssueFieldValueEndpoint,
+    ModuleIssueFieldViewSet,
     ModuleIssueViewSet,
     ModuleLinkViewSet,
-    ModuleFavoriteViewSet,
     ModuleUserPropertiesEndpoint,
-    ModuleArchiveUnarchiveEndpoint,
+    ModuleViewSet,
 )
 
 
@@ -54,6 +58,36 @@ urlpatterns = [
             }
         ),
         name="project-module-issues",
+    ),
+    path(
+        "workspaces/<str:slug>/projects/<uuid:project_id>/modules/<uuid:module_id>/issue-fields/",
+        ModuleIssueFieldViewSet.as_view({"get": "list", "post": "create"}),
+        name="module-issue-fields",
+    ),
+    path(
+        "workspaces/<str:slug>/projects/<uuid:project_id>/modules/<uuid:module_id>/issue-fields/disabled/",
+        DisabledModuleIssueFieldsEndpoint.as_view(),
+        name="module-issue-fields-disabled",
+    ),
+    path(
+        "workspaces/<str:slug>/projects/<uuid:project_id>/modules/<uuid:module_id>/issue-fields/<uuid:pk>/",
+        ModuleIssueFieldViewSet.as_view({"patch": "partial_update", "delete": "destroy"}),
+        name="module-issue-fields",
+    ),
+    path(
+        "workspaces/<str:slug>/projects/<uuid:project_id>/modules/<uuid:module_id>/issue-fields/<uuid:field_id>/options/",
+        ModuleIssueFieldOptionViewSet.as_view({"post": "create"}),
+        name="module-issue-field-options",
+    ),
+    path(
+        "workspaces/<str:slug>/projects/<uuid:project_id>/modules/<uuid:module_id>/issue-fields/<uuid:field_id>/options/<uuid:pk>/",
+        ModuleIssueFieldOptionViewSet.as_view({"delete": "destroy"}),
+        name="module-issue-field-options",
+    ),
+    path(
+        "workspaces/<str:slug>/projects/<uuid:project_id>/modules/<uuid:module_id>/issues/<uuid:issue_id>/field-values/",
+        ModuleIssueFieldValueEndpoint.as_view(),
+        name="module-issue-field-values",
     ),
     path(
         "workspaces/<str:slug>/projects/<uuid:project_id>/modules/<uuid:module_id>/module-links/",

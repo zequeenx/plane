@@ -1,6 +1,7 @@
 import pytest
 from django.core.exceptions import ValidationError
 from django.db import IntegrityError, transaction
+from rest_framework import status
 
 from plane.db.models import (
     Issue,
@@ -12,6 +13,9 @@ from plane.db.models import (
     ModuleIssueFieldValueOption,
     ModuleIssueFieldValueUser,
     Project,
+    ProjectMember,
+    User,
+    WorkspaceMember,
 )
 
 
@@ -21,6 +25,19 @@ pytestmark = pytest.mark.django_db
 @pytest.fixture
 def project(workspace):
     return Project.objects.create(workspace=workspace, name="Module Issue Field Project", identifier="MIF")
+
+
+@pytest.fixture
+def project_member(workspace, project):
+    user = User.objects.create_user(email="module-issue-field-member@example.com", username="module-issue-field-member")
+    WorkspaceMember.objects.create(workspace=workspace, member=user, role=15, is_active=True)
+    ProjectMember.objects.create(workspace=workspace, project=project, member=user, role=15, is_active=True)
+    return user
+
+
+@pytest.fixture
+def issue(workspace, project):
+    return Issue.objects.create(workspace=workspace, project=project, name="Module Issue Field Issue")
 
 
 def create_issue_in_module(workspace, project, module, name="Issue with module field"):
@@ -378,3 +395,77 @@ def test_module_issue_field_value_user_is_unique_per_value_and_user(workspace, p
             value=value,
             user=create_user,
         )
+
+
+def test_module_field_crud_api(api_client, workspace, project, project_member):
+    module = Module.objects.create(workspace=workspace, project=project, name="Launch")
+    api_client.force_authenticate(project_member)
+
+    create_response = api_client.post(
+        f"/api/workspaces/{workspace.slug}/projects/{project.id}/modules/{module.id}/issue-fields/",
+        {"name": "Risk", "field_type": ModuleIssueField.FieldType.SINGLE_SELECT},
+        format="json",
+    )
+
+    assert create_response.status_code == status.HTTP_201_CREATED
+    field_id = create_response.data["id"]
+    assert create_response.data["module"] == str(module.id)
+
+    option_response = api_client.post(
+        f"/api/workspaces/{workspace.slug}/projects/{project.id}/modules/{module.id}/issue-fields/{field_id}/options/",
+        {"value": "High"},
+        format="json",
+    )
+
+    assert option_response.status_code == status.HTTP_201_CREATED
+    assert option_response.data["value"] == "High"
+
+    list_response = api_client.get(
+        f"/api/workspaces/{workspace.slug}/projects/{project.id}/modules/{module.id}/issue-fields/"
+    )
+
+    assert list_response.status_code == status.HTTP_200_OK
+    assert list_response.data[0]["options"][0]["value"] == "High"
+
+
+def test_module_field_value_update_requires_issue_in_module(api_client, workspace, project, issue, project_member):
+    module = Module.objects.create(workspace=workspace, project=project, name="Launch")
+    field = ModuleIssueField.objects.create(
+        workspace=workspace,
+        project=project,
+        module=module,
+        name="Risk",
+        field_type=ModuleIssueField.FieldType.PLAIN_TEXT,
+    )
+    api_client.force_authenticate(project_member)
+
+    response = api_client.patch(
+        f"/api/workspaces/{workspace.slug}/projects/{project.id}/modules/{module.id}/issues/{issue.id}/field-values/",
+        {"field_values": {str(field.id): "High"}},
+        format="json",
+    )
+
+    assert response.status_code == status.HTTP_400_BAD_REQUEST
+    assert "module" in str(response.data).lower()
+
+
+def test_module_field_value_update_serializes_values(api_client, workspace, project, project_member):
+    module = Module.objects.create(workspace=workspace, project=project, name="Launch")
+    issue = create_issue_in_module(workspace, project, module)
+    field = ModuleIssueField.objects.create(
+        workspace=workspace,
+        project=project,
+        module=module,
+        name="Notes",
+        field_type=ModuleIssueField.FieldType.PLAIN_TEXT,
+    )
+    api_client.force_authenticate(project_member)
+
+    response = api_client.patch(
+        f"/api/workspaces/{workspace.slug}/projects/{project.id}/modules/{module.id}/issues/{issue.id}/field-values/",
+        {"field_values": {str(field.id): "Needs QA"}},
+        format="json",
+    )
+
+    assert response.status_code == status.HTTP_200_OK
+    assert response.data["module_field_values"][str(module.id)][str(field.id)] == "Needs QA"

@@ -83,7 +83,12 @@ from .issue import (
     IssueDescriptionVersionDetailSerializer,
     IssueListDetailSerializer,
 )
-from .issue_field import ProjectIssueFieldOptionSerializer, ProjectIssueFieldSerializer
+from .issue_field import (
+    ModuleIssueFieldOptionSerializer,
+    ModuleIssueFieldSerializer,
+    ProjectIssueFieldOptionSerializer,
+    ProjectIssueFieldSerializer,
+)
 
 from .module import (
     ModuleDetailSerializer,
