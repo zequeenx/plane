@@ -245,7 +245,13 @@ class WorkspaceViewIssuesViewSet(BaseViewSet):
     @allow_permission(allowed_roles=[ROLE.ADMIN, ROLE.MEMBER, ROLE.GUEST], level="WORKSPACE")
     def list(self, request, slug, project_id=None, pk=None):
         issue_view = self._set_issue_view_context(slug, project_id, request.user)
+        source_module_id = issue_view.source_module_id if issue_view else None
         issue_queryset = self.get_queryset()
+        if source_module_id:
+            issue_queryset = issue_queryset.filter(
+                issue_module__module_id=source_module_id,
+                issue_module__deleted_at__isnull=True,
+            ).distinct()
 
         # Apply filtering from filterset
         issue_queryset = self.filter_queryset(issue_queryset)
@@ -273,7 +279,6 @@ class WorkspaceViewIssuesViewSet(BaseViewSet):
             issue_queryset=issue_queryset, order_by_param=order_by_param
         )
 
-        source_module_id = issue_view.source_module_id if issue_view else None
         group_by = request.GET.get("group_by", False)
         sub_group_by = request.GET.get("sub_group_by", False)
         group_by = resolve_issue_group_by(group_by, slug=slug, project_id=project_id, module_id=source_module_id)
@@ -366,6 +371,12 @@ class WorkspaceViewIssuesViewSet(BaseViewSet):
 class IssueViewViewSet(BaseViewSet):
     serializer_class = IssueViewSerializer
     model = IssueView
+
+    def get_serializer_context(self):
+        context = super().get_serializer_context()
+        context["project_id"] = self.kwargs.get("project_id")
+        context["workspace_slug"] = self.kwargs.get("slug")
+        return context
 
     def perform_create(self, serializer):
         serializer.save(project_id=self.kwargs.get("project_id"), owned_by=self.request.user)
@@ -503,7 +514,12 @@ class IssueViewViewSet(BaseViewSet):
                     status=status.HTTP_400_BAD_REQUEST,
                 )
 
-            serializer = IssueViewSerializer(issue_view, data=request.data, partial=True)
+            serializer = IssueViewSerializer(
+                issue_view,
+                data=request.data,
+                partial=True,
+                context=self.get_serializer_context(),
+            )
 
             if serializer.is_valid():
                 serializer.save()

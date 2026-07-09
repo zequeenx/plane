@@ -68,6 +68,38 @@ class IssueViewSerializer(DynamicBaseSerializer):
             "is_locked",
         ]
 
+    def validate(self, attrs):
+        attrs = super().validate(attrs)
+        source_module = attrs.get("source_module")
+        if source_module is None:
+            return attrs
+
+        project_id = self.context.get("project_id")
+        workspace_slug = self.context.get("workspace_slug")
+
+        if self.instance:
+            project_id = project_id or self.instance.project_id
+            workspace_id = self.instance.workspace_id
+        else:
+            workspace_id = None
+
+        if project_id and str(source_module.project_id) != str(project_id):
+            raise serializers.ValidationError(
+                {"source_module": "Source module must belong to the view project."}
+            )
+
+        if workspace_slug and source_module.workspace.slug != workspace_slug:
+            raise serializers.ValidationError(
+                {"source_module": "Source module must belong to the view workspace."}
+            )
+
+        if workspace_id and source_module.workspace_id != workspace_id:
+            raise serializers.ValidationError(
+                {"source_module": "Source module must belong to the view workspace."}
+            )
+
+        return attrs
+
     def create(self, validated_data):
         query_params = validated_data.get("filters", {})
         if bool(query_params):

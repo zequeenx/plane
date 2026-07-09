@@ -163,6 +163,57 @@ def test_module_custom_property_filter_outside_module_context_or_returns_empty(
     assert len(results) == 0
 
 
+def test_module_custom_property_filter_wrong_module_field_returns_empty(
+    api_client, workspace, project, project_member
+):
+    source_module = Module.objects.create(workspace=workspace, project=project, name="Launch")
+    other_module = Module.objects.create(workspace=workspace, project=project, name="Growth")
+    field = ModuleIssueField.objects.create(
+        workspace=workspace,
+        project=project,
+        module=source_module,
+        name="Notes",
+        field_type=ModuleIssueField.FieldType.PLAIN_TEXT,
+    )
+    other_issue = Issue.objects.create(workspace=workspace, project=project, name="Other module issue")
+    ModuleIssue.objects.create(workspace=workspace, project=project, module=other_module, issue=other_issue)
+    api_client.force_authenticate(project_member)
+
+    response = api_client.get(
+        f"/api/workspaces/{workspace.slug}/projects/{project.id}/modules/{other_module.id}/issues/",
+        {"filters": json.dumps({f"modulecustomproperty_{field.id}__is_empty": True})},
+    )
+
+    assert response.status_code == status.HTTP_200_OK
+    results = response.data["results"] if "results" in response.data else response.data
+    assert len(results) == 0
+
+
+def test_module_custom_property_filter_disabled_field_returns_empty(
+    api_client, workspace, project, project_member
+):
+    module = Module.objects.create(workspace=workspace, project=project, name="Launch")
+    field = ModuleIssueField.objects.create(
+        workspace=workspace,
+        project=project,
+        module=module,
+        name="Notes",
+        field_type=ModuleIssueField.FieldType.PLAIN_TEXT,
+        is_disabled=True,
+    )
+    create_issue_with_module_value(workspace, project, module, field, text_value="Hidden")
+    api_client.force_authenticate(project_member)
+
+    response = api_client.get(
+        f"/api/workspaces/{workspace.slug}/projects/{project.id}/modules/{module.id}/issues/",
+        {"filters": json.dumps({f"modulecustomproperty_{field.id}__contains": "Hidden"})},
+    )
+
+    assert response.status_code == status.HTTP_200_OK
+    results = response.data["results"] if "results" in response.data else response.data
+    assert len(results) == 0
+
+
 def test_module_custom_property_grouping(api_client, workspace, project, project_member):
     module = Module.objects.create(workspace=workspace, project=project, name="Launch")
     field = ModuleIssueField.objects.create(
@@ -218,6 +269,100 @@ def test_project_view_uses_source_module_context_for_grouping(api_client, worksp
 
     assert response.status_code == status.HTTP_200_OK
     assert str(high.id) in str(response.data)
+
+
+def test_project_view_source_module_is_empty_filter_excludes_outside_module_issues(
+    api_client, workspace, project, project_member
+):
+    module = Module.objects.create(workspace=workspace, project=project, name="Launch")
+    field = ModuleIssueField.objects.create(
+        workspace=workspace,
+        project=project,
+        module=module,
+        name="Notes",
+        field_type=ModuleIssueField.FieldType.PLAIN_TEXT,
+    )
+    in_module_issue = Issue.objects.create(workspace=workspace, project=project, name="In module empty")
+    ModuleIssue.objects.create(workspace=workspace, project=project, module=module, issue=in_module_issue)
+    Issue.objects.create(workspace=workspace, project=project, name="Outside module")
+    view = IssueView.objects.create(
+        workspace=workspace,
+        project=project,
+        owned_by=project_member,
+        name="Module View",
+        filters={},
+        rich_filters={},
+        source_module=module,
+    )
+    api_client.force_authenticate(project_member)
+
+    response = api_client.get(
+        f"/api/workspaces/{workspace.slug}/projects/{project.id}/views/{view.id}/issues/",
+        {"filters": json.dumps({f"modulecustomproperty_{field.id}__is_empty": True})},
+    )
+
+    assert response.status_code == status.HTTP_200_OK
+    results = response.data["results"] if "results" in response.data else response.data
+    assert [str(row["id"]) for row in results] == [str(in_module_issue.id)]
+
+
+def test_project_view_source_module_grouping_excludes_outside_module_none_bucket(
+    api_client, workspace, project, project_member
+):
+    module = Module.objects.create(workspace=workspace, project=project, name="Launch")
+    field = ModuleIssueField.objects.create(
+        workspace=workspace,
+        project=project,
+        module=module,
+        name="Risk",
+        field_type=ModuleIssueField.FieldType.SINGLE_SELECT,
+    )
+    high = ModuleIssueFieldOption.objects.create(
+        workspace=workspace, project=project, module=module, field=field, value="High"
+    )
+    create_issue_with_module_value(workspace, project, module, field, option=high)
+    in_module_empty = Issue.objects.create(workspace=workspace, project=project, name="In module empty")
+    ModuleIssue.objects.create(workspace=workspace, project=project, module=module, issue=in_module_empty)
+    outside_issue = Issue.objects.create(workspace=workspace, project=project, name="Outside module")
+    view = IssueView.objects.create(
+        workspace=workspace,
+        project=project,
+        owned_by=project_member,
+        name="Module View",
+        filters={},
+        rich_filters={},
+        source_module=module,
+    )
+    api_client.force_authenticate(project_member)
+
+    response = api_client.get(
+        f"/api/workspaces/{workspace.slug}/projects/{project.id}/views/{view.id}/issues/",
+        {"group_by": f"modulecustomproperty_{field.id}"},
+    )
+
+    assert response.status_code == status.HTTP_200_OK
+    assert str(high.id) in str(response.data)
+    assert str(in_module_empty.id) in str(response.data)
+    assert str(outside_issue.id) not in str(response.data)
+    assert "Outside module" not in str(response.data)
+
+
+def test_project_view_rejects_source_module_from_another_project(api_client, workspace, project, project_member):
+    other_project = Project.objects.create(workspace=workspace, name="Other Module Field Project", identifier="OMF")
+    other_module = Module.objects.create(workspace=workspace, project=other_project, name="Other launch")
+    api_client.force_authenticate(project_member)
+
+    response = api_client.post(
+        f"/api/workspaces/{workspace.slug}/projects/{project.id}/views/",
+        {
+            "name": "Invalid module view",
+            "filters": {},
+            "source_module": str(other_module.id),
+        },
+        format="json",
+    )
+
+    assert response.status_code == status.HTTP_400_BAD_REQUEST
 
 
 def test_project_view_uses_source_module_context(api_client, workspace, project, project_member):
