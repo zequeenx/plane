@@ -1,5 +1,6 @@
 import pytest
 from django.core.exceptions import ValidationError
+from django.db import IntegrityError, transaction
 
 from plane.db.models import (
     Issue,
@@ -64,7 +65,7 @@ def test_module_issue_field_names_are_unique_per_module(workspace, project):
         field_type=ModuleIssueField.FieldType.PLAIN_TEXT,
     )
 
-    with pytest.raises(Exception):
+    with pytest.raises(IntegrityError), transaction.atomic():
         ModuleIssueField.objects.create(
             workspace=workspace,
             project=project,
@@ -133,6 +134,59 @@ def test_module_issue_field_value_rejects_issue_not_in_module(workspace, project
             issue=issue,
             field=field,
             text_value="Needs review",
+        )
+
+
+def test_module_issue_field_value_rejects_soft_deleted_module_issue(workspace, project):
+    module = Module.objects.create(workspace=workspace, project=project, name="Launch")
+    issue = create_issue_in_module(workspace, project, module)
+    ModuleIssue.objects.get(module=module, issue=issue).delete()
+    field = ModuleIssueField.objects.create(
+        workspace=workspace,
+        project=project,
+        module=module,
+        name="Risk",
+        field_type=ModuleIssueField.FieldType.PLAIN_TEXT,
+    )
+
+    with pytest.raises(ValidationError):
+        ModuleIssueFieldValue.objects.create(
+            workspace=workspace,
+            project=project,
+            module=module,
+            issue=issue,
+            field=field,
+            text_value="Needs review",
+        )
+
+
+def test_module_issue_field_value_is_unique_per_issue_and_field(workspace, project):
+    module = Module.objects.create(workspace=workspace, project=project, name="Launch")
+    issue = create_issue_in_module(workspace, project, module)
+    field = ModuleIssueField.objects.create(
+        workspace=workspace,
+        project=project,
+        module=module,
+        name="Risk",
+        field_type=ModuleIssueField.FieldType.PLAIN_TEXT,
+    )
+    ModuleIssueFieldValue.objects.create(
+        workspace=workspace,
+        project=project,
+        module=module,
+        issue=issue,
+        field=field,
+        text_value="first",
+    )
+
+    with pytest.raises(IntegrityError), transaction.atomic():
+        ModuleIssueFieldValue.objects.create(
+            workspace=workspace,
+            project=project,
+            module=module,
+            issue=issue,
+            field=field,
+            text_value="second",
         )
 
 
@@ -217,7 +271,49 @@ def test_module_issue_field_value_option_aligns_ownership_from_value(workspace, 
     assert selected_option.module_id == value.module_id
 
 
-def test_module_issue_field_value_user_aligns_ownership_from_value(workspace, project, create_user):
+def test_module_issue_field_value_option_is_unique_per_value_and_option(workspace, project):
+    module = Module.objects.create(workspace=workspace, project=project, name="Launch")
+    issue = create_issue_in_module(workspace, project, module)
+    field = ModuleIssueField.objects.create(
+        workspace=workspace,
+        project=project,
+        module=module,
+        name="Risk",
+        field_type=ModuleIssueField.FieldType.SINGLE_SELECT,
+    )
+    option = ModuleIssueFieldOption.objects.create(
+        workspace=workspace,
+        project=project,
+        module=module,
+        field=field,
+        value="High",
+    )
+    value = ModuleIssueFieldValue.objects.create(
+        workspace=workspace,
+        project=project,
+        module=module,
+        issue=issue,
+        field=field,
+    )
+    ModuleIssueFieldValueOption.objects.create(
+        workspace=workspace,
+        project=project,
+        module=module,
+        value=value,
+        option=option,
+    )
+
+    with pytest.raises(IntegrityError), transaction.atomic():
+        ModuleIssueFieldValueOption.objects.create(
+            workspace=workspace,
+            project=project,
+            module=module,
+            value=value,
+            option=option,
+        )
+
+
+def test_module_issue_field_value_user_save_aligns_mismatched_module_from_value(workspace, project, create_user):
     module = Module.objects.create(workspace=workspace, project=project, name="Launch")
     other_module = Module.objects.create(workspace=workspace, project=project, name="Growth")
     issue = create_issue_in_module(workspace, project, module)
@@ -249,9 +345,8 @@ def test_module_issue_field_value_user_aligns_ownership_from_value(workspace, pr
     assert selected_user.module_id == value.module_id
 
 
-def test_module_issue_field_value_user_rejects_mismatched_module(workspace, project, create_user):
+def test_module_issue_field_value_user_is_unique_per_value_and_user(workspace, project, create_user):
     module = Module.objects.create(workspace=workspace, project=project, name="Launch")
-    other_module = Module.objects.create(workspace=workspace, project=project, name="Growth")
     issue = create_issue_in_module(workspace, project, module)
     field = ModuleIssueField.objects.create(
         workspace=workspace,
@@ -267,13 +362,19 @@ def test_module_issue_field_value_user_rejects_mismatched_module(workspace, proj
         issue=issue,
         field=field,
     )
-    selected_user = ModuleIssueFieldValueUser(
+    ModuleIssueFieldValueUser.objects.create(
         workspace=workspace,
         project=project,
-        module=other_module,
+        module=module,
         value=value,
         user=create_user,
     )
 
-    with pytest.raises(ValidationError):
-        selected_user.clean()
+    with pytest.raises(IntegrityError), transaction.atomic():
+        ModuleIssueFieldValueUser.objects.create(
+            workspace=workspace,
+            project=project,
+            module=module,
+            value=value,
+            user=create_user,
+        )
