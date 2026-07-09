@@ -100,14 +100,16 @@ export interface IBaseIssuesStore {
     workspaceSlug: string,
     projectId: string,
     moduleId: string,
-    issueIds: string[]
+    issueIds: string[],
+    deleteModuleFieldValuesConfirmed?: boolean
   ) => Promise<void>;
   changeModulesInIssue(
     workspaceSlug: string,
     projectId: string,
     issueId: string,
     addModuleIds: string[],
-    removeModuleIds: string[]
+    removeModuleIds: string[],
+    deleteModuleFieldValuesConfirmed?: boolean
   ): Promise<void>;
   updateIssueDates(workspaceSlug: string, updates: IBlockUpdateDependencyData[], projectId?: string): Promise<void>;
 }
@@ -1007,9 +1009,17 @@ export abstract class BaseIssuesStore implements IBaseIssuesStore {
    * @param issueIds
    * @returns
    */
-  async removeIssuesFromModule(workspaceSlug: string, projectId: string, moduleId: string, issueIds: string[]) {
+  async removeIssuesFromModule(
+    workspaceSlug: string,
+    projectId: string,
+    moduleId: string,
+    issueIds: string[],
+    deleteModuleFieldValuesConfirmed?: boolean
+  ) {
     // Perform an APi call to remove issue to module
-    const response = await this.moduleService.removeIssuesFromModuleBulk(workspaceSlug, projectId, moduleId, issueIds);
+    const response = await this.moduleService.removeIssuesFromModuleBulk(workspaceSlug, projectId, moduleId, issueIds, {
+      deleteModuleFieldValuesConfirmed,
+    });
 
     // if module Id is the current Module Id then call fetch parent stats
     if (this.moduleId === moduleId) this.fetchParentStats(workspaceSlug, projectId);
@@ -1024,7 +1034,16 @@ export abstract class BaseIssuesStore implements IBaseIssuesStore {
       issueIds.forEach((issueId) => {
         const issueModuleIds = get(this.rootIssueStore.issues.issuesMap, [issueId, "module_ids"]) ?? [];
         const updatedIssueModuleIds = pull(issueModuleIds, moduleId);
-        this.issueUpdate(workspaceSlug, projectId, issueId, { module_ids: updatedIssueModuleIds }, false);
+        const moduleFieldValues = { ...this.rootIssueStore.issues.getIssueById(issueId)?.module_field_values };
+        delete moduleFieldValues[moduleId];
+
+        this.issueUpdate(
+          workspaceSlug,
+          projectId,
+          issueId,
+          { module_ids: updatedIssueModuleIds, module_field_values: moduleFieldValues },
+          false
+        );
       });
     });
 
@@ -1077,7 +1096,8 @@ export abstract class BaseIssuesStore implements IBaseIssuesStore {
     projectId: string,
     issueId: string,
     addModuleIds: string[],
-    removeModuleIds: string[]
+    removeModuleIds: string[],
+    deleteModuleFieldValuesConfirmed?: boolean
   ) {
     // keep a copy of the original module ids
     const issueBeforeChanges = clone(this.rootIssueStore.issues.getIssueById(issueId));
@@ -1096,9 +1116,19 @@ export abstract class BaseIssuesStore implements IBaseIssuesStore {
         // If current Module Id is included in the modules list, then add Issue to List
         if (addModuleIds.includes(this.moduleId ?? "")) this.addIssueToList(issueId);
         currentModuleIds = uniq(concat([...currentModuleIds], addModuleIds));
+        const moduleFieldValues = { ...this.rootIssueStore.issues.getIssueById(issueId)?.module_field_values };
+        removeModuleIds.forEach((moduleId) => {
+          delete moduleFieldValues[moduleId];
+        });
 
         // For current Issue, update module Ids by calling current store's update Issue, without making an API call
-        this.issueUpdate(workspaceSlug, projectId, issueId, { module_ids: currentModuleIds }, false);
+        this.issueUpdate(
+          workspaceSlug,
+          projectId,
+          issueId,
+          { module_ids: currentModuleIds, module_field_values: moduleFieldValues },
+          false
+        );
       });
 
       const issueAfterChanges = clone(this.rootIssueStore.issues.getIssueById(issueId));
@@ -1112,6 +1142,7 @@ export abstract class BaseIssuesStore implements IBaseIssuesStore {
       await this.moduleService.addModulesToIssue(workspaceSlug, projectId, issueId, {
         modules: addModuleIds,
         removed_modules: removeModuleIds,
+        ...(deleteModuleFieldValuesConfirmed ? { delete_module_field_values_confirmed: true } : {}),
       });
 
       if (addModuleIds.includes(this.moduleId || "") || removeModuleIds.includes(this.moduleId || "")) {
@@ -1126,7 +1157,13 @@ export abstract class BaseIssuesStore implements IBaseIssuesStore {
         if (removeModuleIds.includes(this.moduleId ?? "")) this.addIssueToList(issueId);
 
         // For current Issue, update module Ids by calling current store's update Issue, without making an API call
-        this.issueUpdate(workspaceSlug, projectId, issueId, { module_ids: originalModuleIds }, false);
+        this.issueUpdate(
+          workspaceSlug,
+          projectId,
+          issueId,
+          { module_ids: originalModuleIds, module_field_values: issueBeforeChanges?.module_field_values },
+          false
+        );
       });
 
       throw error;

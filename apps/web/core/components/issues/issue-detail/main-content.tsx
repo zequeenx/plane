@@ -27,6 +27,7 @@ import { IssueTypeSwitcher } from "@/plane-web/components/issues/issue-details/i
 import { useDebouncedDuplicateIssues } from "@/hooks/use-debounced-duplicate-issues";
 // services
 import { WorkItemVersionService } from "@/services/issue";
+import { WorkItemModuleFields } from "../module-fields/detail-sections";
 // local imports
 import { IssueDetailWidgets } from "../issue-detail-widgets";
 import { NameDescriptionUpdateStatus } from "../issue-update-status";
@@ -207,6 +208,13 @@ export const IssueMainContent = observer(function IssueMainContent(props: Props)
           disabled={!isEditable || isArchived}
         />
       )}
+
+      <WorkItemModuleFields
+        workspaceSlug={workspaceSlug}
+        projectId={projectId}
+        issueId={issueId}
+        disabled={!isEditable || isArchived}
+      />
 
       <IssueActivity workspaceSlug={workspaceSlug} projectId={projectId} issueId={issueId} disabled={isArchived} />
     </>

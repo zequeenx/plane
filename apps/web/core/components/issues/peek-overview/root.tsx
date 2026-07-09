@@ -178,21 +178,35 @@ export const IssuePeekOverview = observer(function IssuePeekOverview(props: IWor
         projectId: string,
         issueId: string,
         addModuleIds: string[],
-        removeModuleIds: string[]
+        removeModuleIds: string[],
+        deleteModuleFieldValuesConfirmed?: boolean
       ) => {
         const promise = await issues.changeModulesInIssue(
           workspaceSlug,
           projectId,
           issueId,
           addModuleIds,
-          removeModuleIds
+          removeModuleIds,
+          deleteModuleFieldValuesConfirmed
         );
         fetchActivities(workspaceSlug, projectId, issueId);
         return promise;
       },
-      removeIssueFromModule: async (workspaceSlug: string, projectId: string, moduleId: string, issueId: string) => {
+      removeIssueFromModule: async (
+        workspaceSlug: string,
+        projectId: string,
+        moduleId: string,
+        issueId: string,
+        deleteModuleFieldValuesConfirmed?: boolean
+      ) => {
         try {
-          const removeFromModulePromise = issues.removeIssuesFromModule(workspaceSlug, projectId, moduleId, [issueId]);
+          const removeFromModulePromise = issues.removeIssuesFromModule(
+            workspaceSlug,
+            projectId,
+            moduleId,
+            [issueId],
+            deleteModuleFieldValuesConfirmed
+          );
           setPromiseToast(removeFromModulePromise, {
             loading: t("issue.remove.module.loading"),
             success: {

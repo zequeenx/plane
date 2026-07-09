@@ -6,7 +6,15 @@
 
 import { sortBy } from "lodash-es";
 // plane imports
-import type { IModule, TModuleDisplayFilters, TModuleFilters, TModuleOrderByOptions } from "@plane/types";
+import type {
+  IModule,
+  TIssueFieldDateRangeValue,
+  TIssueFieldValue,
+  TIssueModuleFieldValues,
+  TModuleDisplayFilters,
+  TModuleFilters,
+  TModuleOrderByOptions,
+} from "@plane/types";
 // local imports
 import { getDate } from "./datetime";
 import { satisfiesDateFilter } from "./filter";
@@ -30,8 +38,8 @@ export const orderModules = (modules: IModule[], orderByKey: TModuleOrderByOptio
   let orderedModules: IModule[] = [];
   if (modules.length === 0 || !orderByKey) return [];
 
-  if (orderByKey === "name") orderedModules = [...modules].sort((a, b) => naturalSort(a.name, b.name));
-  if (orderByKey === "-name") orderedModules = [...modules].sort((a, b) => naturalSort(b.name, a.name));
+  if (orderByKey === "name") orderedModules = [...modules].toSorted((a, b) => naturalSort(a.name, b.name));
+  if (orderByKey === "-name") orderedModules = [...modules].toSorted((a, b) => naturalSort(b.name, a.name));
   if (["progress", "-progress"].includes(orderByKey))
     orderedModules = sortBy(modules, [
       (m) => {
@@ -90,4 +98,27 @@ export const shouldFilterModule = (
   if (displayFilters.favorites && !module.is_favorite) fallsInFilters = false;
 
   return fallsInFilters;
+};
+
+export const isModuleFieldValueEmpty = (value: TIssueFieldValue | undefined): boolean => {
+  if (typeof value === "undefined" || value === null) return true;
+  if (Array.isArray(value)) return value.length === 0;
+  if (typeof value === "string") return value.trim().length === 0;
+
+  const dateRangeValue = value as TIssueFieldDateRangeValue;
+  return !dateRangeValue.start && !dateRangeValue.end;
+};
+
+export const getModuleIdsWithFieldValues = (
+  moduleFieldValues: TIssueModuleFieldValues | undefined,
+  moduleIds: string[]
+): string[] => {
+  if (!moduleFieldValues || moduleIds.length === 0) return [];
+
+  return moduleIds.filter((moduleId) => {
+    const fieldValues = moduleFieldValues[moduleId];
+    if (!fieldValues) return false;
+
+    return Object.values(fieldValues).some((value) => !isModuleFieldValueEmpty(value));
+  });
 };

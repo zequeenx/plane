@@ -14,6 +14,7 @@ import type { TIssue } from "@plane/types";
 import { ModuleDropdown } from "@/components/dropdowns/module/dropdown";
 // hooks
 import { useIssuesStore } from "@/hooks/use-issue-layout-store";
+import { useModuleFieldValueDeletionConfirmation } from "../../../module-fields/remove-confirmation";
 
 type Props = {
   issue: TIssue;
@@ -29,11 +30,13 @@ export const SpreadsheetModuleColumn = observer(function SpreadsheetModuleColumn
   const {
     issues: { changeModulesInIssue },
   } = useIssuesStore();
+  const { confirmModuleRemoval, confirmationModal } = useModuleFieldValueDeletionConfirmation();
 
   const handleModule = useCallback(
     async (moduleIds: string[] | null) => {
       if (!workspaceSlug || !issue || !issue.project_id || !issue.module_ids || !moduleIds) return;
 
+      const projectId = issue.project_id;
       const updatedModuleIds = xor(issue.module_ids, moduleIds);
       const modulesToAdd: string[] = [];
       const modulesToRemove: string[] = [];
@@ -41,27 +44,39 @@ export const SpreadsheetModuleColumn = observer(function SpreadsheetModuleColumn
         if (issue.module_ids.includes(moduleId)) modulesToRemove.push(moduleId);
         else modulesToAdd.push(moduleId);
       }
-      changeModulesInIssue(workspaceSlug.toString(), issue.project_id, issue.id, modulesToAdd, modulesToRemove);
+      await confirmModuleRemoval(issue, modulesToRemove, (deleteModuleFieldValuesConfirmed) =>
+        changeModulesInIssue(
+          workspaceSlug.toString(),
+          projectId,
+          issue.id,
+          modulesToAdd,
+          modulesToRemove,
+          deleteModuleFieldValuesConfirmed
+        )
+      );
     },
-    [workspaceSlug, issue, changeModulesInIssue]
+    [workspaceSlug, issue, changeModulesInIssue, confirmModuleRemoval]
   );
 
   return (
-    <div className="h-11 border-b-[0.5px] border-subtle">
-      <ModuleDropdown
-        projectId={issue?.project_id ?? undefined}
-        value={issue?.module_ids ?? []}
-        onChange={handleModule}
-        disabled={disabled}
-        placeholder="Select modules"
-        buttonVariant="transparent-with-text"
-        buttonContainerClassName="w-full relative flex items-center p-2 group-[.selected-issue-row]:bg-accent-primary/5 group-[.selected-issue-row]:hover:bg-accent-primary/10 px-page-x"
-        buttonClassName="relative leading-4 h-4.5 bg-transparent hover:bg-transparent !px-0"
-        onClose={onClose}
-        multiple
-        showCount
-        showTooltip
-      />
-    </div>
+    <>
+      <div className="h-11 border-b-[0.5px] border-subtle">
+        <ModuleDropdown
+          projectId={issue?.project_id ?? undefined}
+          value={issue?.module_ids ?? []}
+          onChange={handleModule}
+          disabled={disabled}
+          placeholder="Select modules"
+          buttonVariant="transparent-with-text"
+          buttonContainerClassName="w-full relative flex items-center p-2 group-[.selected-issue-row]:bg-accent-primary/5 group-[.selected-issue-row]:hover:bg-accent-primary/10 px-page-x"
+          buttonClassName="relative leading-4 h-4.5 bg-transparent hover:bg-transparent !px-0"
+          onClose={onClose}
+          multiple
+          showCount
+          showTooltip
+        />
+      </div>
+      {confirmationModal}
+    </>
   );
 });

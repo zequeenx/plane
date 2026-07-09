@@ -28,9 +28,16 @@ export interface IIssueStoreActions {
     projectId: string,
     issueId: string,
     addModuleIds: string[],
-    removeModuleIds: string[]
+    removeModuleIds: string[],
+    deleteModuleFieldValuesConfirmed?: boolean
   ) => Promise<void>;
-  removeIssueFromModule: (workspaceSlug: string, projectId: string, moduleId: string, issueId: string) => Promise<void>;
+  removeIssueFromModule: (
+    workspaceSlug: string,
+    projectId: string,
+    moduleId: string,
+    issueId: string,
+    deleteModuleFieldValuesConfirmed?: boolean
+  ) => Promise<void>;
   fetchIssueWithIdentifier: (workspaceSlug: string, project_identifier: string, sequence_id: string) => Promise<TIssue>;
 }
 
@@ -246,24 +253,33 @@ export class IssueStore implements IIssueStore {
     projectId: string,
     issueId: string,
     addModuleIds: string[],
-    removeModuleIds: string[]
+    removeModuleIds: string[],
+    deleteModuleFieldValuesConfirmed?: boolean
   ) => {
     await this.rootIssueDetailStore.rootIssueStore.moduleIssues.changeModulesInIssue(
       workspaceSlug,
       projectId,
       issueId,
       addModuleIds,
-      removeModuleIds
+      removeModuleIds,
+      deleteModuleFieldValuesConfirmed
     );
     await this.rootIssueDetailStore.activity.fetchActivities(workspaceSlug, projectId, issueId);
   };
 
-  removeIssueFromModule = async (workspaceSlug: string, projectId: string, moduleId: string, issueId: string) => {
+  removeIssueFromModule = async (
+    workspaceSlug: string,
+    projectId: string,
+    moduleId: string,
+    issueId: string,
+    deleteModuleFieldValuesConfirmed?: boolean
+  ) => {
     const currentModule = await this.rootIssueDetailStore.rootIssueStore.moduleIssues.removeIssuesFromModule(
       workspaceSlug,
       projectId,
       moduleId,
-      [issueId]
+      [issueId],
+      deleteModuleFieldValuesConfirmed
     );
     await this.rootIssueDetailStore.activity.fetchActivities(workspaceSlug, projectId, issueId);
     return currentModule;

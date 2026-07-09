@@ -28,6 +28,7 @@ import { FileService } from "@/services/file.service";
 const fileService = new FileService();
 // local imports
 import { CreateIssueToastActionItems } from "../create-issue-toast-action-items";
+import { useModuleFieldValueDeletionConfirmation } from "../module-fields/remove-confirmation";
 import { DraftIssueLayout } from "./draft-issue-layout";
 import { IssueFormRoot } from "./form";
 import type { IssueFormProps } from "./form";
@@ -77,6 +78,7 @@ export const CreateUpdateIssueModalBase = observer(function CreateUpdateIssueMod
   const { fetchIssue } = useIssueDetail();
   const { allowedProjectIds, handleCreateUpdatePropertyValues, handleCreateSubWorkItem } = useIssueModal();
   const { getProjectByIdentifier } = useProject();
+  const { confirmModuleRemoval, confirmationModal } = useModuleFieldValueDeletionConfirmation();
   // current store details
   const { createIssue, updateIssue } = useIssuesActions(storeType);
   // derived values
@@ -311,12 +313,15 @@ export const CreateUpdateIssueModalBase = observer(function CreateUpdateIssueMod
     }
     // update modules if there are modules to add or remove
     if (modulesToAdd.length > 0 || modulesToRemove.length > 0) {
-      await issues.changeModulesInIssue(
-        workspaceSlug.toString(),
-        data.project_id,
-        data.id,
-        modulesToAdd,
-        modulesToRemove
+      await confirmModuleRemoval(data as TIssue, modulesToRemove, (deleteModuleFieldValuesConfirmed) =>
+        issues.changeModulesInIssue(
+          workspaceSlug.toString(),
+          data.project_id ?? "",
+          data.id ?? "",
+          modulesToAdd,
+          modulesToRemove,
+          deleteModuleFieldValuesConfirmed
+        )
       );
     }
   };
@@ -413,17 +418,20 @@ export const CreateUpdateIssueModalBase = observer(function CreateUpdateIssueMod
   };
 
   return (
-    <ModalCore
-      isOpen={isOpen}
-      position={EModalPosition.TOP}
-      width={isDuplicateModalOpen ? EModalWidth.VIXL : EModalWidth.XXXXL}
-      className="rounded-lg !bg-transparent shadow-none transition-[width] ease-linear"
-    >
-      {withDraftIssueWrapper ? (
-        <DraftIssueLayout {...commonIssueModalProps} changesMade={changesMade} onChange={handleFormChange} />
-      ) : (
-        <IssueFormRoot {...commonIssueModalProps} />
-      )}
-    </ModalCore>
+    <>
+      <ModalCore
+        isOpen={isOpen}
+        position={EModalPosition.TOP}
+        width={isDuplicateModalOpen ? EModalWidth.VIXL : EModalWidth.XXXXL}
+        className="rounded-lg !bg-transparent shadow-none transition-[width] ease-linear"
+      >
+        {withDraftIssueWrapper ? (
+          <DraftIssueLayout {...commonIssueModalProps} changesMade={changesMade} onChange={handleFormChange} />
+        ) : (
+          <IssueFormRoot {...commonIssueModalProps} />
+        )}
+      </ModalCore>
+      {confirmationModal}
+    </>
   );
 });

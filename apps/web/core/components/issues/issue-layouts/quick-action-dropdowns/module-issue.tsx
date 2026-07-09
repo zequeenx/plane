@@ -25,6 +25,7 @@ import { DuplicateWorkItemModal } from "@/plane-web/components/issues/issue-layo
 import { ArchiveIssueModal } from "../../archive-issue-modal";
 import { DeleteIssueModal } from "../../delete-issue-modal";
 import { CreateUpdateIssueModal } from "../../issue-modal/modal";
+import { useModuleFieldValueDeletionConfirmation } from "../../module-fields/remove-confirmation";
 import type { IQuickActionProps } from "../list/list-view-types";
 import type { MenuItemFactoryProps } from "./helper";
 import { useModuleIssueMenuItems } from "./helper";
@@ -55,6 +56,7 @@ export const ModuleIssueQuickActions = observer(function ModuleIssueQuickActions
   const { allowPermissions } = useUserPermissions();
   const { getStateById } = useProjectState();
   const { getProjectIdentifierById } = useProject();
+  const { confirmModuleRemoval, confirmationModal } = useModuleFieldValueDeletionConfirmation();
   // derived values
   const stateDetails = getStateById(issue.state_id);
   const projectIdentifier = getProjectIdentifierById(issue?.project_id);
@@ -75,6 +77,16 @@ export const ModuleIssueQuickActions = observer(function ModuleIssueQuickActions
     },
     ["id"]
   );
+  const handleRemoveFromModule = async () => {
+    if (!moduleId) {
+      await handleRemoveFromView?.();
+      return;
+    }
+
+    await confirmModuleRemoval(issue, [moduleId.toString()], (deleteModuleFieldValuesConfirmed) =>
+      handleRemoveFromView?.(deleteModuleFieldValuesConfirmed)
+    );
+  };
 
   // Menu items and modals using helper
   const menuItemProps: MenuItemFactoryProps = {
@@ -91,7 +103,7 @@ export const ModuleIssueQuickActions = observer(function ModuleIssueQuickActions
     setDeleteIssueModal,
     setArchiveIssueModal,
     setDuplicateWorkItemModal,
-    handleRemoveFromView,
+    handleRemoveFromView: handleRemoveFromModule,
     moduleId: moduleId?.toString(),
     handleDelete,
     handleUpdate,
@@ -146,6 +158,7 @@ export const ModuleIssueQuickActions = observer(function ModuleIssueQuickActions
           projectId={issue.project_id}
         />
       )}
+      {confirmationModal}
 
       <ContextMenu parentRef={parentRef} items={CONTEXT_MENU_ITEMS} />
       <CustomMenu

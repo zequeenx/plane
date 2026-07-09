@@ -189,7 +189,9 @@ export const BaseKanBanRoot = observer(function BaseKanBanRoot(props: IBaseKanBa
         issue={issue}
         handleDelete={async () => removeIssue(issue.project_id, issue.id)}
         handleUpdate={async (data) => updateIssue && updateIssue(issue.project_id, issue.id, data)}
-        handleRemoveFromView={async () => removeIssueFromView && removeIssueFromView(issue.project_id, issue.id)}
+        handleRemoveFromView={async (deleteModuleFieldValuesConfirmed) =>
+          removeIssueFromView && removeIssueFromView(issue.project_id, issue.id, deleteModuleFieldValuesConfirmed)
+        }
         handleArchive={async () => archiveIssue && archiveIssue(issue.project_id, issue.id)}
         handleRestore={async () => restoreIssue && restoreIssue(issue.project_id, issue.id)}
         readOnly={!canEditProperties(issue.project_id ?? undefined) || isCompletedCycle}

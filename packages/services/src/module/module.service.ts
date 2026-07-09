@@ -103,7 +103,7 @@ export class ModuleService extends APIService {
     workspaceSlug: string,
     projectId: string,
     issueId: string,
-    data: { modules: string[]; removed_modules?: string[] }
+    data: { modules: string[]; removed_modules?: string[]; delete_module_field_values_confirmed?: boolean }
   ): Promise<void> {
     return this.post(`/api/workspaces/${workspaceSlug}/projects/${projectId}/issues/${issueId}/modules/`, data)
       .then((response) => response?.data)
@@ -116,12 +116,16 @@ export class ModuleService extends APIService {
     workspaceSlug: string,
     projectId: string,
     moduleId: string,
-    issueIds: string[]
+    issueIds: string[],
+    options?: { deleteModuleFieldValuesConfirmed?: boolean }
   ): Promise<void> {
     const promiseDataUrls: any = [];
     issueIds.forEach((issueId) => {
       promiseDataUrls.push(
-        this.delete(`/api/workspaces/${workspaceSlug}/projects/${projectId}/modules/${moduleId}/issues/${issueId}/`)
+        this.delete(
+          `/api/workspaces/${workspaceSlug}/projects/${projectId}/modules/${moduleId}/issues/${issueId}/`,
+          options?.deleteModuleFieldValuesConfirmed ? { delete_module_field_values_confirmed: true } : undefined
+        )
       );
     });
     await Promise.all(promiseDataUrls)
@@ -135,12 +139,16 @@ export class ModuleService extends APIService {
     workspaceSlug: string,
     projectId: string,
     issueId: string,
-    moduleIds: string[]
+    moduleIds: string[],
+    options?: { deleteModuleFieldValuesConfirmed?: boolean }
   ): Promise<void> {
     const promiseDataUrls: any = [];
     moduleIds.forEach((moduleId) => {
       promiseDataUrls.push(
-        this.delete(`/api/workspaces/${workspaceSlug}/projects/${projectId}/modules/${moduleId}/issues/${issueId}/`)
+        this.delete(
+          `/api/workspaces/${workspaceSlug}/projects/${projectId}/modules/${moduleId}/issues/${issueId}/`,
+          options?.deleteModuleFieldValuesConfirmed ? { delete_module_field_values_confirmed: true } : undefined
+        )
       );
     });
     await Promise.all(promiseDataUrls)

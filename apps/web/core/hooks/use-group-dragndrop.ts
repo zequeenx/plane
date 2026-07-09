@@ -7,6 +7,7 @@
 import { useParams } from "next/navigation";
 import { TOAST_TYPE, setToast } from "@plane/propel/toast";
 import type { EIssuesStoreType, TIssue, TIssueGroupByOptions, TIssueOrderByOptions } from "@plane/types";
+import { getModuleIdsWithFieldValues } from "@plane/utils";
 import type { GroupDropLocation } from "@/components/issues/issue-layouts/utils";
 import { handleGroupDragDrop } from "@/components/issues/issue-layouts/utils";
 import { ISSUE_FILTER_DEFAULT_DATA } from "@/store/issue/helpers/base-issues.store";
@@ -84,12 +85,24 @@ export const useGroupIssuesDragNDrop = (
     }
 
     if (isModuleChanged && workspaceSlug && issueUpdates[moduleKey]) {
+      const issue = getIssueById(issueId);
+      const removedModulesWithValues = getModuleIdsWithFieldValues(
+        issue?.module_field_values,
+        issueUpdates[moduleKey].REMOVE
+      );
+      const deleteModuleFieldValuesConfirmed =
+        removedModulesWithValues.length === 0 ||
+        window.confirm("Removing this module will delete its saved module field values from this work item.");
+
+      if (!deleteModuleFieldValuesConfirmed) return;
+
       changeModulesInIssue(
         workspaceSlug.toString(),
         projectId,
         issueId,
         issueUpdates[moduleKey].ADD,
-        issueUpdates[moduleKey].REMOVE
+        issueUpdates[moduleKey].REMOVE,
+        deleteModuleFieldValuesConfirmed
       ).catch(() => setToast(errorToastProps));
       delete data[moduleKey];
     }

@@ -45,6 +45,7 @@ import { useIssueStoreType } from "@/hooks/use-issue-layout-store";
 import { usePlatformOS } from "@/hooks/use-platform-os";
 // plane web components
 import { WorkItemLayoutAdditionalProperties } from "@/plane-web/components/issues/issue-layouts/additional-properties";
+import { useModuleFieldValueDeletionConfirmation } from "../../module-fields/remove-confirmation";
 // local components
 import { IssuePropertyLabels } from "./labels";
 import { WithDisplayPropertiesHOC } from "./with-display-properties-HOC";
@@ -77,6 +78,7 @@ export const IssueProperties = observer(function IssueProperties(props: IIssuePr
   const { getStateById, getSubStateById } = useProjectState();
   const { isMobile } = usePlatformOS();
   const projectDetails = getProjectById(issue.project_id);
+  const { confirmModuleRemoval, confirmationModal } = useModuleFieldValueDeletionConfirmation();
 
   // router
   const router = useAppRouter();
@@ -88,14 +90,6 @@ export const IssueProperties = observer(function IssueProperties(props: IIssuePr
 
   const issueOperations = useMemo(
     () => ({
-      addModulesToIssue: async (moduleIds: string[]) => {
-        if (!workspaceSlug || !issue.project_id || !issue.id) return;
-        await changeModulesInIssue?.(workspaceSlug.toString(), issue.project_id, issue.id, moduleIds, []);
-      },
-      removeModulesFromIssue: async (moduleIds: string[]) => {
-        if (!workspaceSlug || !issue.project_id || !issue.id) return;
-        await changeModulesInIssue?.(workspaceSlug.toString(), issue.project_id, issue.id, [], moduleIds);
-      },
       addIssueToCycle: async (cycleId: string) => {
         if (!workspaceSlug || !issue.project_id || !issue.id) return;
         await addCycleToIssue?.(workspaceSlug.toString(), issue.project_id, cycleId, issue.id);
@@ -105,7 +99,7 @@ export const IssueProperties = observer(function IssueProperties(props: IIssuePr
         await removeCycleFromIssue?.(workspaceSlug.toString(), issue.project_id, issue.id);
       },
     }),
-    [workspaceSlug, issue, changeModulesInIssue, addCycleToIssue, removeCycleFromIssue]
+    [workspaceSlug, issue, addCycleToIssue, removeCycleFromIssue]
   );
 
   const buildStatePayload = (stateId: string): Partial<TIssue> => {
@@ -142,13 +136,26 @@ export const IssueProperties = observer(function IssueProperties(props: IIssuePr
       const updatedModuleIds = xor(issue.module_ids, moduleIds);
       const modulesToAdd: string[] = [];
       const modulesToRemove: string[] = [];
-      for (const moduleId of updatedModuleIds)
+      for (const moduleId of updatedModuleIds) {
         if (issue.module_ids.includes(moduleId)) modulesToRemove.push(moduleId);
         else modulesToAdd.push(moduleId);
-      if (modulesToAdd.length > 0) issueOperations.addModulesToIssue(modulesToAdd);
-      if (modulesToRemove.length > 0) issueOperations.removeModulesFromIssue(modulesToRemove);
+      }
+
+      if (modulesToAdd.length > 0 || modulesToRemove.length > 0)
+        confirmModuleRemoval(issue, modulesToRemove, async (deleteModuleFieldValuesConfirmed) => {
+          if (!workspaceSlug || !issue.project_id || !issue.id) return;
+
+          await changeModulesInIssue?.(
+            workspaceSlug.toString(),
+            issue.project_id,
+            issue.id,
+            modulesToAdd,
+            modulesToRemove,
+            deleteModuleFieldValuesConfirmed
+          );
+        });
     },
-    [issueOperations, issue]
+    [changeModulesInIssue, confirmModuleRemoval, issue, workspaceSlug]
   );
 
   const handleCycle = useCallback(
@@ -516,6 +523,7 @@ export const IssueProperties = observer(function IssueProperties(props: IIssuePr
           maxRender={3}
         />
       </WithDisplayPropertiesHOC>
+      {confirmationModal}
     </div>
   );
 });

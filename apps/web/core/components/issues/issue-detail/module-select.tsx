@@ -16,6 +16,7 @@ import { ModuleDropdown } from "@/components/dropdowns/module/dropdown";
 // helpers
 import { useIssueDetail } from "@/hooks/store/use-issue-detail";
 // types
+import { useModuleFieldValueDeletionConfirmation } from "../module-fields/remove-confirmation";
 import type { TIssueOperations } from "./root";
 
 type TIssueModuleSelect = {
@@ -36,6 +37,7 @@ export const IssueModuleSelect = observer(function IssueModuleSelect(props: TIss
   const {
     issue: { getIssueById },
   } = useIssueDetail();
+  const { confirmModuleRemoval, confirmationModal } = useModuleFieldValueDeletionConfirmation();
   // derived values
   const issue = getIssueById(issueId);
   const disableSelect = disabled || isUpdating;
@@ -43,7 +45,6 @@ export const IssueModuleSelect = observer(function IssueModuleSelect(props: TIss
   const handleIssueModuleChange = async (moduleIds: string[]) => {
     if (!issue || !issue.module_ids) return;
 
-    setIsUpdating(true);
     const updatedModuleIds = xor(issue.module_ids, moduleIds);
     const modulesToAdd: string[] = [];
     const modulesToRemove: string[] = [];
@@ -56,29 +57,44 @@ export const IssueModuleSelect = observer(function IssueModuleSelect(props: TIss
       }
     }
 
-    await issueOperations.changeModulesInIssue?.(workspaceSlug, projectId, issueId, modulesToAdd, modulesToRemove);
-
-    setIsUpdating(false);
+    await confirmModuleRemoval(issue, modulesToRemove, async (deleteModuleFieldValuesConfirmed) => {
+      setIsUpdating(true);
+      try {
+        await issueOperations.changeModulesInIssue?.(
+          workspaceSlug,
+          projectId,
+          issueId,
+          modulesToAdd,
+          modulesToRemove,
+          deleteModuleFieldValuesConfirmed
+        );
+      } finally {
+        setIsUpdating(false);
+      }
+    });
   };
 
   return (
-    <div className={cn(`flex h-full items-center gap-1`, className)}>
-      <ModuleDropdown
-        projectId={projectId}
-        value={issue?.module_ids ?? []}
-        onChange={handleIssueModuleChange}
-        placeholder={t("module.no_module")}
-        disabled={disableSelect}
-        className="group h-full w-full"
-        buttonContainerClassName="w-full text-left rounded-sm"
-        buttonClassName={`text-body-xs-medium justify-between ${issue?.module_ids?.length ? "" : "text-placeholder"}`}
-        buttonVariant="transparent-with-text"
-        hideIcon
-        dropdownArrow
-        dropdownArrowClassName="h-3.5 w-3.5 hidden group-hover:inline"
-        multiple
-        itemClassName="px-2"
-      />
-    </div>
+    <>
+      <div className={cn(`flex h-full items-center gap-1`, className)}>
+        <ModuleDropdown
+          projectId={projectId}
+          value={issue?.module_ids ?? []}
+          onChange={handleIssueModuleChange}
+          placeholder={t("module.no_module")}
+          disabled={disableSelect}
+          className="group h-full w-full"
+          buttonContainerClassName="w-full text-left rounded-sm"
+          buttonClassName={`text-body-xs-medium justify-between ${issue?.module_ids?.length ? "" : "text-placeholder"}`}
+          buttonVariant="transparent-with-text"
+          hideIcon
+          dropdownArrow
+          dropdownArrowClassName="h-3.5 w-3.5 hidden group-hover:inline"
+          multiple
+          itemClassName="px-2"
+        />
+      </div>
+      {confirmationModal}
+    </>
   );
 });

@@ -34,7 +34,11 @@ export interface IssueActions {
   createIssue?: (projectId: string | undefined | null, data: Partial<TIssue>) => Promise<TIssue | undefined>;
   quickAddIssue?: (projectId: string | undefined | null, data: TIssue) => Promise<TIssue | undefined>;
   updateIssue?: (projectId: string | undefined | null, issueId: string, data: Partial<TIssue>) => Promise<void>;
-  removeIssueFromView?: (projectId: string | undefined | null, issueId: string) => Promise<void>;
+  removeIssueFromView?: (
+    projectId: string | undefined | null,
+    issueId: string,
+    deleteModuleFieldValuesConfirmed?: boolean
+  ) => Promise<void>;
   archiveIssue?: (projectId: string | undefined | null, issueId: string) => Promise<void>;
   restoreIssue?: (projectId: string | undefined | null, issueId: string) => Promise<void>;
   updateFilters: (
@@ -409,9 +413,15 @@ const useModuleIssueActions = () => {
     [issues.removeIssue, workspaceSlug]
   );
   const removeIssueFromView = useCallback(
-    async (projectId: string | undefined | null, issueId: string) => {
+    async (projectId: string | undefined | null, issueId: string, deleteModuleFieldValuesConfirmed?: boolean) => {
       if (!moduleId || !workspaceSlug || !projectId) return;
-      return await issues.removeIssuesFromModule(workspaceSlug, projectId, moduleId, [issueId]);
+      return await issues.removeIssuesFromModule(
+        workspaceSlug,
+        projectId,
+        moduleId,
+        [issueId],
+        deleteModuleFieldValuesConfirmed
+      );
     },
     [issues.removeIssuesFromModule, moduleId, workspaceSlug]
   );

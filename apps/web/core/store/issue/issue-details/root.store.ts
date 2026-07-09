@@ -291,10 +291,24 @@ export abstract class IssueDetail implements IIssueDetail {
     projectId: string,
     issueId: string,
     addModuleIds: string[],
-    removeModuleIds: string[]
-  ) => this.issue.changeModulesInIssue(workspaceSlug, projectId, issueId, addModuleIds, removeModuleIds);
-  removeIssueFromModule = async (workspaceSlug: string, projectId: string, moduleId: string, issueId: string) =>
-    this.issue.removeIssueFromModule(workspaceSlug, projectId, moduleId, issueId);
+    removeModuleIds: string[],
+    deleteModuleFieldValuesConfirmed?: boolean
+  ) =>
+    this.issue.changeModulesInIssue(
+      workspaceSlug,
+      projectId,
+      issueId,
+      addModuleIds,
+      removeModuleIds,
+      deleteModuleFieldValuesConfirmed
+    );
+  removeIssueFromModule = async (
+    workspaceSlug: string,
+    projectId: string,
+    moduleId: string,
+    issueId: string,
+    deleteModuleFieldValuesConfirmed?: boolean
+  ) => this.issue.removeIssueFromModule(workspaceSlug, projectId, moduleId, issueId, deleteModuleFieldValuesConfirmed);
 
   // reactions
   addReactions = (issueId: string, reactions: TIssueReaction[]) => this.reaction.addReactions(issueId, reactions);

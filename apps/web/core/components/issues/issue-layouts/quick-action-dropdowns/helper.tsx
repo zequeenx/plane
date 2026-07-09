@@ -68,7 +68,7 @@ export interface MenuItemFactoryProps {
   setDeleteIssueModal: (open: boolean) => void;
   setArchiveIssueModal?: (open: boolean) => void;
   setDuplicateWorkItemModal?: (open: boolean) => void;
-  handleRemoveFromView?: () => void;
+  handleRemoveFromView?: (deleteModuleFieldValuesConfirmed?: boolean) => void | Promise<void>;
   handleRestore?: () => Promise<void>;
   // External handlers
   handleDelete?: () => Promise<void>;

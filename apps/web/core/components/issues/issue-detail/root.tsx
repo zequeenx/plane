@@ -40,14 +40,16 @@ export type TIssueOperations = {
     workspaceSlug: string,
     projectId: string,
     moduleId: string,
-    issueId: string
+    issueId: string,
+    deleteModuleFieldValuesConfirmed?: boolean
   ) => Promise<void>;
   changeModulesInIssue?: (
     workspaceSlug: string,
     projectId: string,
     issueId: string,
     addModuleIds: string[],
-    removeModuleIds: string[]
+    removeModuleIds: string[],
+    deleteModuleFieldValuesConfirmed?: boolean
   ) => Promise<void>;
 };
 
@@ -169,9 +171,21 @@ export const IssueDetailRoot = observer(function IssueDetailRoot(props: TIssueDe
           console.log("Error in removing issue from cycle:", error);
         }
       },
-      removeIssueFromModule: async (workspaceSlug: string, projectId: string, moduleId: string, issueId: string) => {
+      removeIssueFromModule: async (
+        workspaceSlug: string,
+        projectId: string,
+        moduleId: string,
+        issueId: string,
+        deleteModuleFieldValuesConfirmed?: boolean
+      ) => {
         try {
-          const removeFromModulePromise = removeIssueFromModule(workspaceSlug, projectId, moduleId, issueId);
+          const removeFromModulePromise = removeIssueFromModule(
+            workspaceSlug,
+            projectId,
+            moduleId,
+            issueId,
+            deleteModuleFieldValuesConfirmed
+          );
           setPromiseToast(removeFromModulePromise, {
             loading: t("issue.remove.module.loading"),
             success: {
@@ -193,9 +207,17 @@ export const IssueDetailRoot = observer(function IssueDetailRoot(props: TIssueDe
         projectId: string,
         issueId: string,
         addModuleIds: string[],
-        removeModuleIds: string[]
+        removeModuleIds: string[],
+        deleteModuleFieldValuesConfirmed?: boolean
       ) => {
-        const promise = await changeModulesInIssue(workspaceSlug, projectId, issueId, addModuleIds, removeModuleIds);
+        const promise = await changeModulesInIssue(
+          workspaceSlug,
+          projectId,
+          issueId,
+          addModuleIds,
+          removeModuleIds,
+          deleteModuleFieldValuesConfirmed
+        );
         return promise;
       },
     }),
