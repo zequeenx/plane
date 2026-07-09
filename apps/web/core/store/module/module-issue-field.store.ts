@@ -10,6 +10,7 @@ import { computedFn } from "mobx-utils";
 // types
 import type {
   TIssueFieldValue,
+  TIssueModuleFieldValues,
   TModuleIssueField,
   TModuleIssueFieldOption,
   TModuleIssueFieldPayload,
@@ -77,6 +78,13 @@ export interface IModuleIssueFieldStore {
     issueId: string,
     data: TModuleIssueFieldValuesUpdatePayload
   ) => Promise<TModuleFieldValuesResponse>;
+  deleteIssueValue: (
+    workspaceSlug: string,
+    projectId: string,
+    moduleId: string,
+    issueId: string,
+    fieldId: string
+  ) => Promise<TModuleFieldValuesResponse>;
 }
 
 export class ModuleIssueFieldStore implements IModuleIssueFieldStore {
@@ -110,6 +118,7 @@ export class ModuleIssueFieldStore implements IModuleIssueFieldStore {
       createOption: action,
       deleteOption: action,
       updateIssueValues: action,
+      deleteIssueValue: action,
     });
 
     this.rootStore = _rootStore;
@@ -318,7 +327,27 @@ export class ModuleIssueFieldStore implements IModuleIssueFieldStore {
       data
     );
 
-    this.rootStore.issue.issues.updateIssue(issueId, response);
+    this.updateIssueModuleFieldValues(issueId, moduleId, response, data);
+
+    return response;
+  };
+
+  deleteIssueValue = async (
+    workspaceSlug: string,
+    projectId: string,
+    moduleId: string,
+    issueId: string,
+    fieldId: string
+  ) => {
+    const response = await this.moduleIssueFieldService.deleteIssueValue(
+      workspaceSlug,
+      projectId,
+      moduleId,
+      issueId,
+      fieldId
+    );
+
+    this.updateIssueModuleFieldValues(issueId, moduleId, response, { field_values: { [fieldId]: null } });
 
     return response;
   };
@@ -356,7 +385,7 @@ export class ModuleIssueFieldStore implements IModuleIssueFieldStore {
 
       const fieldValues = Object.assign({}, moduleFieldValues);
       delete fieldValues[fieldId];
-      set(issuesMap, [issue.id, "module_field_values", moduleId], fieldValues);
+      this.updateIssueModuleFieldValues(issue.id, moduleId, { module_field_values: { [moduleId]: fieldValues } });
     });
   };
 
@@ -380,8 +409,40 @@ export class ModuleIssueFieldStore implements IModuleIssueFieldStore {
       if (typeof nextValue === "undefined") delete fieldValues[fieldId];
       else fieldValues[fieldId] = nextValue;
 
-      set(issuesMap, [issue.id, "module_field_values", moduleId], fieldValues);
+      this.updateIssueModuleFieldValues(issue.id, moduleId, { module_field_values: { [moduleId]: fieldValues } });
     });
+  };
+
+  private updateIssueModuleFieldValues = (
+    issueId: string,
+    moduleId: string,
+    response: TModuleFieldValuesResponse,
+    submittedData?: TModuleIssueFieldValuesUpdatePayload
+  ) => {
+    const issue = this.rootStore.issue.issues.getIssueById(issueId);
+    const mergedModuleFieldValues: TIssueModuleFieldValues = Object.assign({}, issue?.module_field_values ?? {});
+    const responseModuleFieldValues = response.module_field_values[moduleId];
+
+    if (Object.prototype.hasOwnProperty.call(response.module_field_values, moduleId)) {
+      if (responseModuleFieldValues && Object.keys(responseModuleFieldValues).length > 0) {
+        mergedModuleFieldValues[moduleId] = responseModuleFieldValues;
+      } else {
+        delete mergedModuleFieldValues[moduleId];
+      }
+    }
+
+    Object.entries(submittedData?.field_values ?? {}).forEach(([fieldId, fieldValue]) => {
+      if (fieldValue !== null) return;
+
+      const currentModuleFieldValues = Object.assign({}, mergedModuleFieldValues[moduleId] ?? {});
+      delete currentModuleFieldValues[fieldId];
+
+      if (Object.keys(currentModuleFieldValues).length > 0)
+        mergedModuleFieldValues[moduleId] = currentModuleFieldValues;
+      else delete mergedModuleFieldValues[moduleId];
+    });
+
+    this.rootStore.issue.issues.updateIssue(issueId, { module_field_values: mergedModuleFieldValues });
   };
 
   private isOptionField = (moduleId: string, fieldId: string) => {

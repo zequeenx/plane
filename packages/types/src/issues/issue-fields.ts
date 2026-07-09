@@ -107,3 +107,7 @@ export type TModuleIssueFieldUpdatePayload = Partial<TModuleIssueFieldPayload>;
 export type TModuleIssueFieldValuesUpdatePayload = {
   field_values: TModuleIssueFieldValues;
 };
+
+export type TModuleIssueFieldValueDeletePayload = {
+  field_values: Record<TModuleIssueFieldId, null>;
+};

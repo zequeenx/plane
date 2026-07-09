@@ -10,6 +10,7 @@ import type {
   TModuleIssueFieldOption,
   TModuleIssueFieldPayload,
   TModuleIssueFieldUpdatePayload,
+  TModuleIssueFieldValueDeletePayload,
   TModuleIssueFieldValuesUpdatePayload,
 } from "@plane/types";
 // services
@@ -21,15 +22,19 @@ export class ModuleIssueFieldService extends APIService {
   }
 
   async list(workspaceSlug: string, projectId: string, moduleId: string): Promise<TModuleIssueField[]> {
-    return this.get(`/api/workspaces/${workspaceSlug}/projects/${projectId}/modules/${moduleId}/issue-fields/`).then(
-      (response) => response?.data
-    );
+    return this.get(`/api/workspaces/${workspaceSlug}/projects/${projectId}/modules/${moduleId}/issue-fields/`)
+      .then((response) => response?.data)
+      .catch((error) => {
+        throw error?.response?.data;
+      });
   }
 
   async listDisabled(workspaceSlug: string, projectId: string, moduleId: string): Promise<TModuleIssueField[]> {
-    return this.get(
-      `/api/workspaces/${workspaceSlug}/projects/${projectId}/modules/${moduleId}/issue-fields/disabled/`
-    ).then((response) => response?.data);
+    return this.get(`/api/workspaces/${workspaceSlug}/projects/${projectId}/modules/${moduleId}/issue-fields/disabled/`)
+      .then((response) => response?.data)
+      .catch((error) => {
+        throw error?.response?.data;
+      });
   }
 
   async create(
@@ -38,10 +43,11 @@ export class ModuleIssueFieldService extends APIService {
     moduleId: string,
     data: TModuleIssueFieldPayload
   ): Promise<TModuleIssueField> {
-    return this.post(
-      `/api/workspaces/${workspaceSlug}/projects/${projectId}/modules/${moduleId}/issue-fields/`,
-      data
-    ).then((response) => response?.data);
+    return this.post(`/api/workspaces/${workspaceSlug}/projects/${projectId}/modules/${moduleId}/issue-fields/`, data)
+      .then((response) => response?.data)
+      .catch((error) => {
+        throw error?.response?.data;
+      });
   }
 
   async update(
@@ -54,13 +60,21 @@ export class ModuleIssueFieldService extends APIService {
     return this.patch(
       `/api/workspaces/${workspaceSlug}/projects/${projectId}/modules/${moduleId}/issue-fields/${fieldId}/`,
       data
-    ).then((response) => response?.data);
+    )
+      .then((response) => response?.data)
+      .catch((error) => {
+        throw error?.response?.data;
+      });
   }
 
   async deleteField(workspaceSlug: string, projectId: string, moduleId: string, fieldId: string): Promise<void> {
     return this.delete(
       `/api/workspaces/${workspaceSlug}/projects/${projectId}/modules/${moduleId}/issue-fields/${fieldId}/`
-    ).then(() => undefined);
+    )
+      .then(() => undefined)
+      .catch((error) => {
+        throw error?.response?.data;
+      });
   }
 
   async createOption(
@@ -73,7 +87,11 @@ export class ModuleIssueFieldService extends APIService {
     return this.post(
       `/api/workspaces/${workspaceSlug}/projects/${projectId}/modules/${moduleId}/issue-fields/${fieldId}/options/`,
       { value }
-    ).then((response) => response?.data);
+    )
+      .then((response) => response?.data)
+      .catch((error) => {
+        throw error?.response?.data;
+      });
   }
 
   async deleteOption(
@@ -85,7 +103,11 @@ export class ModuleIssueFieldService extends APIService {
   ): Promise<void> {
     return this.delete(
       `/api/workspaces/${workspaceSlug}/projects/${projectId}/modules/${moduleId}/issue-fields/${fieldId}/options/${optionId}/`
-    ).then(() => undefined);
+    )
+      .then(() => undefined)
+      .catch((error) => {
+        throw error?.response?.data;
+      });
   }
 
   async updateIssueValues(
@@ -98,6 +120,28 @@ export class ModuleIssueFieldService extends APIService {
     return this.patch(
       `/api/workspaces/${workspaceSlug}/projects/${projectId}/modules/${moduleId}/issues/${issueId}/field-values/`,
       data
-    ).then((response) => response?.data);
+    )
+      .then((response) => response?.data)
+      .catch((error) => {
+        throw error?.response?.data;
+      });
+  }
+
+  async deleteIssueValue(
+    workspaceSlug: string,
+    projectId: string,
+    moduleId: string,
+    issueId: string,
+    fieldId: string
+  ): Promise<{ module_field_values: Record<string, TModuleIssueFieldValuesUpdatePayload["field_values"]> }> {
+    const data: TModuleIssueFieldValueDeletePayload = { field_values: { [fieldId]: null } };
+    return this.patch(
+      `/api/workspaces/${workspaceSlug}/projects/${projectId}/modules/${moduleId}/issues/${issueId}/field-values/`,
+      data
+    )
+      .then((response) => response?.data)
+      .catch((error) => {
+        throw error?.response?.data;
+      });
   }
 }

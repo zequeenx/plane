@@ -20,6 +20,7 @@ import type {
   IIssueFilters,
   IIssueFiltersResponse,
   IssuePaginationOptions,
+  TIssueGroupByOptions,
   TIssueKanbanFilters,
   TIssueParams,
   TStaticViewTypes,
@@ -31,6 +32,14 @@ import { getComputedDisplayFilters, getComputedDisplayProperties } from "@plane/
 // lib
 import { storage } from "@/lib/local-storage";
 import { getEnabledDisplayFilters } from "@/plane-web/store/issue/helpers/filter-utils";
+
+const MODULE_CUSTOM_PROPERTY_PREFIX = "modulecustomproperty_";
+
+const getServerGroupBy = (groupBy: TIssueGroupByOptions | undefined) => {
+  if (!groupBy) return undefined;
+  if (groupBy.startsWith(MODULE_CUSTOM_PROPERTY_PREFIX)) return groupBy;
+  return EIssueGroupByToServerOptions[groupBy as keyof typeof EIssueGroupByToServerOptions];
+};
 
 interface ILocalStoreIssueFilters {
   key: EIssuesStoreType;
@@ -68,7 +77,7 @@ export interface IIssueFilterHelperStore {
 }
 
 export class IssueFilterHelperStore implements IIssueFilterHelperStore {
-  constructor() {}
+  
 
   /**
    * @description This method is used to apply the display filters on the issues
@@ -95,10 +104,8 @@ export class IssueFilterHelperStore implements IIssueFilterHelperStore {
     acceptableParamsByLayout: TIssueParams[]
   ): Partial<Record<TIssueParams, string | boolean>> => {
     const computedDisplayFilters: Partial<Record<TIssueParams, undefined | string[] | boolean | string>> = {
-      group_by: displayFilters?.group_by ? EIssueGroupByToServerOptions[displayFilters.group_by] : undefined,
-      sub_group_by: displayFilters?.sub_group_by
-        ? EIssueGroupByToServerOptions[displayFilters.sub_group_by]
-        : undefined,
+      group_by: getServerGroupBy(displayFilters?.group_by),
+      sub_group_by: getServerGroupBy(displayFilters?.sub_group_by),
       order_by: displayFilters?.order_by || undefined,
       sub_issue: displayFilters?.sub_issue ?? true,
     };

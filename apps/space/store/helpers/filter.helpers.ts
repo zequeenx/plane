@@ -5,7 +5,20 @@
  */
 
 import { EIssueGroupByToServerOptions, EServerGroupByToFilterOptions } from "@plane/constants";
-import type { IssuePaginationOptions, TIssueParams } from "@plane/types";
+import type { IssuePaginationOptions, TIssueGroupByOptions, TIssueParams } from "@plane/types";
+
+const MODULE_CUSTOM_PROPERTY_PREFIX = "modulecustomproperty_";
+
+const getServerGroupBy = (groupBy: TIssueGroupByOptions | undefined) => {
+  if (!groupBy) return undefined;
+  if (groupBy.startsWith(MODULE_CUSTOM_PROPERTY_PREFIX)) return groupBy;
+  return EIssueGroupByToServerOptions[groupBy as keyof typeof EIssueGroupByToServerOptions];
+};
+
+const getServerGroupFilter = (groupBy: string) => {
+  if (groupBy.startsWith(MODULE_CUSTOM_PROPERTY_PREFIX)) return `${groupBy}__exact`;
+  return EServerGroupByToFilterOptions[groupBy as EIssueGroupByToServerOptions];
+};
 
 /**
  * This Method is used to construct the url params along with paginated values
@@ -35,12 +48,12 @@ export const getPaginationParams = (
 
   // If group by is specifically sent through options, like that for calendar layout, use that to group
   if (options.groupedBy) {
-    paginationParams.group_by = EIssueGroupByToServerOptions[options.groupedBy];
+    paginationParams.group_by = getServerGroupBy(options.groupedBy);
   }
 
   // If group by is specifically sent through options, like that for calendar layout, use that to group
   if (options.subGroupedBy) {
-    paginationParams.sub_group_by = EIssueGroupByToServerOptions[options.subGroupedBy];
+    paginationParams.sub_group_by = getServerGroupBy(options.subGroupedBy);
   }
 
   // If group by is specifically sent through options, like that for calendar layout, use that to group
@@ -59,8 +72,8 @@ export const getPaginationParams = (
     delete paginationParams["group_by"];
 
     if (groupBy) {
-      const groupByFilterOption = EServerGroupByToFilterOptions[groupBy];
-      paginationParams[groupByFilterOption] = groupId;
+      const groupByFilterOption = getServerGroupFilter(groupBy);
+      paginationParams[groupByFilterOption as TIssueParams] = groupId;
     }
   }
 
@@ -70,8 +83,8 @@ export const getPaginationParams = (
     delete paginationParams["sub_group_by"];
 
     if (subGroupBy) {
-      const subGroupByFilterOption = EServerGroupByToFilterOptions[subGroupBy];
-      paginationParams[subGroupByFilterOption] = subGroupId;
+      const subGroupByFilterOption = getServerGroupFilter(subGroupBy);
+      paginationParams[subGroupByFilterOption as TIssueParams] = subGroupId;
     }
   }
 

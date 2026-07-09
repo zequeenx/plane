@@ -18,7 +18,7 @@ export type TIssueLayouts = "list" | "kanban" | "calendar" | "spreadsheet" | "ga
 
 type TAnyCustomPropertyKey = TCustomPropertyKey | TModuleCustomPropertyKey;
 
-export type TIssueGroupByOptions =
+export type TSystemIssueGroupByOptions =
   | "state"
   | "priority"
   | "labels"
@@ -31,6 +31,8 @@ export type TIssueGroupByOptions =
   | "target_date"
   | "team_project"
   | null;
+
+export type TIssueGroupByOptions = TSystemIssueGroupByOptions | TModuleCustomPropertyKey;
 
 export type TIssueOrderByOptions =
   | "-created_at"
