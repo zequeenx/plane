@@ -351,6 +351,8 @@ class ModuleIssueFieldValue(BaseModel):
     def clean(self):
         errors = {}
         if self.issue_id and self.field_id:
+            from .module import ModuleIssue
+
             issue = self.issue
             field = self.field
             if issue.project_id != field.project_id:
@@ -359,6 +361,8 @@ class ModuleIssueFieldValue(BaseModel):
                 errors["field"] = "Field must belong to the issue workspace."
             if self.module_id and self.module_id != field.module_id:
                 errors["module"] = "Module must match the field module."
+            if not ModuleIssue.objects.filter(module_id=field.module_id, issue_id=issue.id).exists():
+                errors["issue"] = "Issue must belong to the field module."
         if errors:
             raise ValidationError(errors)
 
@@ -396,6 +400,50 @@ class ModuleIssueFieldValueOption(BaseModel):
             )
         ]
 
+    def clean(self):
+        errors = {}
+
+        if self.value_id:
+            value = self.value
+            if self.project_id and self.project_id != value.project_id:
+                errors["project"] = "Project must match the field value project."
+            if self.workspace_id and self.workspace_id != value.workspace_id:
+                errors["workspace"] = "Workspace must match the field value workspace."
+            if self.module_id and self.module_id != value.module_id:
+                errors["module"] = "Module must match the field value module."
+
+        if self.value_id and self.option_id:
+            value = self.value
+            option = self.option
+
+            if option.field_id != value.field_id:
+                errors["option"] = "Option must belong to the value field."
+            if option.project_id != value.project_id:
+                errors["option"] = "Option must belong to the value project."
+            if option.workspace_id != value.workspace_id:
+                errors["option"] = "Option must belong to the value workspace."
+            if option.module_id != value.module_id:
+                errors["option"] = "Option must belong to the value module."
+
+        if errors:
+            raise ValidationError(errors)
+
+    def save(self, *args, **kwargs):
+        if self.value_id:
+            value = self.value
+            if self.module_id != value.module_id:
+                self.module_id = value.module_id
+                _add_update_fields(kwargs, "module")
+            if self.project_id != value.project_id:
+                self.project_id = value.project_id
+                _add_update_fields(kwargs, "project")
+            if self.workspace_id != value.workspace_id:
+                self.workspace_id = value.workspace_id
+                _add_update_fields(kwargs, "workspace")
+
+        _full_clean_issue_field_model(self)
+        return super().save(*args, **kwargs)
+
 
 class ModuleIssueFieldValueUser(BaseModel):
     workspace = models.ForeignKey("db.Workspace", on_delete=models.CASCADE, related_name="module_issue_field_value_users")
@@ -414,3 +462,34 @@ class ModuleIssueFieldValueUser(BaseModel):
                 name="module_issue_field_value_user_unique_value_user_when_not_deleted",
             )
         ]
+
+    def clean(self):
+        errors = {}
+
+        if self.value_id:
+            value = self.value
+            if self.project_id and self.project_id != value.project_id:
+                errors["project"] = "Project must match the field value project."
+            if self.workspace_id and self.workspace_id != value.workspace_id:
+                errors["workspace"] = "Workspace must match the field value workspace."
+            if self.module_id and self.module_id != value.module_id:
+                errors["module"] = "Module must match the field value module."
+
+        if errors:
+            raise ValidationError(errors)
+
+    def save(self, *args, **kwargs):
+        if self.value_id:
+            value = self.value
+            if self.module_id != value.module_id:
+                self.module_id = value.module_id
+                _add_update_fields(kwargs, "module")
+            if self.project_id != value.project_id:
+                self.project_id = value.project_id
+                _add_update_fields(kwargs, "project")
+            if self.workspace_id != value.workspace_id:
+                self.workspace_id = value.workspace_id
+                _add_update_fields(kwargs, "workspace")
+
+        _full_clean_issue_field_model(self)
+        return super().save(*args, **kwargs)
