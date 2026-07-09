@@ -51,8 +51,6 @@ class ModuleIssueFieldValueService(IssueFieldValueService):
     @classmethod
     @transaction.atomic
     def update_issue_values(cls, issue, module, raw_values):
-        if raw_values is None:
-            return
         if not ModuleIssue.objects.filter(issue=issue, module=module, deleted_at__isnull=True).exists():
             raise serializers.ValidationError({"module": "Issue must belong to the module."})
         if not isinstance(raw_values, dict):

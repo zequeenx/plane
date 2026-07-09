@@ -449,6 +449,21 @@ def test_module_field_value_update_requires_issue_in_module(api_client, workspac
     assert "module" in str(response.data).lower()
 
 
+def test_module_field_value_update_rejects_null_payload(api_client, workspace, project, project_member):
+    module = Module.objects.create(workspace=workspace, project=project, name="Launch")
+    issue = create_issue_in_module(workspace, project, module)
+    api_client.force_authenticate(project_member)
+
+    response = api_client.patch(
+        f"/api/workspaces/{workspace.slug}/projects/{project.id}/modules/{module.id}/issues/{issue.id}/field-values/",
+        {"field_values": None},
+        format="json",
+    )
+
+    assert response.status_code == status.HTTP_400_BAD_REQUEST
+    assert "field_values" in str(response.data)
+
+
 def test_module_field_value_update_serializes_values(api_client, workspace, project, project_member):
     module = Module.objects.create(workspace=workspace, project=project, name="Launch")
     issue = create_issue_in_module(workspace, project, module)
