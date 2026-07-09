@@ -9,6 +9,9 @@ import type {
   IUserLite,
   TCustomPropertyKey,
   TFilterConfig,
+  TModuleCustomPropertyKey,
+  TModuleIssueField,
+  TModuleIssueFieldOption,
   TOperatorConfigMap,
   TProjectIssueField,
   TProjectIssueFieldOption,
@@ -36,11 +39,15 @@ import {
 
 export type TCreateCustomPropertyFilterParams = TCreateFilterConfigParams &
   IFilterIconConfig<string | Date | IUserLite> & {
-    field: TProjectIssueField;
+    field: TProjectIssueField | TModuleIssueField;
     members?: IUserLite[];
   };
 
-const getCustomPropertyKey = (fieldId: string): TCustomPropertyKey => `customproperty_${fieldId}`;
+const getCustomPropertyKey = (
+  fieldId: string,
+  prefix: "customproperty_" | "modulecustomproperty_" = "customproperty_"
+): TCustomPropertyKey | TModuleCustomPropertyKey =>
+  `${prefix}${fieldId}` as TCustomPropertyKey | TModuleCustomPropertyKey;
 
 const createEmptyOperatorEntries = (params: TCreateFilterConfigParams) => [
   createOperatorConfigEntry(EXTENDED_EMPTY_OPERATOR.IS_EMPTY, params, (updatedParams) =>
@@ -86,7 +93,7 @@ const getCustomOptionMultiSelectConfig = (
   params: TCreateCustomPropertyFilterParams,
   singleValueOperator: TSupportedOperators
 ) =>
-  getMultiSelectConfig<TProjectIssueFieldOption, string, string>(
+  getMultiSelectConfig<TProjectIssueFieldOption | TModuleIssueFieldOption, string, string>(
     {
       items: params.field.options,
       getId: (option) => option.id,
@@ -157,8 +164,10 @@ const getSupportedOperatorConfigsMap = (params: TCreateCustomPropertyFilterParam
 };
 
 export const getCustomPropertyFilterConfig =
-  (field: TProjectIssueField) =>
-  (params: Omit<TCreateCustomPropertyFilterParams, "field">): TFilterConfig<TCustomPropertyKey> | undefined => {
+  (field: TProjectIssueField | TModuleIssueField, prefix?: "customproperty_" | "modulecustomproperty_") =>
+  (
+    params: Omit<TCreateCustomPropertyFilterParams, "field">
+  ): TFilterConfig<TCustomPropertyKey | TModuleCustomPropertyKey> | undefined => {
     if (field.is_disabled) return undefined;
 
     const configParams = {
@@ -173,8 +182,8 @@ export const getCustomPropertyFilterConfig =
       field.field_type === EProjectIssueFieldType.MULTI_MEMBER;
     const isEnabled = params.isEnabled && (!isMemberField || params.members !== undefined);
 
-    return createFilterConfig<TCustomPropertyKey>({
-      id: getCustomPropertyKey(field.id),
+    return createFilterConfig<TCustomPropertyKey | TModuleCustomPropertyKey>({
+      id: getCustomPropertyKey(field.id, prefix),
       label: field.name,
       ...configParams,
       isEnabled,

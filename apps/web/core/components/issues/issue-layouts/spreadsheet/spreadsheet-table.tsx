@@ -22,6 +22,8 @@ import { getDisplayPropertiesCount } from "../utils";
 import { SpreadsheetIssueRow } from "./issue-row";
 import { SpreadsheetHeader } from "./spreadsheet-header";
 
+const SPREADSHEET_LOADER_ROW_KEYS = ["spreadsheet-loader-1", "spreadsheet-loader-2", "spreadsheet-loader-3"];
+
 type Props = {
   displayProperties: IIssueDisplayProperties;
   displayFilters: IIssueDisplayFilterOptions;
@@ -38,6 +40,7 @@ type Props = {
   spreadsheetColumnsList: (keyof IIssueDisplayProperties)[];
   selectionHelpers: TSelectionHelper;
   isEpic?: boolean;
+  sourceModuleId?: string | null;
 };
 
 export const SpreadsheetTable = observer(function SpreadsheetTable(props: Props) {
@@ -57,6 +60,7 @@ export const SpreadsheetTable = observer(function SpreadsheetTable(props: Props)
     spreadsheetColumnsList,
     selectionHelpers,
     isEpic = false,
+    sourceModuleId,
   } = props;
 
   // states
@@ -121,6 +125,7 @@ export const SpreadsheetTable = observer(function SpreadsheetTable(props: Props)
         spreadsheetColumnsList={spreadsheetColumnsList}
         selectionHelpers={selectionHelpers}
         isEpic={isEpic}
+        sourceModuleId={sourceModuleId}
       />
       <tbody>
         {issueIds.map((id) => (
@@ -139,13 +144,14 @@ export const SpreadsheetTable = observer(function SpreadsheetTable(props: Props)
             spreadsheetColumnsList={spreadsheetColumnsList}
             selectionHelpers={selectionHelpers}
             isEpic={isEpic}
+            sourceModuleId={sourceModuleId}
           />
         ))}
       </tbody>
       {canLoadMoreIssues && (
         <tfoot ref={setIntersectionElement}>
-          {Array.from({ length: 3 }).map((_, index) => (
-            <SpreadsheetIssueRowLoader key={index} columnCount={displayPropertiesCount} />
+          {SPREADSHEET_LOADER_ROW_KEYS.map((loaderKey) => (
+            <SpreadsheetIssueRowLoader key={loaderKey} columnCount={displayPropertiesCount} />
           ))}
         </tfoot>
       )}

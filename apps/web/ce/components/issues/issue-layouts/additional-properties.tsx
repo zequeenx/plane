@@ -14,11 +14,14 @@ import {
   type TIssue,
   type TIssueFieldDateRangeValue,
   type TIssueFieldValue,
+  type TModuleIssueField,
   type TProjectIssueField,
 } from "@plane/types";
 import { cn, renderFormattedDate } from "@plane/utils";
 import { useMember } from "@/hooks/store/use-member";
+import { useModuleIssueFields } from "@/hooks/store/use-module-issue-fields";
 import { useProjectIssueFields } from "@/hooks/store/use-project-issue-fields";
+import { useProjectView } from "@/hooks/store/use-project-view";
 
 export type TWorkItemLayoutAdditionalProperties = {
   displayProperties: IIssueDisplayProperties;
@@ -26,8 +29,10 @@ export type TWorkItemLayoutAdditionalProperties = {
 };
 
 const CUSTOM_PROPERTY_PREFIX = "customproperty_";
+const MODULE_CUSTOM_PROPERTY_PREFIX = "modulecustomproperty_";
 
 const getCustomPropertyKey = (fieldId: string) => `${CUSTOM_PROPERTY_PREFIX}${fieldId}` as const;
+const getModuleCustomPropertyKey = (fieldId: string) => `${MODULE_CUSTOM_PROPERTY_PREFIX}${fieldId}` as const;
 
 const getDateRangeLabel = (value: TIssueFieldDateRangeValue) => {
   if (value.start && value.end) return `${renderFormattedDate(value.start)} - ${renderFormattedDate(value.end)}`;
@@ -38,7 +43,7 @@ const getDateRangeLabel = (value: TIssueFieldDateRangeValue) => {
 };
 
 type TCustomFieldValueLabelProps = {
-  field: TProjectIssueField;
+  field: TProjectIssueField | TModuleIssueField;
   value: TIssueFieldValue | undefined;
 };
 
@@ -101,11 +106,16 @@ export const WorkItemLayoutAdditionalProperties = observer(function WorkItemLayo
   props: TWorkItemLayoutAdditionalProperties
 ) {
   const { displayProperties, issue } = props;
-  const { workspaceSlug, projectId: routeProjectId } = useParams();
+  const { workspaceSlug, projectId: routeProjectId, moduleId: routeModuleId, viewId: routeViewId } = useParams();
+  const { fieldsLoader: moduleFieldsLoader, getFields: getModuleFields, getFieldsByModuleId } = useModuleIssueFields();
   const { fieldsLoader, getFields, getFieldsByProjectId } = useProjectIssueFields();
+  const { getViewById } = useProjectView();
 
   const projectId = routeProjectId?.toString() === issue.project_id ? issue.project_id : undefined;
   const fields = projectId ? getFieldsByProjectId(projectId) : undefined;
+  const projectView = routeViewId ? getViewById(routeViewId.toString()) : undefined;
+  const sourceModuleId = routeModuleId?.toString() ?? projectView?.source_module ?? null;
+  const moduleFields = sourceModuleId ? getFieldsByModuleId(sourceModuleId) : undefined;
 
   useEffect(() => {
     if (!workspaceSlug || !projectId) return;
@@ -116,17 +126,38 @@ export const WorkItemLayoutAdditionalProperties = observer(function WorkItemLayo
     });
   }, [fields, fieldsLoader, getFields, projectId, workspaceSlug]);
 
-  if (!projectId || !fields || fields.length === 0) return null;
+  useEffect(() => {
+    if (!workspaceSlug || !projectId || !sourceModuleId) return;
+    if (moduleFields || moduleFieldsLoader[sourceModuleId]) return;
 
-  const visibleFields = fields.filter((field) => displayProperties[getCustomPropertyKey(field.id)]);
+    getModuleFields(workspaceSlug.toString(), projectId, sourceModuleId).catch((error) => {
+      console.error("Failed to load module issue fields:", error);
+    });
+  }, [getModuleFields, moduleFields, moduleFieldsLoader, projectId, sourceModuleId, workspaceSlug]);
 
-  if (visibleFields.length === 0) return null;
+  if (!projectId) return null;
+
+  const visibleFields = fields?.filter((field) => displayProperties[getCustomPropertyKey(field.id)]) ?? [];
+  const visibleModuleFields =
+    sourceModuleId && moduleFields
+      ? moduleFields.filter((field) => displayProperties[getModuleCustomPropertyKey(field.id)])
+      : [];
+
+  if (visibleFields.length === 0 && visibleModuleFields.length === 0) return null;
 
   return (
     <>
       {visibleFields.map((field) => (
         <CustomFieldValueLabel key={field.id} field={field} value={issue.field_values?.[field.id]} />
       ))}
+      {sourceModuleId &&
+        visibleModuleFields.map((field) => (
+          <CustomFieldValueLabel
+            key={`module-${field.id}`}
+            field={field}
+            value={issue.module_field_values?.[sourceModuleId]?.[field.id]}
+          />
+        ))}
     </>
   );
 });

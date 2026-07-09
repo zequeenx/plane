@@ -16,6 +16,8 @@ describe("getComputedDisplayProperties", () => {
       assignee: false,
       customproperty_field_1: true,
       customproperty_field_2: false,
+      modulecustomproperty_field_3: true,
+      modulecustomproperty_field_4: false,
       unknown_property: true,
     } as IIssueDisplayProperties & { unknown_property: boolean };
 
@@ -24,6 +26,8 @@ describe("getComputedDisplayProperties", () => {
         assignee: false,
         customproperty_field_1: true,
         customproperty_field_2: false,
+        modulecustomproperty_field_3: true,
+        modulecustomproperty_field_4: false,
       })
     );
     expect(getComputedDisplayProperties(displayProperties)).not.toHaveProperty("unknown_property");

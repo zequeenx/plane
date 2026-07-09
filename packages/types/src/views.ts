@@ -34,6 +34,7 @@ export interface IProjectView {
   query_data: IIssueFilterOptions;
   project: string;
   workspace: string;
+  source_module?: string | null;
   logo_props: TLogoProps | undefined;
   is_locked: boolean;
   anchor?: string;

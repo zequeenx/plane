@@ -15,6 +15,7 @@ import {
   EProjectIssueFieldType,
   type IIssueDisplayFilterOptions,
   type IIssueDisplayProperties,
+  type TModuleIssueField,
   type TIssueOrderByOptions,
   type TProjectIssueField,
 } from "@plane/types";
@@ -28,7 +29,7 @@ interface Props {
   handleDisplayFilterUpdate: (data: Partial<IIssueDisplayFilterOptions>) => void;
   onClose: () => void;
   isEpic?: boolean;
-  customField?: TProjectIssueField;
+  customField?: TProjectIssueField | TModuleIssueField;
 }
 
 export function HeaderColumn(props: Props) {

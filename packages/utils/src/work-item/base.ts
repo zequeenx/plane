@@ -15,6 +15,7 @@ import type {
   IIssueDisplayFilterOptions,
   IIssueDisplayProperties,
   TCustomPropertyKey,
+  TModuleCustomPropertyKey,
   TGroupedIssues,
   TIssue,
   TIssueGroupByOptions,
@@ -297,10 +298,13 @@ export const getComputedDisplayProperties = (
   displayProperties: IIssueDisplayProperties = {}
 ): IIssueDisplayProperties => {
   const customDisplayProperties = Object.entries(displayProperties).reduce<
-    Partial<Record<TCustomPropertyKey, boolean | undefined>>
+    Partial<Record<TCustomPropertyKey | TModuleCustomPropertyKey, boolean | undefined>>
   >((acc, [key, value]) => {
     if (key.startsWith("customproperty_") && typeof value === "boolean") {
       acc[key as TCustomPropertyKey] = value;
+    }
+    if (key.startsWith("modulecustomproperty_") && typeof value === "boolean") {
+      acc[key as TModuleCustomPropertyKey] = value;
     }
 
     return acc;

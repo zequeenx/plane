@@ -14,6 +14,7 @@ import { useTranslation } from "@plane/i18n";
 // types
 import type { IIssueDisplayProperties } from "@plane/types";
 // components
+import { useModuleIssueFields } from "@/hooks/store/use-module-issue-fields";
 import { useProjectIssueFields } from "@/hooks/store/use-project-issue-fields";
 import { FilterHeader } from "../helpers/filter-header";
 
@@ -23,6 +24,7 @@ type Props = {
   handleUpdate: (updatedDisplayProperties: Partial<IIssueDisplayProperties>) => void;
   cycleViewDisabled?: boolean;
   moduleViewDisabled?: boolean;
+  sourceModuleId?: string | null;
   isEpic?: boolean;
 };
 
@@ -33,18 +35,22 @@ export const FilterDisplayProperties = observer(function FilterDisplayProperties
     handleUpdate,
     cycleViewDisabled = false,
     moduleViewDisabled = false,
+    sourceModuleId,
     isEpic = false,
   } = props;
   // hooks
   const { t } = useTranslation();
-  const { workspaceSlug, projectId } = useParams();
+  const { workspaceSlug, projectId, moduleId } = useParams();
+  const { fieldsLoader: moduleFieldsLoader, getFields: getModuleFields, getFieldsByModuleId } = useModuleIssueFields();
   const { fieldsLoader, getFields, getFieldsByProjectId } = useProjectIssueFields();
   // states
   const [previewEnabled, setPreviewEnabled] = React.useState(true);
   // derived values
   const currentProjectId = projectId?.toString();
+  const currentSourceModuleId = sourceModuleId ?? moduleId?.toString();
   const isProjectScopedView = !!workspaceSlug && !!currentProjectId;
   const fields = isProjectScopedView ? getFieldsByProjectId(currentProjectId) : undefined;
+  const moduleFields = currentSourceModuleId ? getFieldsByModuleId(currentSourceModuleId) : undefined;
 
   useEffect(() => {
     if (!isProjectScopedView) return;
@@ -54,6 +60,23 @@ export const FilterDisplayProperties = observer(function FilterDisplayProperties
       console.error("Failed to load project issue fields:", error);
     });
   }, [currentProjectId, fields, fieldsLoader, getFields, isProjectScopedView, workspaceSlug]);
+
+  useEffect(() => {
+    if (!isProjectScopedView || !currentSourceModuleId) return;
+    if (moduleFields || moduleFieldsLoader[currentSourceModuleId]) return;
+
+    getModuleFields(workspaceSlug.toString(), currentProjectId, currentSourceModuleId).catch((error) => {
+      console.error("Failed to load module issue fields:", error);
+    });
+  }, [
+    currentProjectId,
+    currentSourceModuleId,
+    getModuleFields,
+    isProjectScopedView,
+    moduleFields,
+    moduleFieldsLoader,
+    workspaceSlug,
+  ]);
 
   // Filter out "cycle" and "module" keys if cycleViewDisabled or moduleViewDisabled is true
   // Also filter out display properties that should not be rendered
@@ -93,6 +116,13 @@ export const FilterDisplayProperties = observer(function FilterDisplayProperties
       key: `customproperty_${field.id}` as keyof IIssueDisplayProperties,
       title: field.name,
     })) ?? [];
+  const moduleCustomDisplayProperties =
+    currentSourceModuleId && moduleFields
+      ? moduleFields.map((field) => ({
+          key: `modulecustomproperty_${field.id}` as keyof IIssueDisplayProperties,
+          title: field.name,
+        }))
+      : [];
 
   return (
     <>
@@ -122,6 +152,24 @@ export const FilterDisplayProperties = observer(function FilterDisplayProperties
             </button>
           ))}
           {customDisplayProperties.map((displayProperty) => (
+            <button
+              key={displayProperty.key}
+              type="button"
+              className={`rounded-sm border px-2 py-0.5 text-11 transition-all ${
+                displayProperties?.[displayProperty.key]
+                  ? "border-accent-strong bg-accent-primary text-on-color"
+                  : "border-subtle hover:bg-layer-1"
+              }`}
+              onClick={() =>
+                handleUpdate({
+                  [displayProperty.key]: !displayProperties?.[displayProperty.key],
+                })
+              }
+            >
+              {displayProperty.title}
+            </button>
+          ))}
+          {moduleCustomDisplayProperties.map((displayProperty) => (
             <button
               key={displayProperty.key}
               type="button"

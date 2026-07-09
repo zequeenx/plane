@@ -31,14 +31,23 @@ import type { TEnableSaveViewProps, TEnableUpdateViewProps, TSharedWorkItemFilte
 type TProjectLevelWorkItemFiltersHOCProps = TSharedWorkItemFiltersHOCProps & {
   workspaceSlug: string;
   projectId: string;
+  sourceModuleId?: string | null;
 } & TEnableSaveViewProps &
   TEnableUpdateViewProps;
 
 export const ProjectLevelWorkItemFiltersHOC = observer(function ProjectLevelWorkItemFiltersHOC(
   props: TProjectLevelWorkItemFiltersHOCProps
 ) {
-  const { children, enableSaveView, enableUpdateView, entityId, initialWorkItemFilters, projectId, workspaceSlug } =
-    props;
+  const {
+    children,
+    enableSaveView,
+    enableUpdateView,
+    entityId,
+    initialWorkItemFilters,
+    projectId,
+    sourceModuleId,
+    workspaceSlug,
+  } = props;
   // states
   const [isCreateViewModalOpen, setIsCreateViewModalOpen] = useState(false);
   const [createViewPayload, setCreateViewPayload] = useState<Partial<IProjectView> | null>(null);
@@ -120,8 +129,9 @@ export const ProjectLevelWorkItemFiltersHOC = observer(function ProjectLevelWork
       rich_filters: cloneDeep(filterExpression),
       display_filters: cloneDeep(initialWorkItemFilters?.displayFilters),
       display_properties: cloneDeep(initialWorkItemFilters?.displayProperties),
+      source_module: sourceModuleId ?? viewDetails?.source_module ?? null,
     }),
-    [initialWorkItemFilters]
+    [initialWorkItemFilters, sourceModuleId, viewDetails?.source_module]
   );
 
   const handleViewSave = useCallback(
@@ -156,6 +166,7 @@ export const ProjectLevelWorkItemFiltersHOC = observer(function ProjectLevelWork
             title: "Success!",
             message: "Your view has been updated successfully.",
           });
+          return undefined;
         })
         .catch(() => {
           setToast({

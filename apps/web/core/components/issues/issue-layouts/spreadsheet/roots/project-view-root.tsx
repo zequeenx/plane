@@ -9,6 +9,7 @@ import { observer } from "mobx-react";
 import { useParams } from "next/navigation";
 // mobx store
 // components
+import { useProjectView } from "@/hooks/store/use-project-view";
 import { ProjectIssueQuickActions } from "../../quick-action-dropdowns";
 import { BaseSpreadsheetRoot } from "../base-spreadsheet-root";
 // types
@@ -16,6 +17,14 @@ import { BaseSpreadsheetRoot } from "../base-spreadsheet-root";
 
 export const ProjectViewSpreadsheetLayout = observer(function ProjectViewSpreadsheetLayout() {
   const { viewId } = useParams();
+  const { getViewById } = useProjectView();
+  const projectView = viewId ? getViewById(viewId.toString()) : undefined;
 
-  return <BaseSpreadsheetRoot QuickActions={ProjectIssueQuickActions} viewId={viewId.toString()} />;
+  return (
+    <BaseSpreadsheetRoot
+      QuickActions={ProjectIssueQuickActions}
+      sourceModuleId={projectView?.source_module ?? null}
+      viewId={viewId.toString()}
+    />
+  );
 });

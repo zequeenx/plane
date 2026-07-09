@@ -31,6 +31,7 @@ type Props = {
   ignoreGroupedFilters?: Partial<TIssueGroupByOptions>[];
   cycleViewDisabled?: boolean;
   moduleViewDisabled?: boolean;
+  sourceModuleId?: string | null;
   isEpic?: boolean;
 };
 
@@ -44,6 +45,7 @@ export const DisplayFiltersSelection = observer(function DisplayFiltersSelection
     ignoreGroupedFilters = [],
     cycleViewDisabled = false,
     moduleViewDisabled = false,
+    sourceModuleId,
     isEpic = false,
   } = props;
 
@@ -69,6 +71,7 @@ export const DisplayFiltersSelection = observer(function DisplayFiltersSelection
             handleUpdate={handleDisplayPropertiesUpdate}
             cycleViewDisabled={cycleViewDisabled}
             moduleViewDisabled={moduleViewDisabled}
+            sourceModuleId={sourceModuleId}
             isEpic={isEpic}
           />
         </div>

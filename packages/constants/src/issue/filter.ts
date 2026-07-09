@@ -217,6 +217,7 @@ export const ISSUE_DISPLAY_FILTERS_BY_PAGE: TIssueFiltersToDisplayByPageType = {
       "created_by_id",
       "label_id",
       "customproperty_",
+      "modulecustomproperty_",
       "start_date",
       "target_date",
     ],

@@ -11,6 +11,7 @@ import { useParams } from "next/navigation";
 import type { IIssueDisplayFilterOptions, IIssueDisplayProperties } from "@plane/types";
 //components
 import { shouldRenderColumn } from "@/helpers/issue-filter.helper";
+import { useModuleIssueFields } from "@/hooks/store/use-module-issue-fields";
 import { useProjectIssueFields } from "@/hooks/store/use-project-issue-fields";
 import { WithDisplayPropertiesHOC } from "../properties/with-display-properties-HOC";
 import { HeaderColumn } from "./columns/header-column";
@@ -22,18 +23,32 @@ interface Props {
   displayFilters: IIssueDisplayFilterOptions;
   handleDisplayFilterUpdate: (data: Partial<IIssueDisplayFilterOptions>) => void;
   isEpic?: boolean;
+  sourceModuleId?: string | null;
 }
 export const SpreadsheetHeaderColumn = observer(function SpreadsheetHeaderColumn(props: Props) {
-  const { displayProperties, displayFilters, property, handleDisplayFilterUpdate, isEpic = false } = props;
+  const {
+    displayProperties,
+    displayFilters,
+    property,
+    handleDisplayFilterUpdate,
+    isEpic = false,
+    sourceModuleId,
+  } = props;
 
   //hooks
   const tableHeaderCellRef = useRef<HTMLTableCellElement | null>(null);
   const { projectId } = useParams();
+  const { getFieldById: getModuleFieldById } = useModuleIssueFields();
   const { getFieldById } = useProjectIssueFields();
 
   const shouldRenderProperty = shouldRenderColumn(property);
   const customFieldId = property.startsWith("customproperty_") ? property.replace("customproperty_", "") : null;
+  const moduleCustomFieldId = property.startsWith("modulecustomproperty_")
+    ? property.replace("modulecustomproperty_", "")
+    : null;
   const customField = projectId && customFieldId ? getFieldById(projectId.toString(), customFieldId) : undefined;
+  const moduleCustomField =
+    sourceModuleId && moduleCustomFieldId ? getModuleFieldById(sourceModuleId, moduleCustomFieldId) : undefined;
 
   return (
     <WithDisplayPropertiesHOC
@@ -54,7 +69,7 @@ export const SpreadsheetHeaderColumn = observer(function SpreadsheetHeaderColumn
             tableHeaderCellRef?.current?.focus();
           }}
           isEpic={isEpic}
-          customField={customField}
+          customField={customField ?? moduleCustomField}
         />
       </th>
     </WithDisplayPropertiesHOC>

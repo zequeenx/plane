@@ -77,6 +77,7 @@ export const ModuleLayoutRoot = observer(function ModuleLayoutRoot() {
         initialWorkItemFilters={workItemFilters}
         updateFilters={issuesFilter?.updateFilterExpression.bind(issuesFilter, workspaceSlug, projectId, moduleId)}
         projectId={projectId}
+        sourceModuleId={moduleId}
         workspaceSlug={workspaceSlug}
       >
         {({ filter: moduleWorkItemsFilter }) => (

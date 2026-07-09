@@ -63,6 +63,7 @@ import { useCycle } from "@/hooks/store/use-cycle";
 import { useLabel } from "@/hooks/store/use-label";
 import { useMember } from "@/hooks/store/use-member";
 import { useModule } from "@/hooks/store/use-module";
+import { useModuleIssueFields } from "@/hooks/store/use-module-issue-fields";
 import { useProject } from "@/hooks/store/use-project";
 import { useProjectIssueFields } from "@/hooks/store/use-project-issue-fields";
 import { useProjectState } from "@/hooks/store/use-project-state";
@@ -77,6 +78,7 @@ export type TWorkItemFiltersEntityProps = {
   moduleIds?: string[];
   projectId?: string;
   projectIds?: string[];
+  sourceModuleId?: string | null;
   stateIds?: string[];
 };
 
@@ -139,6 +141,7 @@ const getSelectedStateIds = (richFilters: TWorkItemFilterExpression | undefined)
 };
 
 const CUSTOM_PROPERTY_FILTER_PREFIX = "customproperty_";
+const MODULE_CUSTOM_PROPERTY_FILTER_PREFIX = "modulecustomproperty_";
 
 export const useWorkItemFiltersConfig = (props: TUseWorkItemFiltersConfigProps): TWorkItemFiltersConfig => {
   const {
@@ -150,6 +153,7 @@ export const useWorkItemFiltersConfig = (props: TUseWorkItemFiltersConfigProps):
     projectId,
     projectIds,
     richFilters,
+    sourceModuleId,
     stateIds,
     workspaceSlug,
   } = props;
@@ -158,6 +162,11 @@ export const useWorkItemFiltersConfig = (props: TUseWorkItemFiltersConfigProps):
   const { getCycleById } = useCycle();
   const { getLabelById } = useLabel();
   const { getModuleById } = useModule();
+  const {
+    fieldsLoader: moduleIssueFieldsLoader,
+    getFields: getModuleIssueFields,
+    getFieldsByModuleId,
+  } = useModuleIssueFields();
   const { fieldsLoader: projectIssueFieldsLoader, getFields, getFieldsByProjectId } = useProjectIssueFields();
   const { getStateById, getSubStatesByStateId } = useProjectState();
   const { getUserDetails } = useMember();
@@ -167,9 +176,15 @@ export const useWorkItemFiltersConfig = (props: TUseWorkItemFiltersConfigProps):
   const project = useMemo(() => getProjectById(projectId), [projectId, getProjectById]);
   const projectIssueFields = projectId ? getFieldsByProjectId(projectId) : undefined;
   const projectIssueFieldsLoadKey = workspaceSlug && projectId ? `${workspaceSlug}:${projectId}` : undefined;
+  const moduleIssueFields = sourceModuleId ? getFieldsByModuleId(sourceModuleId) : undefined;
+  const moduleIssueFieldsLoadKey =
+    workspaceSlug && projectId && sourceModuleId ? `${workspaceSlug}:${projectId}:${sourceModuleId}` : undefined;
   const [failedProjectIssueFieldsKeys, setFailedProjectIssueFieldsKeys] = useState<Set<string>>(() => new Set());
+  const [failedModuleIssueFieldsKeys, setFailedModuleIssueFieldsKeys] = useState<Set<string>>(() => new Set());
   const hasProjectIssueFieldsLoadFailed =
     !!projectIssueFieldsLoadKey && failedProjectIssueFieldsKeys.has(projectIssueFieldsLoadKey);
+  const hasModuleIssueFieldsLoadFailed =
+    !!moduleIssueFieldsLoadKey && failedModuleIssueFieldsKeys.has(moduleIssueFieldsLoadKey);
   const members: IUserLite[] | undefined = useMemo(
     () =>
       memberIds
@@ -236,8 +251,17 @@ export const useWorkItemFiltersConfig = (props: TUseWorkItemFiltersConfigProps):
   const areAllConfigsInitialized = useMemo(
     () =>
       isLoaderReady(projectLoader) &&
-      (!projectId || projectIssueFields !== undefined || hasProjectIssueFieldsLoadFailed),
-    [hasProjectIssueFieldsLoadFailed, projectId, projectIssueFields, projectLoader]
+      (!projectId || projectIssueFields !== undefined || hasProjectIssueFieldsLoadFailed) &&
+      (!sourceModuleId || moduleIssueFields !== undefined || hasModuleIssueFieldsLoadFailed),
+    [
+      hasModuleIssueFieldsLoadFailed,
+      hasProjectIssueFieldsLoadFailed,
+      moduleIssueFields,
+      projectId,
+      projectIssueFields,
+      projectLoader,
+      sourceModuleId,
+    ]
   );
 
   useEffect(() => {
@@ -265,6 +289,33 @@ export const useWorkItemFiltersConfig = (props: TUseWorkItemFiltersConfigProps):
     workspaceSlug,
   ]);
 
+  useEffect(() => {
+    if (
+      !workspaceSlug ||
+      !projectId ||
+      !sourceModuleId ||
+      !moduleIssueFieldsLoadKey ||
+      moduleIssueFields !== undefined ||
+      moduleIssueFieldsLoader[sourceModuleId] ||
+      hasModuleIssueFieldsLoadFailed
+    )
+      return;
+
+    getModuleIssueFields(workspaceSlug, projectId, sourceModuleId).catch((error) => {
+      console.error("Failed to load module issue fields:", error);
+      setFailedModuleIssueFieldsKeys((currentKeys) => new Set(currentKeys).add(moduleIssueFieldsLoadKey));
+    });
+  }, [
+    getModuleIssueFields,
+    hasModuleIssueFieldsLoadFailed,
+    moduleIssueFields,
+    moduleIssueFieldsLoadKey,
+    moduleIssueFieldsLoader,
+    projectId,
+    sourceModuleId,
+    workspaceSlug,
+  ]);
+
   /**
    * Checks if a filter is enabled based on the filters to show.
    * @param key - The filter key.
@@ -275,6 +326,11 @@ export const useWorkItemFiltersConfig = (props: TUseWorkItemFiltersConfigProps):
   const isCustomPropertyFilterEnabled = useCallback(
     (key: TWorkItemFilterProperty) =>
       allowedFilters.length === 0 || filtersToShow.has(CUSTOM_PROPERTY_FILTER_PREFIX) || filtersToShow.has(key),
+    [allowedFilters.length, filtersToShow]
+  );
+  const isModuleCustomPropertyFilterEnabled = useCallback(
+    (key: TWorkItemFilterProperty) =>
+      allowedFilters.length === 0 || filtersToShow.has(MODULE_CUSTOM_PROPERTY_FILTER_PREFIX) || filtersToShow.has(key),
     [allowedFilters.length, filtersToShow]
   );
 
@@ -552,6 +608,53 @@ export const useWorkItemFiltersConfig = (props: TUseWorkItemFiltersConfigProps):
       >,
     [customPropertyFilterConfigs]
   );
+  const moduleCustomPropertyFilterConfigs = useMemo(() => {
+    if (!sourceModuleId || !moduleIssueFields) return [];
+
+    const fieldIconMap = {
+      [EProjectIssueFieldType.SINGLE_SELECT]: ListChecks,
+      [EProjectIssueFieldType.MULTI_SELECT]: ListChecks,
+      [EProjectIssueFieldType.SINGLE_MEMBER]: User,
+      [EProjectIssueFieldType.MULTI_MEMBER]: Users,
+      [EProjectIssueFieldType.DATE]: CalendarDays,
+      [EProjectIssueFieldType.DATE_RANGE]: CalendarRange,
+      [EProjectIssueFieldType.PLAIN_TEXT]: TextCursorInput,
+    } as const;
+
+    return moduleIssueFields.flatMap((field) => {
+      const config = getCustomPropertyFilterConfig(
+        field,
+        MODULE_CUSTOM_PROPERTY_FILTER_PREFIX
+      )({
+        isEnabled: isModuleCustomPropertyFilterEnabled(`${MODULE_CUSTOM_PROPERTY_FILTER_PREFIX}${field.id}`),
+        filterIcon: fieldIconMap[field.field_type],
+        members: customPropertyMembers,
+        getOptionIcon: (value: string | Date | IUserLite) => {
+          if (typeof value === "string") {
+            return <span className="bg-custom-background-80 flex size-2.5 flex-shrink-0 rounded-full" />;
+          }
+
+          if (value && typeof value === "object" && "display_name" in value) {
+            return (
+              <Avatar name={value.display_name} src={getFileURL(value.avatar_url)} showTooltip={false} size="sm" />
+            );
+          }
+
+          return undefined;
+        },
+        ...operatorConfigs,
+      });
+
+      return config ? [config] : [];
+    });
+  }, [customPropertyMembers, isModuleCustomPropertyFilterEnabled, moduleIssueFields, operatorConfigs, sourceModuleId]);
+  const moduleCustomPropertyConfigMap = useMemo(
+    () =>
+      Object.fromEntries(moduleCustomPropertyFilterConfigs.map((config) => [config.id, config])) as Partial<
+        Record<TWorkItemFilterProperty, TFilterConfig<TWorkItemFilterProperty>>
+      >,
+    [moduleCustomPropertyFilterConfigs]
+  );
 
   return {
     areAllConfigsInitialized,
@@ -574,6 +677,7 @@ export const useWorkItemFiltersConfig = (props: TUseWorkItemFiltersConfigProps):
       createdByFilterConfig,
       subscriberFilterConfig,
       ...customPropertyFilterConfigs,
+      ...moduleCustomPropertyFilterConfigs,
     ],
     configMap: {
       project_id: projectFilterConfig,
@@ -593,6 +697,7 @@ export const useWorkItemFiltersConfig = (props: TUseWorkItemFiltersConfigProps):
       created_at: createdAtFilterConfig,
       updated_at: updatedAtFilterConfig,
       ...customPropertyConfigMap,
+      ...moduleCustomPropertyConfigMap,
     },
     isFilterEnabled,
     members: members ?? [],

@@ -4,12 +4,20 @@
  * See the LICENSE file for details.
  */
 
-import type { TIssueFieldValue, TIssueFieldValues, TProjectIssueField } from "@plane/types";
+import type {
+  TIssueFieldValue,
+  TIssueFieldValues,
+  TModuleIssueField,
+  TModuleIssueFieldValues,
+  TProjectIssueField,
+} from "@plane/types";
+
+export type TIssueField = TProjectIssueField | TModuleIssueField;
 
 export type TProjectFieldEditorProps = {
   commitPlainTextOnBlur?: boolean;
   disabled?: boolean;
-  field: TProjectIssueField;
+  field: TIssueField;
   onChange: (fieldId: string, value: TIssueFieldValue) => void;
   projectId: string;
   value: TIssueFieldValue | undefined;
@@ -19,9 +27,9 @@ export type TProjectFieldEditorProps = {
 export type TProjectFieldValueEditorsProps = {
   commitPlainTextOnBlur?: boolean;
   disabled?: boolean;
-  fields: TProjectIssueField[];
+  fields: TIssueField[];
   onChange: (fieldId: string, value: TIssueFieldValue) => void;
   projectId: string;
-  values?: TIssueFieldValues | null;
+  values?: TIssueFieldValues | TModuleIssueFieldValues | null;
   workspaceSlug: string;
 };

@@ -81,6 +81,7 @@ export const ProjectViewForm = observer(function ProjectViewForm(props: Props) {
   // derived values
   const projectDetails = getProjectById(projectId);
   const logoValue = watch("logo_props");
+  const sourceModuleId = watch("source_module") ?? preLoadedData?.source_module ?? data?.source_module ?? null;
   const workItemFilters: IIssueFilters = {
     richFilters: getValues("rich_filters"),
     displayFilters: getValues("display_filters"),
@@ -97,6 +98,7 @@ export const ProjectViewForm = observer(function ProjectViewForm(props: Props) {
       rich_filters: formData.rich_filters,
       display_filters: formData.display_filters,
       display_properties: formData.display_properties,
+      source_module: formData.source_module ?? sourceModuleId ?? null,
       access: formData.access,
     } as IProjectView);
 
@@ -247,6 +249,7 @@ export const ProjectViewForm = observer(function ProjectViewForm(props: Props) {
                           }}
                           cycleViewDisabled={!projectDetails?.cycle_view}
                           moduleViewDisabled={!projectDetails?.module_view}
+                          sourceModuleId={sourceModuleId}
                         />
                       </FiltersDropdown>
                     )}
@@ -269,6 +272,7 @@ export const ProjectViewForm = observer(function ProjectViewForm(props: Props) {
                   isTemporary
                   updateFilters={(updateFilters) => onFiltersChange(updateFilters)}
                   projectId={projectId}
+                  sourceModuleId={sourceModuleId}
                   showOnMount
                   workspaceSlug={workspaceSlug}
                 >

@@ -55,6 +55,7 @@ export const ProjectViewLayoutRoot = observer(function ProjectViewLayoutRoot() {
   const projectView = viewId ? getViewById(viewId) : undefined;
   const workItemFilters = viewId ? issuesFilter?.getIssueFilters(viewId) : undefined;
   const activeLayout = workItemFilters?.displayFilters?.layout;
+  const sourceModuleId = projectView?.source_module ?? null;
   const initialWorkItemFilters = projectView
     ? {
         displayFilters: workItemFilters?.displayFilters,
@@ -97,6 +98,7 @@ export const ProjectViewLayoutRoot = observer(function ProjectViewLayoutRoot() {
         initialWorkItemFilters={initialWorkItemFilters}
         updateFilters={issuesFilter?.updateFilterExpression.bind(issuesFilter, workspaceSlug, projectId, viewId)}
         projectId={projectId}
+        sourceModuleId={sourceModuleId}
         workspaceSlug={workspaceSlug}
       >
         {({ filter: projectViewWorkItemsFilter }) => (

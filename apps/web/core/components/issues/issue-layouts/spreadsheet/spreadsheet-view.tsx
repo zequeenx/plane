@@ -16,6 +16,7 @@ import { EIssueLayoutTypes } from "@plane/types";
 import { MultipleSelectGroup } from "@/components/core/multiple-select";
 // hooks
 import { useProject } from "@/hooks/store/use-project";
+import { useModuleIssueFields } from "@/hooks/store/use-module-issue-fields";
 import { useProjectIssueFields } from "@/hooks/store/use-project-issue-fields";
 import { useBulkOperationStatus } from "@/hooks/use-bulk-operation-status";
 // plane web components
@@ -42,6 +43,7 @@ type Props = {
   disableIssueCreation?: boolean;
   isWorkspaceLevel?: boolean;
   isEpic?: boolean;
+  sourceModuleId?: string | null;
 };
 
 export const SpreadsheetView = observer(function SpreadsheetView(props: Props) {
@@ -60,6 +62,7 @@ export const SpreadsheetView = observer(function SpreadsheetView(props: Props) {
     loadMoreIssues,
     isWorkspaceLevel = false,
     isEpic = false,
+    sourceModuleId,
   } = props;
   // refs
   const containerRef = useRef<HTMLTableElement | null>(null);
@@ -68,6 +71,7 @@ export const SpreadsheetView = observer(function SpreadsheetView(props: Props) {
   const { workspaceSlug, projectId } = useParams();
   // store hooks
   const { currentProjectDetails } = useProject();
+  const { fieldsLoader: moduleFieldsLoader, getFields: getModuleFields, getFieldsByModuleId } = useModuleIssueFields();
   const { fieldsLoader, getFields, getFieldsByProjectId } = useProjectIssueFields();
   // plane web hooks
   const isBulkOperationsEnabled = useBulkOperationStatus();
@@ -77,6 +81,7 @@ export const SpreadsheetView = observer(function SpreadsheetView(props: Props) {
   const currentProjectId = projectId?.toString();
   const isProjectScopedView = !isWorkspaceLevel && !!workspaceSlug && !!currentProjectId;
   const projectIssueFields = isProjectScopedView ? getFieldsByProjectId(currentProjectId) : undefined;
+  const moduleIssueFields = sourceModuleId ? getFieldsByModuleId(sourceModuleId) : undefined;
 
   useEffect(() => {
     if (!isProjectScopedView) return;
@@ -86,6 +91,23 @@ export const SpreadsheetView = observer(function SpreadsheetView(props: Props) {
       console.error("Failed to load project issue fields:", error);
     });
   }, [currentProjectId, fieldsLoader, getFields, isProjectScopedView, projectIssueFields, workspaceSlug]);
+
+  useEffect(() => {
+    if (!isProjectScopedView || !sourceModuleId) return;
+    if (moduleIssueFields || moduleFieldsLoader[sourceModuleId]) return;
+
+    getModuleFields(workspaceSlug.toString(), currentProjectId, sourceModuleId).catch((error) => {
+      console.error("Failed to load module issue fields:", error);
+    });
+  }, [
+    currentProjectId,
+    getModuleFields,
+    isProjectScopedView,
+    moduleFieldsLoader,
+    moduleIssueFields,
+    sourceModuleId,
+    workspaceSlug,
+  ]);
 
   const spreadsheetColumnsList = useMemo(() => {
     const systemColumns = isWorkspaceLevel
@@ -104,15 +126,26 @@ export const SpreadsheetView = observer(function SpreadsheetView(props: Props) {
           return acc;
         }, [])
       : undefined;
+    const moduleCustomColumns =
+      isProjectScopedView && sourceModuleId
+        ? moduleIssueFields?.reduce<(keyof IIssueDisplayProperties)[]>((acc, field) => {
+            const property = `modulecustomproperty_${field.id}` as keyof IIssueDisplayProperties;
+            if (displayProperties[property]) acc.push(property);
 
-    return [...systemColumns, ...(customColumns ?? [])];
+            return acc;
+          }, [])
+        : undefined;
+
+    return [...systemColumns, ...(customColumns ?? []), ...(moduleCustomColumns ?? [])];
   }, [
     currentProjectDetails?.cycle_view,
     currentProjectDetails?.module_view,
     displayProperties,
     isWorkspaceLevel,
     isProjectScopedView,
+    moduleIssueFields,
     projectIssueFields,
+    sourceModuleId,
   ]);
 
   if (!issueIds || issueIds.length === 0) return <></>;
@@ -145,6 +178,7 @@ export const SpreadsheetView = observer(function SpreadsheetView(props: Props) {
                 spreadsheetColumnsList={spreadsheetColumnsList}
                 selectionHelpers={helpers}
                 isEpic={isEpic}
+                sourceModuleId={sourceModuleId}
               />
             </div>
             <div className="border-t border-subtle">
