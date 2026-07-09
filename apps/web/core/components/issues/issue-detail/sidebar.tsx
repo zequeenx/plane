@@ -45,6 +45,7 @@ import { DateAlert } from "@/plane-web/components/issues/issue-details/sidebar/d
 import { TransferHopInfo } from "@/plane-web/components/issues/issue-details/sidebar/transfer-hop-info";
 import { IssueWorklogProperty } from "@/plane-web/components/issues/worklog/property";
 import { SidebarPropertyListItem } from "@/components/common/layout/sidebar/property-list-item";
+import { WorkItemModuleFields } from "../module-fields/detail-sections";
 import { IssueCycleSelect } from "./cycle-select";
 import { IssueLabel } from "./label";
 import { IssueModuleSelect } from "./module-select";
@@ -296,6 +297,13 @@ export const IssueDetailsSidebar = observer(function IssueDetailsSidebar(props: 
               projectId={projectId}
               workspaceSlug={workspaceSlug}
               isEditable={isEditable}
+            />
+
+            <WorkItemModuleFields
+              workspaceSlug={workspaceSlug}
+              projectId={projectId}
+              issueId={issueId}
+              disabled={!isEditable}
             />
           </div>
         </div>

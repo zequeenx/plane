@@ -82,7 +82,13 @@ const WorkItemModuleFieldSection = observer(function WorkItemModuleFieldSection(
     <Collapsible
       isOpen={isOpen}
       onToggle={() => setIsOpen((current) => !current)}
-      title={<CollapsibleButton isOpen={isOpen} title={`${moduleDetails.name} fields`} className="h-10 px-0 py-2" />}
+      title={
+        <CollapsibleButton
+          isOpen={isOpen}
+          title={`${moduleDetails.name} ${t("common.fields")}`}
+          className="h-10 px-0 py-2"
+        />
+      }
       buttonClassName="w-full"
       className="border-b border-subtle last:border-b-0"
     >

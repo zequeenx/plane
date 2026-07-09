@@ -43,6 +43,7 @@ import { IssueParentSelectRoot } from "@/plane-web/components/issues/issue-detai
 import { DateAlert } from "@/plane-web/components/issues/issue-details/sidebar/date-alert";
 import { TransferHopInfo } from "@/plane-web/components/issues/issue-details/sidebar/transfer-hop-info";
 import { IssueWorklogProperty } from "@/plane-web/components/issues/worklog/property";
+import { WorkItemModuleFields } from "../module-fields/detail-sections";
 import type { TIssueOperations } from "../issue-detail";
 import { IssueCycleSelect } from "../issue-detail/cycle-select";
 import { IssueLabel } from "../issue-detail/label";
@@ -291,6 +292,13 @@ export const PeekOverviewProperties = observer(function PeekOverviewProperties(p
           workspaceSlug={workspaceSlug}
           isEditable={!disabled}
           isPeekView
+        />
+
+        <WorkItemModuleFields
+          workspaceSlug={workspaceSlug}
+          projectId={projectId}
+          issueId={issueId}
+          disabled={disabled}
         />
       </div>
     </div>
