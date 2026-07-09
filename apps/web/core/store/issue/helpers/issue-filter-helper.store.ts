@@ -41,6 +41,11 @@ const getServerGroupBy = (groupBy: TIssueGroupByOptions | undefined) => {
   return EIssueGroupByToServerOptions[groupBy as keyof typeof EIssueGroupByToServerOptions];
 };
 
+const getServerGroupFilter = (groupBy: string) => {
+  if (groupBy.startsWith(MODULE_CUSTOM_PROPERTY_PREFIX)) return `${groupBy}__exact`;
+  return EServerGroupByToFilterOptions[groupBy as EIssueGroupByToServerOptions];
+};
+
 interface ILocalStoreIssueFilters {
   key: EIssuesStoreType;
   workspaceSlug: string;
@@ -77,8 +82,6 @@ export interface IIssueFilterHelperStore {
 }
 
 export class IssueFilterHelperStore implements IIssueFilterHelperStore {
-  
-
   /**
    * @description This method is used to apply the display filters on the issues
    * @param {IIssueFilters} filters
@@ -322,7 +325,7 @@ export class IssueFilterHelperStore implements IIssueFilterHelperStore {
 
     // If group by is specifically sent through options, like that for calendar layout, use that to group
     if (options.groupedBy) {
-      paginationParams.group_by = options.groupedBy;
+      paginationParams.group_by = getServerGroupBy(options.groupedBy);
     }
 
     // If before and after dates are sent from option to filter by then, add them to filter the options
@@ -332,23 +335,23 @@ export class IssueFilterHelperStore implements IIssueFilterHelperStore {
 
     // If groupId is passed down, add a filter param for that group Id
     if (groupId) {
-      const groupBy = paginationParams["group_by"] as EIssueGroupByToServerOptions | undefined;
+      const groupBy = paginationParams["group_by"] as string | undefined;
       delete paginationParams["group_by"];
 
       if (groupBy) {
-        const groupByFilterOption = EServerGroupByToFilterOptions[groupBy];
-        paginationParams[groupByFilterOption] = groupId;
+        const groupByFilterOption = getServerGroupFilter(groupBy);
+        paginationParams[groupByFilterOption as TIssueParams] = groupId;
       }
     }
 
     // If subGroupId is passed down, add a filter param for that subGroup Id
     if (subGroupId) {
-      const subGroupBy = paginationParams["sub_group_by"] as EIssueGroupByToServerOptions | undefined;
+      const subGroupBy = paginationParams["sub_group_by"] as string | undefined;
       delete paginationParams["sub_group_by"];
 
       if (subGroupBy) {
-        const subGroupByFilterOption = EServerGroupByToFilterOptions[subGroupBy];
-        paginationParams[subGroupByFilterOption] = subGroupId;
+        const subGroupByFilterOption = getServerGroupFilter(subGroupBy);
+        paginationParams[subGroupByFilterOption as TIssueParams] = subGroupId;
       }
     }
 
