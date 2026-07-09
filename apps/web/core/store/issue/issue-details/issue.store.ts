@@ -173,6 +173,7 @@ export class IssueStore implements IIssueStore {
       target_date: issue?.target_date,
       completed_at: issue?.completed_at,
       field_values: issue?.field_values,
+      module_field_values: issue?.module_field_values,
       archived_at: issue?.archived_at,
       created_by: issue?.created_by,
       updated_by: issue?.updated_by,
