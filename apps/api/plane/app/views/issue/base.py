@@ -393,7 +393,11 @@ def attach_visible_module_field_values(issue_dicts, user):
         return issue_dicts
     visible_module_ids = set(
         filter_visible_module_relations(
-            ModuleIssue.objects.filter(issue_id__in=issue_ids, deleted_at__isnull=True),
+            ModuleIssue.objects.filter(
+                issue_id__in=issue_ids,
+                deleted_at__isnull=True,
+                module__archived_at__isnull=True,
+            ),
             user,
         ).values_list("module_id", flat=True)
     )

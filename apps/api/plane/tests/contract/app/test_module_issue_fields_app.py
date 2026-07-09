@@ -1,6 +1,7 @@
 import pytest
 from django.core.exceptions import ValidationError
 from django.db import IntegrityError, transaction
+from django.utils import timezone
 from rest_framework import status
 
 from plane.db.models import (
@@ -44,6 +45,43 @@ def create_issue_in_module(workspace, project, module, name="Issue with module f
     issue = Issue.objects.create(workspace=workspace, project=project, name=name)
     ModuleIssue.objects.create(workspace=workspace, project=project, module=module, issue=issue)
     return issue
+
+
+def create_project_member(workspace, project, email):
+    user = User.objects.create_user(email=email, username=email.split("@")[0])
+    WorkspaceMember.objects.create(workspace=workspace, member=user, role=15, is_active=True)
+    ProjectMember.objects.create(workspace=workspace, project=project, member=user, role=15, is_active=True)
+    return user
+
+
+def create_private_module(workspace, project, name, creator):
+    module = Module(
+        workspace=workspace,
+        project=project,
+        name=name,
+        visibility=Module.ModuleVisibility.PRIVATE,
+    )
+    module.save(created_by_id=creator.id)
+    return module
+
+
+def create_module_plain_text_value(workspace, project, module, issue, field_name, value):
+    field = ModuleIssueField.objects.create(
+        workspace=workspace,
+        project=project,
+        module=module,
+        name=field_name,
+        field_type=ModuleIssueField.FieldType.PLAIN_TEXT,
+    )
+    ModuleIssueFieldValue.objects.create(
+        workspace=workspace,
+        project=project,
+        module=module,
+        issue=issue,
+        field=field,
+        text_value=value,
+    )
+    return field
 
 
 def test_module_issue_field_defaults(workspace, project):
@@ -832,5 +870,173 @@ def test_confirmed_remove_issue_modules_deletes_values(api_client, workspace, pr
     )
 
     assert response.status_code == status.HTTP_201_CREATED
+    assert not ModuleIssue.objects.filter(module=module, issue=issue).exists()
+    assert not ModuleIssueFieldValue.objects.filter(module=module, issue=issue).exists()
+
+
+def test_module_field_values_hide_private_modules_from_issue_list(api_client, workspace, project, project_member):
+    private_owner = create_project_member(workspace, project, "private-module-owner@example.com")
+    public_module = Module.objects.create(workspace=workspace, project=project, name="Public Launch")
+    private_module = create_private_module(workspace, project, "Private Launch", private_owner)
+    issue = Issue.objects.create(workspace=workspace, project=project, name="Shared issue")
+    ModuleIssue.objects.create(workspace=workspace, project=project, module=public_module, issue=issue)
+    ModuleIssue.objects.create(workspace=workspace, project=project, module=private_module, issue=issue)
+    public_field = create_module_plain_text_value(
+        workspace,
+        project,
+        public_module,
+        issue,
+        "Public notes",
+        "Visible",
+    )
+    private_field = create_module_plain_text_value(
+        workspace,
+        project,
+        private_module,
+        issue,
+        "Private notes",
+        "Hidden",
+    )
+    api_client.force_authenticate(project_member)
+
+    response = api_client.get(f"/api/workspaces/{workspace.slug}/projects/{project.id}/issues/")
+
+    assert response.status_code == status.HTTP_200_OK
+    response_issue = next(item for item in response.data["results"] if item["id"] == issue.id)
+    assert str(public_module.id) in response_issue["module_field_values"]
+    assert str(private_module.id) not in response_issue["module_field_values"]
+    assert response_issue["module_field_values"][str(public_module.id)] == {str(public_field.id): "Visible"}
+    assert str(private_field.id) not in str(response_issue["module_field_values"])
+
+
+def test_module_field_values_hide_private_modules_from_issue_detail(api_client, workspace, project, project_member):
+    private_owner = create_project_member(workspace, project, "private-module-detail-owner@example.com")
+    public_module = Module.objects.create(workspace=workspace, project=project, name="Public Detail")
+    private_module = create_private_module(workspace, project, "Private Detail", private_owner)
+    issue = Issue.objects.create(workspace=workspace, project=project, name="Shared detail issue")
+    ModuleIssue.objects.create(workspace=workspace, project=project, module=public_module, issue=issue)
+    ModuleIssue.objects.create(workspace=workspace, project=project, module=private_module, issue=issue)
+    public_field = create_module_plain_text_value(
+        workspace,
+        project,
+        public_module,
+        issue,
+        "Public detail notes",
+        "Visible",
+    )
+    private_field = create_module_plain_text_value(
+        workspace,
+        project,
+        private_module,
+        issue,
+        "Private detail notes",
+        "Hidden",
+    )
+    api_client.force_authenticate(project_member)
+
+    response = api_client.get(f"/api/workspaces/{workspace.slug}/projects/{project.id}/issues/{issue.id}/")
+
+    assert response.status_code == status.HTTP_200_OK
+    assert str(public_module.id) in response.data["module_field_values"]
+    assert str(private_module.id) not in response.data["module_field_values"]
+    assert response.data["module_field_values"][str(public_module.id)] == {str(public_field.id): "Visible"}
+    assert str(private_field.id) not in str(response.data["module_field_values"])
+
+
+def test_module_field_values_hide_private_modules_from_v2_issue_list(api_client, workspace, project, project_member):
+    private_owner = create_project_member(workspace, project, "private-module-v2-owner@example.com")
+    public_module = Module.objects.create(workspace=workspace, project=project, name="Public V2")
+    private_module = create_private_module(workspace, project, "Private V2", private_owner)
+    issue = Issue.objects.create(workspace=workspace, project=project, name="Shared v2 issue")
+    ModuleIssue.objects.create(workspace=workspace, project=project, module=public_module, issue=issue)
+    ModuleIssue.objects.create(workspace=workspace, project=project, module=private_module, issue=issue)
+    public_field = create_module_plain_text_value(
+        workspace,
+        project,
+        public_module,
+        issue,
+        "Public v2 notes",
+        "Visible",
+    )
+    private_field = create_module_plain_text_value(
+        workspace,
+        project,
+        private_module,
+        issue,
+        "Private v2 notes",
+        "Hidden",
+    )
+    api_client.force_authenticate(project_member)
+
+    response = api_client.get(f"/api/workspaces/{workspace.slug}/projects/{project.id}/v2/issues/")
+
+    assert response.status_code == status.HTTP_200_OK
+    response_issue = next(item for item in response.data["results"] if item["id"] == issue.id)
+    assert str(public_module.id) in response_issue["module_field_values"]
+    assert str(private_module.id) not in response_issue["module_field_values"]
+    assert response_issue["module_field_values"][str(public_module.id)] == {str(public_field.id): "Visible"}
+    assert str(private_field.id) not in str(response_issue["module_field_values"])
+
+
+def test_archived_module_field_values_are_absent_from_issue_responses(
+    api_client, workspace, project, project_member
+):
+    module = Module.objects.create(workspace=workspace, project=project, name="Archived Launch")
+    issue = create_issue_in_module(workspace, project, module, name="Archived module issue")
+    field = create_module_plain_text_value(
+        workspace,
+        project,
+        module,
+        issue,
+        "Archived notes",
+        "Hidden archive",
+    )
+    module.archived_at = timezone.now()
+    module.save(update_fields=["archived_at", "updated_at"])
+    api_client.force_authenticate(project_member)
+
+    list_response = api_client.get(f"/api/workspaces/{workspace.slug}/projects/{project.id}/issues/")
+    detail_response = api_client.get(f"/api/workspaces/{workspace.slug}/projects/{project.id}/issues/{issue.id}/")
+
+    assert list_response.status_code == status.HTTP_200_OK
+    response_issue = next(item for item in list_response.data["results"] if item["id"] == issue.id)
+    assert str(module.id) not in response_issue["module_ids"]
+    assert str(module.id) not in response_issue["module_field_values"]
+    assert str(field.id) not in str(response_issue["module_field_values"])
+    assert detail_response.status_code == status.HTTP_200_OK
+    assert str(module.id) not in detail_response.data["module_ids"]
+    assert str(module.id) not in detail_response.data["module_field_values"]
+    assert str(field.id) not in str(detail_response.data["module_field_values"])
+
+
+def test_remove_issue_from_module_accepts_uppercase_string_confirmation(
+    api_client, workspace, project, project_member
+):
+    module = Module.objects.create(workspace=workspace, project=project, name="Launch")
+    issue = create_issue_in_module(workspace, project, module)
+    field = ModuleIssueField.objects.create(
+        workspace=workspace,
+        project=project,
+        module=module,
+        name="Notes",
+        field_type=ModuleIssueField.FieldType.PLAIN_TEXT,
+    )
+    ModuleIssueFieldValue.objects.create(
+        workspace=workspace,
+        project=project,
+        module=module,
+        issue=issue,
+        field=field,
+        text_value="Delete me",
+    )
+    api_client.force_authenticate(project_member)
+
+    response = api_client.delete(
+        f"/api/workspaces/{workspace.slug}/projects/{project.id}/modules/{module.id}/issues/{issue.id}/",
+        {"delete_module_field_values_confirmed": "TRUE"},
+        format="json",
+    )
+
+    assert response.status_code == status.HTTP_204_NO_CONTENT
     assert not ModuleIssue.objects.filter(module=module, issue=issue).exists()
     assert not ModuleIssueFieldValue.objects.filter(module=module, issue=issue).exists()

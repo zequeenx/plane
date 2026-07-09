@@ -93,7 +93,10 @@ class ModuleIssueViewSet(BaseViewSet):
         )
 
     def module_field_value_cleanup_confirmed(self, request):
-        return request.data.get("delete_module_field_values_confirmed") in (True, "true", "True", "1", 1)
+        confirmation = request.data.get("delete_module_field_values_confirmed")
+        if isinstance(confirmation, str):
+            return confirmation.lower() in ("true", "1")
+        return confirmation in (True, 1)
 
     def module_removal_requires_confirmation(self, issue_id, module_ids, confirmation):
         return not confirmation and any(
