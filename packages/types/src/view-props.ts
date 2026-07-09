@@ -4,13 +4,19 @@
  * See the LICENSE file for details.
  */
 
-import type { TCustomPropertyFilterOperator, TCustomPropertyKey } from "./issues/issue-fields";
+import type {
+  TCustomPropertyFilterOperator,
+  TCustomPropertyKey,
+  TModuleCustomPropertyKey,
+} from "./issues/issue-fields";
 import type { TIssue } from "./issues/issue";
 import type { IProjectMemberNavigationPreferences } from "./project";
 import type { LOGICAL_OPERATOR, TSupportedOperators } from "./rich-filters";
 import type { CompleteOrEmpty } from "./utils";
 
 export type TIssueLayouts = "list" | "kanban" | "calendar" | "spreadsheet" | "gantt_chart";
+
+type TAnyCustomPropertyKey = TCustomPropertyKey | TModuleCustomPropertyKey;
 
 export type TIssueGroupByOptions =
   | "state"
@@ -56,8 +62,8 @@ export type TIssueOrderByOptions =
   | "-attachment_count"
   | "sub_issues_count"
   | "-sub_issues_count"
-  | TCustomPropertyKey
-  | `-${TCustomPropertyKey}`;
+  | TAnyCustomPropertyKey
+  | `-${TAnyCustomPropertyKey}`;
 
 export type TIssueGroupingFilters = "active" | "backlog";
 
@@ -116,10 +122,10 @@ export const WORK_ITEM_FILTER_PROPERTY_KEYS = [
   "updated_at",
 ] as const;
 export type TSystemWorkItemFilterProperty = (typeof WORK_ITEM_FILTER_PROPERTY_KEYS)[number];
-export type TWorkItemFilterProperty = TSystemWorkItemFilterProperty | TCustomPropertyKey;
+export type TWorkItemFilterProperty = TSystemWorkItemFilterProperty | TCustomPropertyKey | TModuleCustomPropertyKey;
 
 export type TSystemWorkItemFilterConditionKey = `${TSystemWorkItemFilterProperty}__${TSupportedOperators}`;
-export type TCustomPropertyFilterConditionKey = `${TCustomPropertyKey}__${TCustomPropertyFilterOperator}`;
+export type TCustomPropertyFilterConditionKey = `${TAnyCustomPropertyKey}__${TCustomPropertyFilterOperator}`;
 export type TWorkItemFilterConditionKey = TSystemWorkItemFilterConditionKey | TCustomPropertyFilterConditionKey;
 
 export type TWorkItemFilterConditionData = Partial<{
@@ -167,8 +173,7 @@ export interface IIssueDisplayFilterOptions {
   show_empty_groups?: boolean;
   sub_issue?: boolean;
 }
-export interface IIssueDisplayProperties {
-  [key: TCustomPropertyKey]: boolean | undefined;
+export type IIssueDisplayProperties = Partial<Record<TCustomPropertyKey | TModuleCustomPropertyKey, boolean>> & {
   assignee?: boolean;
   start_date?: boolean;
   due_date?: boolean;
@@ -186,7 +191,7 @@ export interface IIssueDisplayProperties {
   modules?: boolean;
   cycle?: boolean;
   issue_type?: boolean;
-}
+};
 
 export type TIssueKanbanFilters = {
   group_by: string[];

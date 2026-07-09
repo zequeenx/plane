@@ -18,6 +18,10 @@ export type TProjectIssueFieldId = string;
 
 export type TCustomPropertyKey = `customproperty_${TProjectIssueFieldId}`;
 
+export type TModuleIssueFieldId = string;
+
+export type TModuleCustomPropertyKey = `modulecustomproperty_${TModuleIssueFieldId}`;
+
 export type TCustomPropertyFilterOperator =
   | "contains"
   | "icontains"
@@ -60,6 +64,17 @@ export type TProjectIssueField = {
   updated_at: string;
 };
 
+export type TModuleIssueFieldOption = TProjectIssueFieldOption & {
+  module: string;
+  field: TModuleIssueFieldId;
+};
+
+export type TModuleIssueField = Omit<TProjectIssueField, "id" | "options"> & {
+  id: TModuleIssueFieldId;
+  module: string;
+  options: TModuleIssueFieldOption[];
+};
+
 export type TIssueFieldDateRangeValue = {
   start: string | null;
   end: string | null;
@@ -68,6 +83,10 @@ export type TIssueFieldDateRangeValue = {
 export type TIssueFieldValue = string | string[] | TIssueFieldDateRangeValue | null;
 
 export type TIssueFieldValues = Partial<Record<TProjectIssueFieldId, TIssueFieldValue>>;
+
+export type TModuleIssueFieldValues = Partial<Record<TModuleIssueFieldId, TIssueFieldValue>>;
+
+export type TIssueModuleFieldValues = Partial<Record<string, TModuleIssueFieldValues>>;
 
 export type TProjectIssueFieldPayload = Partial<
   Pick<TProjectIssueField, "description" | "sort_order" | "is_disabled">
@@ -78,4 +97,13 @@ export type TProjectIssueFieldUpdatePayload = Partial<TProjectIssueFieldPayload>
 
 export type TIssueFieldValuesUpdatePayload = {
   field_values: TIssueFieldValues;
+};
+
+export type TModuleIssueFieldPayload = Partial<Pick<TModuleIssueField, "description" | "sort_order" | "is_disabled">> &
+  Pick<TModuleIssueField, "name" | "field_type">;
+
+export type TModuleIssueFieldUpdatePayload = Partial<TModuleIssueFieldPayload>;
+
+export type TModuleIssueFieldValuesUpdatePayload = {
+  field_values: TModuleIssueFieldValues;
 };

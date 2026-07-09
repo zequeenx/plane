@@ -47,6 +47,8 @@ import type { IMemberRootStore } from "./member";
 import { MemberRootStore } from "./member";
 import type { IModuleStore } from "./module.store";
 import { ModulesStore } from "./module.store";
+import type { IModuleIssueFieldStore } from "./module/module-issue-field.store";
+import { ModuleIssueFieldStore } from "./module/module-issue-field.store";
 import type { IModuleFilterStore } from "./module_filter.store";
 import { ModuleFilterStore } from "./module_filter.store";
 import type { IMultipleSelectStore } from "./multiple_select.store";
@@ -79,6 +81,7 @@ export class CoreRootStore {
   cycleFilter: ICycleFilterStore;
   module: IModuleStore;
   moduleFilter: IModuleFilterStore;
+  moduleIssueFields: IModuleIssueFieldStore;
   projectView: IProjectViewStore;
   globalView: IGlobalViewStore;
   issue: IIssueRootStore;
@@ -115,6 +118,7 @@ export class CoreRootStore {
     this.cycleFilter = new CycleFilterStore(this);
     this.module = new ModulesStore(this);
     this.moduleFilter = new ModuleFilterStore(this);
+    this.moduleIssueFields = new ModuleIssueFieldStore(this);
     this.projectView = new ProjectViewStore(this);
     this.globalView = new GlobalViewStore(this);
     this.issue = new IssueRootStore(this as unknown as RootStore);
@@ -149,6 +153,7 @@ export class CoreRootStore {
     this.cycleFilter = new CycleFilterStore(this);
     this.module = new ModulesStore(this);
     this.moduleFilter = new ModuleFilterStore(this);
+    this.moduleIssueFields = new ModuleIssueFieldStore(this);
     this.projectView = new ProjectViewStore(this);
     this.globalView = new GlobalViewStore(this);
     this.issue = new IssueRootStore(this as unknown as RootStore);
