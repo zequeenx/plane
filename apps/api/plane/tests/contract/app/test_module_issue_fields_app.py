@@ -681,3 +681,156 @@ def test_module_field_value_update_serializes_values(api_client, workspace, proj
 
     assert response.status_code == status.HTTP_200_OK
     assert response.data["module_field_values"][str(module.id)][str(field.id)] == "Needs QA"
+
+
+def test_module_issue_list_includes_module_field_values(api_client, workspace, project, project_member):
+    module = Module.objects.create(workspace=workspace, project=project, name="Launch")
+    issue = create_issue_in_module(workspace, project, module)
+    field = ModuleIssueField.objects.create(
+        workspace=workspace,
+        project=project,
+        module=module,
+        name="Notes",
+        field_type=ModuleIssueField.FieldType.PLAIN_TEXT,
+    )
+    ModuleIssueFieldValue.objects.create(
+        workspace=workspace,
+        project=project,
+        module=module,
+        issue=issue,
+        field=field,
+        text_value="Needs QA",
+    )
+    api_client.force_authenticate(project_member)
+
+    response = api_client.get(
+        f"/api/workspaces/{workspace.slug}/projects/{project.id}/modules/{module.id}/issues/"
+    )
+
+    assert response.status_code == status.HTTP_200_OK
+    first_issue = response.data["results"][0] if "results" in response.data else response.data[0]
+    assert first_issue["module_field_values"][str(module.id)][str(field.id)] == "Needs QA"
+
+
+def test_remove_issue_from_module_requires_confirmation_when_values_exist(
+    api_client, workspace, project, project_member
+):
+    module = Module.objects.create(workspace=workspace, project=project, name="Launch")
+    issue = create_issue_in_module(workspace, project, module)
+    field = ModuleIssueField.objects.create(
+        workspace=workspace,
+        project=project,
+        module=module,
+        name="Notes",
+        field_type=ModuleIssueField.FieldType.PLAIN_TEXT,
+    )
+    ModuleIssueFieldValue.objects.create(
+        workspace=workspace,
+        project=project,
+        module=module,
+        issue=issue,
+        field=field,
+        text_value="Delete me",
+    )
+    api_client.force_authenticate(project_member)
+
+    response = api_client.delete(
+        f"/api/workspaces/{workspace.slug}/projects/{project.id}/modules/{module.id}/issues/{issue.id}/"
+    )
+
+    assert response.status_code == status.HTTP_400_BAD_REQUEST
+    assert ModuleIssue.objects.filter(module=module, issue=issue).exists()
+    assert ModuleIssueFieldValue.objects.filter(module=module, issue=issue).exists()
+
+
+def test_confirmed_remove_issue_from_module_deletes_values(api_client, workspace, project, project_member):
+    module = Module.objects.create(workspace=workspace, project=project, name="Launch")
+    issue = create_issue_in_module(workspace, project, module)
+    field = ModuleIssueField.objects.create(
+        workspace=workspace,
+        project=project,
+        module=module,
+        name="Notes",
+        field_type=ModuleIssueField.FieldType.PLAIN_TEXT,
+    )
+    ModuleIssueFieldValue.objects.create(
+        workspace=workspace,
+        project=project,
+        module=module,
+        issue=issue,
+        field=field,
+        text_value="Delete me",
+    )
+    api_client.force_authenticate(project_member)
+
+    response = api_client.delete(
+        f"/api/workspaces/{workspace.slug}/projects/{project.id}/modules/{module.id}/issues/{issue.id}/",
+        {"delete_module_field_values_confirmed": True},
+        format="json",
+    )
+
+    assert response.status_code == status.HTTP_204_NO_CONTENT
+    assert not ModuleIssue.objects.filter(module=module, issue=issue).exists()
+    assert not ModuleIssueFieldValue.objects.filter(module=module, issue=issue).exists()
+
+
+def test_remove_issue_modules_requires_confirmation_when_values_exist(api_client, workspace, project, project_member):
+    module = Module.objects.create(workspace=workspace, project=project, name="Launch")
+    issue = create_issue_in_module(workspace, project, module)
+    field = ModuleIssueField.objects.create(
+        workspace=workspace,
+        project=project,
+        module=module,
+        name="Notes",
+        field_type=ModuleIssueField.FieldType.PLAIN_TEXT,
+    )
+    ModuleIssueFieldValue.objects.create(
+        workspace=workspace,
+        project=project,
+        module=module,
+        issue=issue,
+        field=field,
+        text_value="Delete me",
+    )
+    api_client.force_authenticate(project_member)
+
+    response = api_client.post(
+        f"/api/workspaces/{workspace.slug}/projects/{project.id}/issues/{issue.id}/modules/",
+        {"removed_modules": [str(module.id)]},
+        format="json",
+    )
+
+    assert response.status_code == status.HTTP_400_BAD_REQUEST
+    assert ModuleIssue.objects.filter(module=module, issue=issue).exists()
+    assert ModuleIssueFieldValue.objects.filter(module=module, issue=issue).exists()
+
+
+def test_confirmed_remove_issue_modules_deletes_values(api_client, workspace, project, project_member):
+    module = Module.objects.create(workspace=workspace, project=project, name="Launch")
+    issue = create_issue_in_module(workspace, project, module)
+    field = ModuleIssueField.objects.create(
+        workspace=workspace,
+        project=project,
+        module=module,
+        name="Notes",
+        field_type=ModuleIssueField.FieldType.PLAIN_TEXT,
+    )
+    ModuleIssueFieldValue.objects.create(
+        workspace=workspace,
+        project=project,
+        module=module,
+        issue=issue,
+        field=field,
+        text_value="Delete me",
+    )
+    api_client.force_authenticate(project_member)
+
+    response = api_client.post(
+        f"/api/workspaces/{workspace.slug}/projects/{project.id}/issues/{issue.id}/modules/",
+        {"removed_modules": [str(module.id)], "delete_module_field_values_confirmed": True},
+        format="json",
+    )
+
+    assert response.status_code == status.HTTP_201_CREATED
+    assert not ModuleIssue.objects.filter(module=module, issue=issue).exists()
+    assert not ModuleIssueFieldValue.objects.filter(module=module, issue=issue).exists()

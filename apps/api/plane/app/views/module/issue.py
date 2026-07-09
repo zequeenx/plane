@@ -6,6 +6,7 @@
 import copy
 import json
 
+from django.db import transaction
 from django.db.models import F, Func, OuterRef, Q, Subquery
 
 # Django Imports
@@ -20,6 +21,7 @@ from rest_framework.response import Response
 from plane.app.permissions import allow_permission, ROLE
 from plane.app.serializers import ModuleIssueSerializer
 from plane.app.services.issue_field import IssueFieldValueService
+from plane.app.services.module_issue_field import ModuleIssueFieldValueService
 from plane.bgtasks.issue_activities_task import issue_activity
 from plane.db.models import (
     Issue,
@@ -84,7 +86,26 @@ class ModuleIssueViewSet(BaseViewSet):
             issue["module_ids"] = [
                 module_id for module_id in issue.get("module_ids", []) if str(module_id) in visible_module_ids
             ]
-        return IssueFieldValueService.attach_field_values_to_issue_dicts(issue_results)
+        issue_results = IssueFieldValueService.attach_field_values_to_issue_dicts(issue_results)
+        return ModuleIssueFieldValueService.attach_module_field_values_to_issue_dicts(
+            issue_results,
+            module_ids=[self.kwargs.get("module_id")],
+        )
+
+    def module_field_value_cleanup_confirmed(self, request):
+        return request.data.get("delete_module_field_values_confirmed") in (True, "true", "True", "1", 1)
+
+    def module_removal_requires_confirmation(self, issue_id, module_ids, confirmation):
+        return not confirmation and any(
+            ModuleIssueFieldValueService.has_values_for_issue_module(issue_id=issue_id, module_id=module_id)
+            for module_id in module_ids
+        )
+
+    def module_field_value_cleanup_error_response(self):
+        return Response(
+            {"error": "Removing this work item from the module will delete module custom field values."},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
 
     def apply_annotations(self, issues):
         return (
@@ -331,6 +352,7 @@ class ModuleIssueViewSet(BaseViewSet):
         removed_modules = request.data.get("removed_modules", [])
         project = Project.objects.get(pk=project_id)
         requested_module_ids = {str(module_id) for module_id in modules + removed_modules}
+        confirmation = self.module_field_value_cleanup_confirmed(request)
 
         if any(not is_valid_uuid(module_id) for module_id in requested_module_ids):
             return Response({"error": "Invalid module id"}, status=status.HTTP_400_BAD_REQUEST)
@@ -345,6 +367,13 @@ class ModuleIssueViewSet(BaseViewSet):
             }
             if visible_modules != requested_module_ids:
                 return Response({"error": "Module not found"}, status=status.HTTP_404_NOT_FOUND)
+
+        if self.module_removal_requires_confirmation(
+            issue_id=issue_id,
+            module_ids=removed_modules,
+            confirmation=confirmation,
+        ):
+            return self.module_field_value_cleanup_error_response()
 
         if modules:
             _ = ModuleIssue.objects.bulk_create(
@@ -388,26 +417,24 @@ class ModuleIssueViewSet(BaseViewSet):
                 module_id=module_id,
                 issue_id=issue_id,
             )
+            module_issue_instance = module_issue.first()
+            module_name = (
+                module_issue_instance.module.name if module_issue_instance and module_issue_instance.module else None
+            )
+            with transaction.atomic():
+                ModuleIssueFieldValueService.delete_values_for_issue_module(issue_id=issue_id, module_id=module_id)
+                module_issue.delete()
             issue_activity.delay(
                 type="module.activity.deleted",
                 requested_data=json.dumps({"module_id": str(module_id)}),
                 actor_id=str(request.user.id),
                 issue_id=str(issue_id),
                 project_id=str(project_id),
-                current_instance=json.dumps(
-                    {
-                        "module_name": (
-                            module_issue.first().module.name
-                            if (module_issue.first() and module_issue.first().module)
-                            else None
-                        )
-                    }
-                ),
+                current_instance=json.dumps({"module_name": module_name}),
                 epoch=int(timezone.now().timestamp()),
                 notification=True,
                 origin=base_host(request=request, is_app=True),
             )
-            module_issue.delete()
 
         return Response({"message": "success"}, status=status.HTTP_201_CREATED)
 
@@ -422,16 +449,29 @@ class ModuleIssueViewSet(BaseViewSet):
             module_id=module_id,
             issue_id=issue_id,
         )
+        confirmation = self.module_field_value_cleanup_confirmed(request)
+        if (
+            ModuleIssueFieldValueService.has_values_for_issue_module(issue_id=issue_id, module_id=module_id)
+            and not confirmation
+        ):
+            return self.module_field_value_cleanup_error_response()
+
+        module_issue_instance = module_issue.first()
+        module_name = (
+            module_issue_instance.module.name if module_issue_instance and module_issue_instance.module else None
+        )
+        with transaction.atomic():
+            ModuleIssueFieldValueService.delete_values_for_issue_module(issue_id=issue_id, module_id=module_id)
+            module_issue.delete()
         issue_activity.delay(
             type="module.activity.deleted",
             requested_data=json.dumps({"module_id": str(module_id)}),
             actor_id=str(request.user.id),
             issue_id=str(issue_id),
             project_id=str(project_id),
-            current_instance=json.dumps({"module_name": module_issue.first().module.name}),
+            current_instance=json.dumps({"module_name": module_name}),
             epoch=int(timezone.now().timestamp()),
             notification=True,
             origin=base_host(request=request, is_app=True),
         )
-        module_issue.delete()
         return Response(status=status.HTTP_204_NO_CONTENT)

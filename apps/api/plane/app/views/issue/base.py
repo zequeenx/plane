@@ -43,6 +43,7 @@ from plane.app.serializers import (
     ProjectUserPropertySerializer,
 )
 from plane.app.services.issue_field import IssueFieldValueService
+from plane.app.services.module_issue_field import ModuleIssueFieldValueService
 from plane.bgtasks.issue_activities_task import issue_activity
 from plane.bgtasks.issue_description_version_task import issue_description_version_task
 from plane.bgtasks.recent_visited_task import recent_visited_task
@@ -386,6 +387,22 @@ def filter_grouped_module_response(response, slug, project_id, user):
     return response
 
 
+def attach_visible_module_field_values(issue_dicts, user):
+    issue_ids = [issue_dict.get("id") for issue_dict in issue_dicts if issue_dict.get("id")]
+    if not issue_ids:
+        return issue_dicts
+    visible_module_ids = set(
+        filter_visible_module_relations(
+            ModuleIssue.objects.filter(issue_id__in=issue_ids, deleted_at__isnull=True),
+            user,
+        ).values_list("module_id", flat=True)
+    )
+    return ModuleIssueFieldValueService.attach_module_field_values_to_issue_dicts(
+        issue_dicts,
+        module_ids=list(visible_module_ids),
+    )
+
+
 class IssueListEndpoint(BaseAPIView):
     filter_backends = (ComplexFilterBackend,)
     filterset_class = IssueFilterSet
@@ -486,6 +503,7 @@ class IssueListEndpoint(BaseAPIView):
         if self.fields or self.expand:
             issues = IssueSerializer(issue_queryset, many=True, fields=self.fields, expand=self.expand).data
             issues = IssueFieldValueService.attach_field_values_to_issue_dicts(issues)
+            issues = attach_visible_module_field_values(issues, request.user)
         else:
             issues = issue_queryset.values(
                 "id",
@@ -519,6 +537,7 @@ class IssueListEndpoint(BaseAPIView):
             datetime_fields = ["created_at", "updated_at"]
             issues = user_timezone_converter(issues, datetime_fields, request.user.user_timezone)
             issues = IssueFieldValueService.attach_field_values_to_issue_dicts(issues)
+            issues = attach_visible_module_field_values(issues, request.user)
         return Response(issues, status=status.HTTP_200_OK)
 
 
@@ -674,8 +693,11 @@ class IssueViewSet(BaseViewSet):
                         order_by=order_by_param,
                         queryset=issue_queryset,
                         total_count_queryset=filtered_issue_queryset,
-                        on_results=lambda issues: IssueFieldValueService.attach_field_values_to_issue_dicts(
-                            issue_on_results(group_by=group_by, issues=issues, sub_group_by=sub_group_by)
+                        on_results=lambda issues: attach_visible_module_field_values(
+                            IssueFieldValueService.attach_field_values_to_issue_dicts(
+                                issue_on_results(group_by=group_by, issues=issues, sub_group_by=sub_group_by)
+                            ),
+                            request.user,
                         ),
                         paginator_cls=SubGroupedOffsetPaginator,
                         group_by_fields=issue_group_values(
@@ -713,8 +735,11 @@ class IssueViewSet(BaseViewSet):
                     order_by=order_by_param,
                     queryset=issue_queryset,
                     total_count_queryset=filtered_issue_queryset,
-                    on_results=lambda issues: IssueFieldValueService.attach_field_values_to_issue_dicts(
-                        issue_on_results(group_by=group_by, issues=issues, sub_group_by=sub_group_by)
+                    on_results=lambda issues: attach_visible_module_field_values(
+                        IssueFieldValueService.attach_field_values_to_issue_dicts(
+                            issue_on_results(group_by=group_by, issues=issues, sub_group_by=sub_group_by)
+                        ),
+                        request.user,
                     ),
                     paginator_cls=GroupedOffsetPaginator,
                     group_by_fields=issue_group_values(
@@ -743,8 +768,11 @@ class IssueViewSet(BaseViewSet):
                 request=request,
                 queryset=issue_queryset,
                 total_count_queryset=filtered_issue_queryset,
-                on_results=lambda issues: IssueFieldValueService.attach_field_values_to_issue_dicts(
-                    issue_on_results(group_by=group_by, issues=issues, sub_group_by=sub_group_by)
+                on_results=lambda issues: attach_visible_module_field_values(
+                    IssueFieldValueService.attach_field_values_to_issue_dicts(
+                        issue_on_results(group_by=group_by, issues=issues, sub_group_by=sub_group_by)
+                    ),
+                    request.user,
                 ),
             )
 
@@ -822,6 +850,7 @@ class IssueViewSet(BaseViewSet):
             datetime_fields = ["created_at", "updated_at"]
             issue = user_timezone_converter(issue, datetime_fields, request.user.user_timezone)
             issue = IssueFieldValueService.attach_field_values_to_issue_dict(issue)
+            issue = attach_visible_module_field_values([issue], request.user)[0]
             # Send the model activity
             model_activity.delay(
                 model_name="issue",
@@ -965,6 +994,7 @@ class IssueViewSet(BaseViewSet):
 
         serializer = IssueDetailSerializer(issue, expand=self.expand)
         issue_data = IssueFieldValueService.attach_field_values_to_issue_dict(serializer.data)
+        issue_data = attach_visible_module_field_values([issue_data], request.user)[0]
         return Response(issue_data, status=status.HTTP_200_OK)
 
     @allow_permission(allowed_roles=[ROLE.ADMIN, ROLE.MEMBER], creator=True, model=Issue)
@@ -1186,13 +1216,14 @@ class IssuePaginatedViewSet(BaseViewSet):
             )
         )
 
-    def process_paginated_result(self, fields, results, timezone):
+    def process_paginated_result(self, fields, results, timezone, user):
         paginated_data = results.values(*fields)
 
         # converting the datetime fields in paginated data
         datetime_fields = ["created_at", "updated_at"]
         paginated_data = user_timezone_converter(paginated_data, datetime_fields, timezone)
         paginated_data = IssueFieldValueService.attach_field_values_to_issue_dicts(paginated_data)
+        paginated_data = attach_visible_module_field_values(paginated_data, user)
 
         return paginated_data
 
@@ -1290,7 +1321,7 @@ class IssuePaginatedViewSet(BaseViewSet):
             queryset=queryset,
             cursor=cursor,
             on_result=lambda results: self.process_paginated_result(
-                required_fields, results, request.user.user_timezone
+                required_fields, results, request.user.user_timezone, request.user
             ),
         )
 
@@ -1432,8 +1463,11 @@ class IssueDetailEndpoint(BaseAPIView):
             order_by=order_by_param,
             queryset=issue,
             total_count_queryset=total_issue_queryset,
-            on_results=lambda issue: IssueFieldValueService.attach_field_values_to_issue_dicts(
-                IssueListDetailSerializer(issue, many=True, fields=self.fields, expand=self.expand).data
+            on_results=lambda issue: attach_visible_module_field_values(
+                IssueFieldValueService.attach_field_values_to_issue_dicts(
+                    IssueListDetailSerializer(issue, many=True, fields=self.fields, expand=self.expand).data
+                ),
+                request.user,
             ),
         )
 
@@ -1689,4 +1723,5 @@ class IssueDetailIdentifierEndpoint(BaseAPIView):
         # Serialize the issue
         serializer = IssueDetailSerializer(issue, expand=self.expand)
         issue_data = IssueFieldValueService.attach_field_values_to_issue_dict(serializer.data)
+        issue_data = attach_visible_module_field_values([issue_data], request.user)[0]
         return Response(issue_data, status=status.HTTP_200_OK)

@@ -49,6 +49,14 @@ class ModuleIssueFieldValueService(IssueFieldValueService):
         return issue_dicts
 
     @classmethod
+    def has_values_for_issue_module(cls, issue_id, module_id):
+        return cls.value_model.objects.filter(issue_id=issue_id, module_id=module_id).exists()
+
+    @classmethod
+    def delete_values_for_issue_module(cls, issue_id, module_id):
+        cls.value_model.objects.filter(issue_id=issue_id, module_id=module_id).delete(soft=False)
+
+    @classmethod
     @transaction.atomic
     def update_issue_values(cls, issue, module, raw_values):
         if not ModuleIssue.objects.filter(issue=issue, module=module, deleted_at__isnull=True).exists():
