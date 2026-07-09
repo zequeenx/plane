@@ -21,6 +21,7 @@ from plane.utils.exception_logger import log_exception
 
 
 CUSTOM_PROPERTY_PREFIX = "customproperty_"
+MODULE_CUSTOM_PROPERTY_PREFIX = "modulecustomproperty_"
 
 
 class ComplexFilterBackend(filters.BaseFilterBackend):
@@ -143,6 +144,8 @@ class ComplexFilterBackend(filters.BaseFilterBackend):
         Returns:
             The transformed field name to validate against the FilterSet
         """
+        if self._parse_module_custom_property_filter_key(field_name) is not None:
+            return "modulecustomproperty"
         if self._parse_custom_property_filter_key(field_name) is not None:
             return "customproperty"
         return field_name
@@ -267,6 +270,10 @@ class ComplexFilterBackend(filters.BaseFilterBackend):
         standard_conditions = {}
         custom_q = Q()
         for key, value in processed_conditions.items():
+            module_custom_filter = self._build_module_custom_property_q(key, value, view)
+            if module_custom_filter is not None:
+                custom_q &= module_custom_filter
+                continue
             custom_filter = self._build_custom_property_q(key, value, view)
             if custom_filter is None:
                 standard_conditions[key] = value
@@ -328,6 +335,88 @@ class ComplexFilterBackend(filters.BaseFilterBackend):
             return field_id, operator, False
 
         return field_id, operator, True
+
+    def _parse_module_custom_property_filter_key(self, field_name):
+        if not isinstance(field_name, str) or not field_name.startswith(MODULE_CUSTOM_PROPERTY_PREFIX):
+            return None
+
+        raw_key = field_name[len(MODULE_CUSTOM_PROPERTY_PREFIX) :]
+        field_id, separator, operator = raw_key.partition("__")
+        operator = operator if separator else "exact"
+
+        try:
+            UUID(str(field_id))
+        except (AttributeError, TypeError, ValueError):
+            return field_id, operator, False
+
+        return field_id, operator, True
+
+    def _module_custom_property_context_module_id(self, view):
+        kwargs = getattr(view, "kwargs", {})
+        if kwargs.get("module_id"):
+            return kwargs.get("module_id")
+
+        issue_view = getattr(view, "issue_view", None)
+        if issue_view and issue_view.source_module_id:
+            return issue_view.source_module_id
+
+        return None
+
+    def _build_module_custom_property_q(self, field_name, value, view):
+        parsed = self._parse_module_custom_property_filter_key(field_name)
+        if parsed is None:
+            return None
+
+        field_id, operator, is_valid_uuid = parsed
+        if not is_valid_uuid:
+            return Q(pk__in=[])
+
+        context_module_id = self._module_custom_property_context_module_id(view)
+        if context_module_id is None:
+            return Q(pk__in=[])
+
+        from plane.db.models import ModuleIssueField
+
+        project_id = getattr(view, "kwargs", {}).get("project_id")
+        slug = getattr(view, "kwargs", {}).get("slug")
+        field_filters = {
+            "id": field_id,
+            "is_disabled": False,
+            "project_id": project_id,
+            "module_id": context_module_id,
+        }
+        if slug:
+            field_filters["workspace__slug"] = slug
+
+        field = ModuleIssueField.objects.filter(**field_filters).first()
+        if field is None:
+            return Q(pk__in=[])
+
+        base_q = Q(
+            module_field_value_rows__field_id=field.id,
+            module_field_value_rows__module_id=context_module_id,
+            module_field_value_rows__deleted_at__isnull=True,
+        )
+        field_type = field.field_type
+
+        if field_type == ModuleIssueField.FieldType.PLAIN_TEXT:
+            return self._build_module_plain_text_custom_property_q(base_q, operator, value)
+        if field_type in (
+            ModuleIssueField.FieldType.SINGLE_SELECT,
+            ModuleIssueField.FieldType.MULTI_SELECT,
+        ):
+            return self._build_module_option_custom_property_q(field.id, context_module_id, operator, value)
+        if field_type in (
+            ModuleIssueField.FieldType.SINGLE_MEMBER,
+            ModuleIssueField.FieldType.MULTI_MEMBER,
+        ):
+            return self._build_module_member_custom_property_q(field.id, context_module_id, operator, value)
+        if field_type == ModuleIssueField.FieldType.DATE:
+            return self._build_module_date_custom_property_q(base_q, operator, value)
+        if field_type == ModuleIssueField.FieldType.DATE_RANGE:
+            return self._build_module_date_range_custom_property_q(base_q, operator, value)
+
+        return Q(pk__in=[])
 
     def _build_custom_property_q(self, field_name, value, view):
         parsed = self._parse_custom_property_filter_key(field_name)
@@ -465,6 +554,50 @@ class ComplexFilterBackend(filters.BaseFilterBackend):
             return non_empty_q
         return Q()
 
+    def _build_module_plain_text_custom_property_q(self, base_q, operator, value):
+        non_empty_q = (
+            base_q
+            & Q(module_field_value_rows__text_value__isnull=False)
+            & ~Q(module_field_value_rows__text_value="")
+        )
+        if operator not in (
+            "contains",
+            "icontains",
+            "not_contains",
+            "exact",
+            "in",
+            "not_exact",
+            "not_in",
+            "is_empty",
+            "is_not_empty",
+        ):
+            self._raise_unsupported_custom_filter_operator(operator)
+        if operator in ("contains", "icontains"):
+            return base_q & Q(module_field_value_rows__text_value__icontains=value)
+        if operator == "not_contains":
+            return ~(base_q & Q(module_field_value_rows__text_value__icontains=value))
+        if operator in ("exact", "in"):
+            values = self._ensure_list_value(value) if operator == "in" else value
+            lookup = (
+                "module_field_value_rows__text_value__in"
+                if operator == "in"
+                else "module_field_value_rows__text_value"
+            )
+            return base_q & Q(**{lookup: values})
+        if operator in ("not_exact", "not_in"):
+            values = self._ensure_list_value(value) if operator == "not_in" else value
+            lookup = (
+                "module_field_value_rows__text_value__in"
+                if operator == "not_in"
+                else "module_field_value_rows__text_value"
+            )
+            return ~(base_q & Q(**{lookup: values}))
+        if operator == "is_empty":
+            return ~non_empty_q
+        if operator == "is_not_empty":
+            return non_empty_q
+        return Q(pk__in=[])
+
     def _build_option_custom_property_q(self, field_id, operator, value):
         from plane.db.models import IssueFieldValueOption
 
@@ -499,6 +632,41 @@ class ComplexFilterBackend(filters.BaseFilterBackend):
             return Exists(selected_options)
         return Q()
 
+    def _build_module_option_custom_property_q(self, field_id, module_id, operator, value):
+        from plane.db.models import ModuleIssueFieldValueOption
+
+        if operator not in (
+            "exact",
+            "in",
+            "contains_any",
+            "not_exact",
+            "not_in",
+            "not_contains_any",
+            "is_empty",
+            "is_not_empty",
+        ):
+            self._raise_unsupported_custom_filter_operator(operator)
+
+        selected_options = ModuleIssueFieldValueOption.objects.filter(
+            value__issue_id=OuterRef("pk"),
+            value__module_id=module_id,
+            value__field_id=field_id,
+            value__deleted_at__isnull=True,
+            deleted_at__isnull=True,
+            option__deleted_at__isnull=True,
+        )
+        if operator in ("exact", "in", "contains_any"):
+            values = self._ensure_uuid_list_value(value)
+            return Exists(selected_options.filter(option_id__in=values))
+        if operator in ("not_exact", "not_in", "not_contains_any"):
+            values = self._ensure_uuid_list_value(value)
+            return ~Exists(selected_options.filter(option_id__in=values))
+        if operator == "is_empty":
+            return ~Exists(selected_options)
+        if operator == "is_not_empty":
+            return Exists(selected_options)
+        return Q(pk__in=[])
+
     def _build_member_custom_property_q(self, field_id, operator, value):
         from plane.db.models import IssueFieldValueUser
 
@@ -532,6 +700,40 @@ class ComplexFilterBackend(filters.BaseFilterBackend):
             return Exists(selected_users)
         return Q()
 
+    def _build_module_member_custom_property_q(self, field_id, module_id, operator, value):
+        from plane.db.models import ModuleIssueFieldValueUser
+
+        if operator not in (
+            "exact",
+            "in",
+            "contains_any",
+            "not_exact",
+            "not_in",
+            "not_contains_any",
+            "is_empty",
+            "is_not_empty",
+        ):
+            self._raise_unsupported_custom_filter_operator(operator)
+
+        selected_users = ModuleIssueFieldValueUser.objects.filter(
+            value__issue_id=OuterRef("pk"),
+            value__module_id=module_id,
+            value__field_id=field_id,
+            value__deleted_at__isnull=True,
+            deleted_at__isnull=True,
+        )
+        if operator in ("exact", "in", "contains_any"):
+            values = self._ensure_uuid_list_value(value)
+            return Exists(selected_users.filter(user_id__in=values))
+        if operator in ("not_exact", "not_in", "not_contains_any"):
+            values = self._ensure_uuid_list_value(value)
+            return ~Exists(selected_users.filter(user_id__in=values))
+        if operator == "is_empty":
+            return ~Exists(selected_users)
+        if operator == "is_not_empty":
+            return Exists(selected_users)
+        return Q(pk__in=[])
+
     def _build_date_custom_property_q(self, base_q, operator, value):
         non_empty_q = base_q & Q(field_value_rows__date_value__isnull=False)
         if operator not in ("exact", "range", "is_empty", "is_not_empty"):
@@ -546,6 +748,21 @@ class ComplexFilterBackend(filters.BaseFilterBackend):
         if operator == "is_not_empty":
             return non_empty_q
         return Q()
+
+    def _build_module_date_custom_property_q(self, base_q, operator, value):
+        non_empty_q = base_q & Q(module_field_value_rows__date_value__isnull=False)
+        if operator not in ("exact", "range", "is_empty", "is_not_empty"):
+            self._raise_unsupported_custom_filter_operator(operator)
+        if operator == "exact":
+            return base_q & Q(module_field_value_rows__date_value=self._ensure_date_value(value))
+        if operator == "range":
+            values = self._ensure_date_range_value(value)
+            return base_q & Q(module_field_value_rows__date_value__range=values)
+        if operator == "is_empty":
+            return ~non_empty_q
+        if operator == "is_not_empty":
+            return non_empty_q
+        return Q(pk__in=[])
 
     def _build_date_range_custom_property_q(self, base_q, operator, value):
         non_empty_q = base_q & Q(
@@ -567,6 +784,27 @@ class ComplexFilterBackend(filters.BaseFilterBackend):
         if operator == "is_not_empty":
             return non_empty_q
         return Q()
+
+    def _build_module_date_range_custom_property_q(self, base_q, operator, value):
+        non_empty_q = base_q & Q(
+            module_field_value_rows__date_range_start__isnull=False,
+            module_field_value_rows__date_range_end__isnull=False,
+        )
+        if operator not in ("overlaps", "not_overlaps", "is_empty", "is_not_empty"):
+            self._raise_unsupported_custom_filter_operator(operator)
+        if operator in ("overlaps", "not_overlaps"):
+            values = self._ensure_date_range_value(value)
+            overlap_q = (
+                base_q
+                & Q(module_field_value_rows__date_range_start__lte=values[1])
+                & Q(module_field_value_rows__date_range_end__gte=values[0])
+            )
+            return ~overlap_q if operator == "not_overlaps" else overlap_q
+        if operator == "is_empty":
+            return ~non_empty_q
+        if operator == "is_not_empty":
+            return non_empty_q
+        return Q(pk__in=[])
 
     def _get_max_depth(self, view):
         """Return the maximum allowed nesting depth for complex filters.

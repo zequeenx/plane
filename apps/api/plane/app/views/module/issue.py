@@ -193,8 +193,8 @@ class ModuleIssueViewSet(BaseViewSet):
         # Group by
         group_by = request.GET.get("group_by", False)
         sub_group_by = request.GET.get("sub_group_by", False)
-        group_by = resolve_issue_group_by(group_by, slug=slug, project_id=project_id)
-        sub_group_by = resolve_issue_group_by(sub_group_by, slug=slug, project_id=project_id)
+        group_by = resolve_issue_group_by(group_by, slug=slug, project_id=project_id, module_id=module_id)
+        sub_group_by = resolve_issue_group_by(sub_group_by, slug=slug, project_id=project_id, module_id=module_id)
         group_by = normalize_module_group_by(group_by)
         sub_group_by = normalize_module_group_by(sub_group_by)
 
@@ -205,6 +205,7 @@ class ModuleIssueViewSet(BaseViewSet):
             sub_group_by=sub_group_by,
             slug=slug,
             project_id=project_id,
+            module_id=module_id,
         )
 
         if group_by:
@@ -232,6 +233,7 @@ class ModuleIssueViewSet(BaseViewSet):
                             project_id=project_id,
                             filters=filters,
                             queryset=total_issue_queryset,
+                            module_id=module_id,
                         ),
                         sub_group_by_fields=issue_group_values(
                             field=sub_group_by,
@@ -239,6 +241,7 @@ class ModuleIssueViewSet(BaseViewSet):
                             project_id=project_id,
                             filters=filters,
                             queryset=total_issue_queryset,
+                            module_id=module_id,
                         ),
                         group_by_field_name=group_by,
                         sub_group_by_field_name=sub_group_by,
@@ -272,6 +275,7 @@ class ModuleIssueViewSet(BaseViewSet):
                         project_id=project_id,
                         filters=filters,
                         queryset=total_issue_queryset,
+                        module_id=module_id,
                     ),
                     group_by_field_name=group_by,
                     count_filter=Q(

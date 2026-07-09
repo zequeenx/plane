@@ -18,6 +18,8 @@ from plane.db.models import (
     IssueFieldValue,
     Label,
     Module,
+    ModuleIssueField,
+    ModuleIssueFieldOption,
     Project,
     ProjectIssueField,
     ProjectIssueFieldOption,
@@ -31,12 +33,17 @@ from plane.db.models import (
 from typing import Optional, Dict, Tuple, Any, Union, List
 
 
+CUSTOM_PROPERTY_PREFIX = "customproperty_"
+MODULE_CUSTOM_PROPERTY_PREFIX = "modulecustomproperty_"
+
+
 def issue_queryset_grouper(
     queryset: QuerySet[Issue],
     group_by: Optional[str],
     sub_group_by: Optional[str],
     slug: Optional[str] = None,
     project_id: Optional[str] = None,
+    module_id: Optional[str] = None,
 ) -> QuerySet[Issue]:
     FIELD_MAPPER: Dict[str, str] = {
         "label_ids": "labels__id",
@@ -52,6 +59,15 @@ def issue_queryset_grouper(
 
     custom_group_annotations = {}
     for group_key in [group_by, sub_group_by]:
+        module_custom_group_annotation = _module_custom_property_group_annotation(
+            group_key,
+            slug=slug,
+            project_id=project_id,
+            module_id=module_id,
+        )
+        if module_custom_group_annotation is not None:
+            custom_group_annotations[group_key] = module_custom_group_annotation
+            continue
         custom_group_annotation = _custom_property_group_annotation(
             group_key,
             slug=slug,
@@ -156,7 +172,7 @@ def issue_on_results(
 
     required_fields.extend(original_list)
     for custom_group_key in [group_by, sub_group_by]:
-        if _custom_property_field_id(custom_group_key):
+        if _custom_property_field_id(custom_group_key) or _module_custom_property_field_id(custom_group_key):
             required_fields.append(custom_group_key)
     return list(issues.values(*required_fields))
 
@@ -167,6 +183,7 @@ def issue_group_values(
     project_id: Optional[str] = None,
     filters: Dict[str, Any] = {},
     queryset: Optional[QuerySet] = None,
+    module_id: Optional[str] = None,
 ) -> List[Union[str, Any]]:
     if field == "state_id":
         queryset = State.objects.filter(is_triage=False, workspace__slug=slug).values_list("id", flat=True)
@@ -213,6 +230,10 @@ def issue_group_values(
     if field == "state__group":
         return ["backlog", "unstarted", "started", "completed", "cancelled"]
 
+    module_custom_group_values = _module_custom_property_group_values(field, slug, project_id, module_id, queryset)
+    if module_custom_group_values is not None:
+        return module_custom_group_values
+
     custom_group_values = _custom_property_group_values(field, slug, project_id, queryset)
     if custom_group_values is not None:
         return custom_group_values
@@ -242,9 +263,22 @@ def issue_group_values(
 
 
 def _custom_property_field_id(field: Optional[str]) -> Optional[str]:
-    if not isinstance(field, str) or not field.startswith("customproperty_"):
+    if not isinstance(field, str) or not field.startswith(CUSTOM_PROPERTY_PREFIX):
         return None
-    field_id = field[len("customproperty_") :]
+    field_id = field[len(CUSTOM_PROPERTY_PREFIX) :]
+    if not field_id:
+        return None
+    try:
+        UUID(str(field_id))
+    except (AttributeError, TypeError, ValueError):
+        return None
+    return field_id
+
+
+def _module_custom_property_field_id(field: Optional[str]) -> Optional[str]:
+    if not isinstance(field, str) or not field.startswith(MODULE_CUSTOM_PROPERTY_PREFIX):
+        return None
+    field_id = field[len(MODULE_CUSTOM_PROPERTY_PREFIX) :]
     if not field_id:
         return None
     try:
@@ -258,13 +292,117 @@ def resolve_issue_group_by(
     field: Optional[str],
     slug: Optional[str] = None,
     project_id: Optional[str] = None,
+    module_id: Optional[str] = None,
 ) -> Optional[str]:
-    is_custom_property = isinstance(field, str) and field.startswith("customproperty_")
+    is_module_custom_property = isinstance(field, str) and field.startswith(MODULE_CUSTOM_PROPERTY_PREFIX)
+    if is_module_custom_property:
+        if _module_custom_property_group_field(field, slug=slug, project_id=project_id, module_id=module_id) is None:
+            return None
+        return field
+
+    is_custom_property = isinstance(field, str) and field.startswith(CUSTOM_PROPERTY_PREFIX)
     if _custom_property_field_id(field) is None:
         return None if is_custom_property else field
     if _custom_property_group_field(field, slug=slug, project_id=project_id) is None:
         return None
     return field
+
+
+def _module_custom_property_group_field(
+    field: Optional[str],
+    slug: Optional[str] = None,
+    project_id: Optional[str] = None,
+    module_id: Optional[str] = None,
+) -> Optional[ModuleIssueField]:
+    field_id = _module_custom_property_field_id(field)
+    if field_id is None:
+        return None
+    if project_id is None or module_id is None:
+        return None
+
+    field_filters = {
+        "id": field_id,
+        "is_disabled": False,
+        "project_id": project_id,
+        "module_id": module_id,
+    }
+    if slug:
+        field_filters["workspace__slug"] = slug
+
+    field = ModuleIssueField.objects.filter(**field_filters).first()
+    if field is None:
+        return None
+    if field.field_type not in (
+        ModuleIssueField.FieldType.SINGLE_SELECT,
+        ModuleIssueField.FieldType.SINGLE_MEMBER,
+    ):
+        return None
+    return field
+
+
+def _module_custom_property_group_annotation(
+    field: Optional[str],
+    slug: Optional[str] = None,
+    project_id: Optional[str] = None,
+    module_id: Optional[str] = None,
+):
+    module_field = _module_custom_property_group_field(field, slug=slug, project_id=project_id, module_id=module_id)
+    if module_field is None:
+        return None
+
+    value_rows = module_field.issue_values.filter(
+        issue_id=OuterRef("pk"),
+        module_id=module_id,
+        deleted_at__isnull=True,
+    )
+
+    if module_field.field_type == ModuleIssueField.FieldType.SINGLE_SELECT:
+        return Subquery(
+            value_rows.filter(
+                selected_options__deleted_at__isnull=True,
+                selected_options__option__deleted_at__isnull=True,
+            ).values("selected_options__option_id")[:1]
+        )
+
+    if module_field.field_type == ModuleIssueField.FieldType.SINGLE_MEMBER:
+        return Subquery(
+            value_rows.filter(selected_users__deleted_at__isnull=True).values("selected_users__user_id")[:1]
+        )
+
+    return None
+
+
+def _module_custom_property_group_values(
+    field: str,
+    slug: str,
+    project_id: Optional[str],
+    module_id: Optional[str],
+    queryset: Optional[QuerySet],
+) -> Optional[List[Union[str, Any]]]:
+    module_field = _module_custom_property_group_field(field, slug=slug, project_id=project_id, module_id=module_id)
+    if module_field is None:
+        return None
+
+    if module_field.field_type == ModuleIssueField.FieldType.SINGLE_SELECT:
+        return list(
+            ModuleIssueFieldOption.objects.filter(
+                workspace__slug=slug,
+                project_id=project_id,
+                module_id=module_id,
+                field=module_field,
+            ).values_list("id", flat=True)
+        ) + [None]
+
+    if module_field.field_type == ModuleIssueField.FieldType.SINGLE_MEMBER:
+        return list(
+            ProjectMember.objects.filter(
+                workspace__slug=slug,
+                project_id=project_id,
+                is_active=True,
+            ).values_list("member_id", flat=True)
+        ) + [None]
+
+    return []
 
 
 def _custom_property_group_field(

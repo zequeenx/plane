@@ -216,11 +216,28 @@ class WorkspaceViewIssuesViewSet(BaseViewSet):
         )
 
     def get_queryset(self):
-        return Issue.issue_objects.filter(workspace__slug=self.kwargs.get("slug"))
+        queryset = Issue.issue_objects.filter(workspace__slug=self.kwargs.get("slug"))
+        if self.kwargs.get("project_id"):
+            queryset = queryset.filter(project_id=self.kwargs.get("project_id"))
+        return queryset
+
+    def _set_issue_view_context(self, slug, project_id, user):
+        view_id = self.kwargs.get("pk") or self.kwargs.get("view_id")
+        if not view_id or not project_id:
+            return None
+        issue_view = IssueView.objects.get(
+            Q(owned_by=user) | Q(access=1),
+            pk=view_id,
+            project_id=project_id,
+            workspace__slug=slug,
+        )
+        self.issue_view = issue_view
+        return issue_view
 
     @method_decorator(gzip_page)
     @allow_permission(allowed_roles=[ROLE.ADMIN, ROLE.MEMBER, ROLE.GUEST], level="WORKSPACE")
-    def list(self, request, slug):
+    def list(self, request, slug, project_id=None, pk=None):
+        self._set_issue_view_context(slug, project_id, request.user)
         issue_queryset = self.get_queryset()
 
         # Apply filtering from filterset
