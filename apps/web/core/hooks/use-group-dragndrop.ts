@@ -8,11 +8,13 @@ import { useParams } from "next/navigation";
 import { TOAST_TYPE, setToast } from "@plane/propel/toast";
 import type { EIssuesStoreType, TIssue, TIssueGroupByOptions, TIssueOrderByOptions } from "@plane/types";
 import { getModuleIdsWithFieldValues } from "@plane/utils";
+import { isCustomFieldGroupKey } from "@/components/issues/issue-layouts/custom-field-grouping";
 import type { GroupDropLocation } from "@/components/issues/issue-layouts/utils";
 import { handleGroupDragDrop } from "@/components/issues/issue-layouts/utils";
 import { ISSUE_FILTER_DEFAULT_DATA } from "@/store/issue/helpers/base-issues.store";
 import { useIssueDetail } from "./store/use-issue-detail";
 import { useIssues } from "./store/use-issues";
+import { useCustomFieldGroupOperations } from "./use-custom-field-group-operations";
 import { useIssuesActions } from "./use-issues-actions";
 
 type DNDStoreType =
@@ -39,10 +41,11 @@ export const useGroupIssuesDragNDrop = (
   const {
     issue: { getIssueById },
   } = useIssueDetail();
-  const { updateIssue } = useIssuesActions(storeType);
+  const { fetchIssues, updateIssue } = useIssuesActions(storeType);
   const {
     issues: { getIssueIds, addCycleToIssue, removeCycleFromIssue, changeModulesInIssue },
   } = useIssues(storeType);
+  const customFieldGroupOperations = useCustomFieldGroupOperations({ fetchIssues, groupBy, storeType, updateIssue });
 
   /**
    * update Issue on Drop, checks if modules or cycles are changed and then calls appropriate functions
@@ -69,6 +72,18 @@ export const useGroupIssuesDragNDrop = (
     };
     const moduleKey = ISSUE_FILTER_DEFAULT_DATA["module"];
     const cycleKey = ISSUE_FILTER_DEFAULT_DATA["cycle"];
+    const customGroupKey = Object.keys(data).find(isCustomFieldGroupKey);
+
+    if (customGroupKey) {
+      const issue = getIssueById(issueId);
+      const customGroupValue = data[customGroupKey];
+      if (!issue || (typeof customGroupValue !== "string" && customGroupValue !== null))
+        throw new Error("Custom field group drop data is unavailable");
+
+      const sortOrder = typeof data.sort_order === "number" ? data.sort_order : undefined;
+      await customFieldGroupOperations.persistDrop(issue, customGroupValue ?? "None", sortOrder);
+      return;
+    }
 
     const isModuleChanged = Object.keys(data).includes(moduleKey);
     const isCycleChanged = Object.keys(data).includes(cycleKey);

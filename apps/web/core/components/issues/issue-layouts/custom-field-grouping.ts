@@ -1,3 +1,4 @@
+import { DRAG_ALLOWED_GROUPS } from "@plane/constants";
 import type {
   TCustomPropertyKey,
   TIssue,
@@ -47,6 +48,9 @@ export const parseCustomFieldGroupKey = (
 export const isCustomFieldGroupKey = (
   key: TIssueGroupByOptions | string | null | undefined
 ): key is TCustomFieldGroupKey => !!parseCustomFieldGroupKey(key);
+
+export const isIssueGroupDragAllowed = (groupBy: TIssueGroupByOptions | undefined) =>
+  !!groupBy && (isCustomFieldGroupKey(groupBy) || DRAG_ALLOWED_GROUPS.includes(groupBy));
 
 export const normalizeCustomFieldGroupId = (groupId: string) => (groupId === "None" ? null : groupId);
 
@@ -192,4 +196,27 @@ export const getCustomFieldGroupColumns = ({
   if (!field || !isGroupableCustomField(field))
     return [{ id: "All Issues", kind: "all", name: `All ${isEpic ? "Epics" : "work items"}` }];
   return buildCustomFieldGroupColumns(field, members);
+};
+
+export const executeCustomFieldGroupDrop = async ({
+  onPartialFailure,
+  onRollback,
+  persistFieldValue,
+  persistSortOrder,
+}: {
+  onPartialFailure: () => Promise<void>;
+  onRollback: () => Promise<void> | void;
+  persistFieldValue: () => Promise<unknown>;
+  persistSortOrder?: () => Promise<unknown>;
+}) => {
+  const operations = [persistFieldValue(), ...(persistSortOrder ? [persistSortOrder()] : [])];
+  const results = await Promise.allSettled(operations);
+  const rejected = results.find((result): result is PromiseRejectedResult => result.status === "rejected");
+  if (!rejected) return;
+
+  const fulfilledCount = results.filter((result) => result.status === "fulfilled").length;
+  if (fulfilledCount > 0) await onPartialFailure();
+  else await onRollback();
+
+  throw rejected.reason;
 };

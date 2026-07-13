@@ -10,8 +10,6 @@ import { combine } from "@atlaskit/pragmatic-drag-and-drop/combine";
 import { dropTargetForElements } from "@atlaskit/pragmatic-drag-and-drop/element/adapter";
 import { autoScrollForElements } from "@atlaskit/pragmatic-drag-and-drop-auto-scroll/element";
 import { observer } from "mobx-react";
-// plane constants
-import { DRAG_ALLOWED_GROUPS } from "@plane/constants";
 // i18n
 import { useTranslation } from "@plane/i18n";
 //types
@@ -43,6 +41,7 @@ import { useIssuesStore } from "@/hooks/use-issue-layout-store";
 import { useWorkFlowFDragNDrop } from "@/plane-web/components/workflow";
 //
 import { GroupDragOverlay } from "../group-drag-overlay";
+import { isIssueGroupDragAllowed } from "../custom-field-grouping";
 import type { TRenderQuickActions } from "../list/list-view-types";
 import { KanbanQuickAddIssueButton, QuickAddIssueRoot } from "../quick-add";
 import { KanbanIssueBlocksList } from "./blocks-list";
@@ -272,9 +271,7 @@ export const KanbanGroup = observer(function KanbanGroup(props: IKanbanGroup) {
   const canOverlayBeVisible = isWorkflowDropDisabled || orderBy !== "sort_order" || isDropDisabled;
   const shouldOverlayBeVisible = isDraggingOverColumn && canOverlayBeVisible;
   const canDragIssuesInCurrentGrouping =
-    !!group_by &&
-    DRAG_ALLOWED_GROUPS.includes(group_by) &&
-    (sub_group_by ? DRAG_ALLOWED_GROUPS.includes(sub_group_by) : true);
+    isIssueGroupDragAllowed(group_by) && (sub_group_by ? isIssueGroupDragAllowed(sub_group_by) : true);
 
   return (
     <div
