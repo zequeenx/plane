@@ -20,6 +20,7 @@ import type {
   TIssueOrderByOptions,
 } from "@plane/types";
 import { Row } from "@plane/ui";
+import { isCustomFieldGroupCreationDisabled } from "@/components/issues/issue-layouts/custom-field-grouping";
 // hooks
 import { useIssueStoreType } from "@/hooks/use-issue-layout-store";
 import { useCustomFieldGrouping } from "@/hooks/use-custom-field-grouping";
@@ -37,6 +38,7 @@ import { HeaderSubGroupByCard } from "./headers/sub-group-by-card";
 interface ISubGroupSwimlaneHeader {
   collapsedGroups: TIssueKanbanFilters;
   customFieldGroupOperations: TCustomFieldGroupCreationOperations;
+  disableIssueCreation?: boolean;
   group_by: TIssueGroupByOptions | undefined;
   getGroupIssueCount: (
     groupId: string | undefined,
@@ -65,6 +67,7 @@ const visibilitySubGroupByGroupCount = (subGroupIssueCount: number, showEmptyGro
 const SubGroupSwimlaneHeader = observer(function SubGroupSwimlaneHeader({
   collapsedGroups,
   customFieldGroupOperations,
+  disableIssueCreation,
   getGroupIssueCount,
   group_by,
   handleCollapsedGroups,
@@ -99,7 +102,7 @@ const SubGroupSwimlaneHeader = observer(function SubGroupSwimlaneHeader({
                 customFieldGroupOperations={customFieldGroupOperations}
                 handleCollapsedGroups={handleCollapsedGroups}
                 issuePayload={_list.payload}
-                disableIssueCreation={getIsWorkflowWorkItemCreationDisabled(_list.id)}
+                disableIssueCreation={disableIssueCreation || getIsWorkflowWorkItemCreationDisabled(_list.id)}
                 isEpic={isEpic}
               />
             </div>
@@ -299,6 +302,7 @@ export const KanBanSwimLanes = observer(function KanBanSwimLanes(props: IKanBanS
   // store hooks
   const storeType = useIssueStoreType();
   const { moduleFieldsLoading, projectFieldsLoading, projectId, sourceModuleId } = useCustomFieldGrouping();
+  const isCustomGroupCreationDisabled = isCustomFieldGroupCreationDisabled(group_by, sourceModuleId);
   // derived values
   const groupByList = getGroupByColumns({
     groupBy: group_by as GroupByColumnTypes,
@@ -332,6 +336,7 @@ export const KanBanSwimLanes = observer(function KanBanSwimLanes(props: IKanBanS
           sub_group_by={sub_group_by}
           collapsedGroups={collapsedGroups}
           customFieldGroupOperations={customFieldGroupOperations}
+          disableIssueCreation={disableIssueCreation || isCustomGroupCreationDisabled}
           handleCollapsedGroups={handleCollapsedGroups}
           list={groupByList}
           showEmptyGroup={showEmptyGroup}

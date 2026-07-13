@@ -29,7 +29,8 @@ export type TOperations = {
   refetchCurrentGrouping: () => Promise<void>;
   wrapQuickCreate: (
     groupId: string,
-    createIssue: (projectId: string | null | undefined, data: TIssue) => Promise<TIssue | undefined>
+    createIssue: (projectId: string | null | undefined, data: TIssue) => Promise<TIssue | undefined>,
+    expectedGroupKey?: TCustomFieldGroupKey
   ) => (projectId: string | null | undefined, data: TIssue) => Promise<TIssue | undefined>;
 };
 
@@ -162,11 +163,17 @@ export const createCustomFieldGroupOperations = ({
   const wrapQuickCreate =
     (
       groupId: string,
-      createIssue: (projectId: string | null | undefined, data: TIssue) => Promise<TIssue | undefined>
+      createIssue: (projectId: string | null | undefined, data: TIssue) => Promise<TIssue | undefined>,
+      expectedGroupKey?: TCustomFieldGroupKey
     ) =>
     async (quickCreateProjectId: string | null | undefined, data: TIssue): Promise<TIssue | undefined> => {
       const groupKey = Object.keys(data).find(isCustomFieldGroupKey);
-      if (!groupKey) return await createIssue(quickCreateProjectId, data);
+      if (!groupKey) {
+        const expectedGroup = parseCustomFieldGroupKey(expectedGroupKey);
+        if (expectedGroup?.scope === "module" && !sourceModuleId) throw getUnavailableContextError("module");
+        if (expectedGroup) throw getUnavailableContextError("group");
+        return await createIssue(quickCreateProjectId, data);
+      }
 
       const customGroup = parseCustomFieldGroupKey(groupKey);
       if (customGroup?.scope === "module" && !sourceModuleId) throw getUnavailableContextError("module");

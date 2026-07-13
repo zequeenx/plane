@@ -104,7 +104,7 @@ export const HeaderGroupByCard = observer(function HeaderGroupByCard(props: IHea
           isOpen={isOpen}
           onClose={() => setIsOpen(false)}
           data={issuePayload}
-          onSubmit={handleCreatedIssue}
+          beforeCreateSuccess={handleCreatedIssue}
           storeType={storeType}
         />
       )}

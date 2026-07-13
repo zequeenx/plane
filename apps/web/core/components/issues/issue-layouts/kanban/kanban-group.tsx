@@ -45,8 +45,10 @@ import { useWorkFlowFDragNDrop } from "@/plane-web/components/workflow";
 import { GroupDragOverlay } from "../group-drag-overlay";
 import {
   getCustomFieldGroupQuickAddData,
+  isCustomFieldGroupCreationDisabled,
   isCustomFieldGroupKey,
   isIssueGroupDragAllowed,
+  mergeModuleGroupIds,
 } from "../custom-field-grouping";
 import type { TRenderQuickActions } from "../list/list-view-types";
 import { KanbanQuickAddIssueButton, QuickAddIssueRoot } from "../quick-add";
@@ -245,7 +247,10 @@ export const KanbanGroup = observer(function KanbanGroup(props: IKanbanGroup) {
       } else if (subGroupByKey === "cycle") {
         preloadedData = { ...preloadedData, cycle_id: subGroupValue };
       } else if (subGroupByKey === "module") {
-        preloadedData = { ...preloadedData, module_ids: [subGroupValue] };
+        preloadedData = {
+          ...preloadedData,
+          module_ids: mergeModuleGroupIds((preloadedData as Partial<TIssue>).module_ids, subGroupValue),
+        };
       } else if (subGroupByKey === "labels" && subGroupValue != "None") {
         preloadedData = { ...preloadedData, label_ids: [subGroupValue] };
       } else if (subGroupByKey === "assignees" && subGroupValue != "None") {
@@ -288,8 +293,9 @@ export const KanbanGroup = observer(function KanbanGroup(props: IKanbanGroup) {
     isIssueGroupDragAllowed(group_by) && (sub_group_by ? isIssueGroupDragAllowed(sub_group_by) : true);
   const groupedQuickAddCallback =
     quickAddCallback && isCustomFieldGroupKey(group_by)
-      ? customFieldGroupOperations.wrapQuickCreate(groupId, quickAddCallback)
+      ? customFieldGroupOperations.wrapQuickCreate(groupId, quickAddCallback, group_by)
       : quickAddCallback;
+  const isCustomGroupCreationDisabled = isCustomFieldGroupCreationDisabled(group_by, sourceModuleId);
 
   return (
     <div
@@ -340,6 +346,7 @@ export const KanbanGroup = observer(function KanbanGroup(props: IKanbanGroup) {
 
       {enableQuickIssueCreate &&
         !disableIssueCreation &&
+        !isCustomGroupCreationDisabled &&
         !getIsWorkflowWorkItemCreationDisabled(groupId, sub_group_id) && (
           <div className="sticky bottom-0 w-full bg-surface-2 py-0.5">
             <QuickAddIssueRoot

@@ -14,10 +14,12 @@ import {
   getCustomFieldGroupQuickAddData,
   getCustomFieldGroupValue,
   getCustomFieldGroupColumns,
+  isCustomFieldGroupCreationDisabled,
   isGroupableCustomField,
   isIssueGroupDragAllowed,
   normalizeCustomFieldGroupId,
   parseCustomFieldGroupKey,
+  mergeModuleGroupIds,
   resolveCustomFieldGroupField,
   stripCustomFieldGroupAnnotations,
 } from "./custom-field-grouping";
@@ -192,6 +194,36 @@ describe("getCustomFieldGroupQuickAddData", () => {
 
   it("does not advertise module grouping when source module context is unavailable", () => {
     expect(getCustomFieldGroupQuickAddData("modulecustomproperty_member-field", "member-1")).toEqual({});
+  });
+});
+
+describe("mergeModuleGroupIds", () => {
+  it("preserves the source module and adds a different static module subgroup", () => {
+    expect(mergeModuleGroupIds(["module-a"], "module-b")).toEqual(["module-a", "module-b"]);
+  });
+
+  it("deduplicates a static module subgroup that matches the source module", () => {
+    expect(mergeModuleGroupIds(["module-a"], "module-a")).toEqual(["module-a"]);
+  });
+
+  it("preserves the source module for the unassigned static module subgroup", () => {
+    expect(mergeModuleGroupIds(["module-a"], "None")).toEqual(["module-a"]);
+  });
+
+  it("keeps static-only module grouping behavior", () => {
+    expect(mergeModuleGroupIds(undefined, "module-b")).toEqual(["module-b"]);
+  });
+});
+
+describe("isCustomFieldGroupCreationDisabled", () => {
+  it("disables module custom group creation without source module context", () => {
+    expect(isCustomFieldGroupCreationDisabled("modulecustomproperty_member-field", null)).toBe(true);
+  });
+
+  it("allows module groups with source context and all project or static groups", () => {
+    expect(isCustomFieldGroupCreationDisabled("modulecustomproperty_member-field", "module-1")).toBe(false);
+    expect(isCustomFieldGroupCreationDisabled("customproperty_select-field", null)).toBe(false);
+    expect(isCustomFieldGroupCreationDisabled("state", null)).toBe(false);
   });
 });
 

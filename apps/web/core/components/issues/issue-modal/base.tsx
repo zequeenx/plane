@@ -32,6 +32,7 @@ import { useModuleFieldValueDeletionConfirmation } from "../module-fields/remove
 import { DraftIssueLayout } from "./draft-issue-layout";
 import { IssueFormRoot } from "./form";
 import type { IssueFormProps } from "./form";
+import { executeIssueCreateLifecycle } from "./issue-create-lifecycle";
 import type { IssuesModalProps } from "./modal";
 
 export const CreateUpdateIssueModalBase = observer(function CreateUpdateIssueModalBase(props: IssuesModalProps) {
@@ -40,6 +41,7 @@ export const CreateUpdateIssueModalBase = observer(function CreateUpdateIssueMod
     isOpen,
     onClose,
     beforeFormSubmit,
+    beforeCreateSuccess,
     onSubmit,
     withDraftIssueWrapper = true,
     storeType: issueStoreFromProps,
@@ -163,103 +165,115 @@ export const CreateUpdateIssueModalBase = observer(function CreateUpdateIssueMod
     payload: Partial<TIssue>,
     is_draft_issue: boolean = false
   ): Promise<TIssue | undefined> => {
-    if (!workspaceSlug || !payload.project_id) return;
+    const payloadProjectId = payload.project_id;
+    if (!workspaceSlug || !payloadProjectId) return;
 
-    try {
-      let response: TIssue | undefined;
-      // if draft issue, use draft issue store to create issue
-      if (is_draft_issue) {
-        response = (await draftIssues.createIssue(workspaceSlug.toString(), payload)) as TIssue;
-      }
-      // if cycle id in payload does not match the cycleId in url
-      // or if the moduleIds in Payload does not match the moduleId in url
-      // use the project issue store to create issues
-      else if (
-        (payload.cycle_id !== cycleId && storeType === EIssuesStoreType.CYCLE) ||
-        (!payload.module_ids?.includes(moduleId?.toString()) && storeType === EIssuesStoreType.MODULE)
-      ) {
-        response = await projectIssues.createIssue(workspaceSlug.toString(), payload.project_id, payload);
-      } // else just use the existing store type's create method
-      else if (createIssue) {
-        response = await createIssue(payload.project_id, payload);
-      }
+    return await executeIssueCreateLifecycle({
+      beforeSuccess: is_draft_issue ? undefined : beforeCreateSuccess,
+      create: async () => {
+        let response: TIssue | undefined;
+        // if draft issue, use draft issue store to create issue
+        if (is_draft_issue) {
+          response = (await draftIssues.createIssue(workspaceSlug.toString(), payload)) as TIssue;
+        }
+        // if cycle id in payload does not match the cycleId in url
+        // or if the moduleIds in Payload does not match the moduleId in url
+        // use the project issue store to create issues
+        else if (
+          (payload.cycle_id !== cycleId && storeType === EIssuesStoreType.CYCLE) ||
+          (!payload.module_ids?.includes(moduleId?.toString()) && storeType === EIssuesStoreType.MODULE)
+        ) {
+          response = await projectIssues.createIssue(workspaceSlug.toString(), payloadProjectId, payload);
+        } // else just use the existing store type's create method
+        else if (createIssue) {
+          response = await createIssue(payloadProjectId, payload);
+        }
 
-      // update uploaded assets' status
-      if (uploadedAssetIds.length > 0) {
-        await fileService.updateBulkProjectAssetsUploadStatus(
-          workspaceSlug?.toString() ?? "",
-          response?.project_id ?? "",
-          response?.id ?? "",
-          {
-            asset_ids: uploadedAssetIds,
+        // update uploaded assets' status
+        if (uploadedAssetIds.length > 0) {
+          await fileService.updateBulkProjectAssetsUploadStatus(
+            workspaceSlug?.toString() ?? "",
+            response?.project_id ?? "",
+            response?.id ?? "",
+            {
+              asset_ids: uploadedAssetIds,
+            }
+          );
+          setUploadedAssetIds([]);
+        }
+
+        if (!response) throw new Error();
+
+        // check if we should add issue to cycle/module
+        if (!is_draft_issue) {
+          if (
+            payload.cycle_id &&
+            payload.cycle_id !== "" &&
+            (payload.cycle_id !== cycleId || storeType !== EIssuesStoreType.CYCLE)
+          ) {
+            await addIssueToCycle(response, payload.cycle_id);
           }
-        );
-        setUploadedAssetIds([]);
-      }
-
-      if (!response) throw new Error();
-
-      // check if we should add issue to cycle/module
-      if (!is_draft_issue) {
-        if (
-          payload.cycle_id &&
-          payload.cycle_id !== "" &&
-          (payload.cycle_id !== cycleId || storeType !== EIssuesStoreType.CYCLE)
-        ) {
-          await addIssueToCycle(response, payload.cycle_id);
+          if (
+            payload.module_ids &&
+            payload.module_ids.length > 0 &&
+            (!payload.module_ids.includes(moduleId?.toString()) || storeType !== EIssuesStoreType.MODULE)
+          ) {
+            await addIssueToModule(response, payload.module_ids);
+          }
         }
-        if (
-          payload.module_ids &&
-          payload.module_ids.length > 0 &&
-          (!payload.module_ids.includes(moduleId?.toString()) || storeType !== EIssuesStoreType.MODULE)
-        ) {
-          await addIssueToModule(response, payload.module_ids);
+
+        // add other property values
+        if (response.id && response.project_id) {
+          await handleCreateUpdatePropertyValues({
+            issueId: response.id,
+            issueTypeId: response.type_id,
+            projectId: response.project_id,
+            workspaceSlug: workspaceSlug?.toString(),
+            isDraft: is_draft_issue,
+          });
+
+          // create sub work item
+          await handleCreateSubWorkItem({
+            workspaceSlug: workspaceSlug?.toString(),
+            projectId: response.project_id,
+            parentId: response.id,
+          });
         }
-      }
 
-      // add other property values
-      if (response.id && response.project_id) {
-        await handleCreateUpdatePropertyValues({
-          issueId: response.id,
-          issueTypeId: response.type_id,
-          projectId: response.project_id,
-          workspaceSlug: workspaceSlug?.toString(),
-          isDraft: is_draft_issue,
+        return response;
+      },
+      onCoreFailure: (error) => {
+        const createError = error as { error?: string };
+        setToast({
+          type: TOAST_TYPE.ERROR,
+          title: t("error"),
+          message: createError.error ?? t(is_draft_issue ? "draft_creation_failed" : "issue_creation_failed"),
         });
-
-        // create sub work item
-        await handleCreateSubWorkItem({
-          workspaceSlug: workspaceSlug?.toString(),
-          projectId: response.project_id,
-          parentId: response.id,
+      },
+      onFinalizationFailure: () => {
+        setDescription("<p></p>");
+        setChangesMade(null);
+        handleClose();
+      },
+      onSuccess: (response) => {
+        setToast({
+          type: TOAST_TYPE.SUCCESS,
+          title: t("success"),
+          message: `${is_draft_issue ? t("draft_created") : t("issue_created_successfully")} `,
+          actionItems: !is_draft_issue && response.project_id && (
+            <CreateIssueToastActionItems
+              workspaceSlug={workspaceSlug.toString()}
+              projectId={response.project_id}
+              issueId={response.id}
+            />
+          ),
         });
-      }
-
-      setToast({
-        type: TOAST_TYPE.SUCCESS,
-        title: t("success"),
-        message: `${is_draft_issue ? t("draft_created") : t("issue_created_successfully")} `,
-        actionItems: !is_draft_issue && response?.project_id && (
-          <CreateIssueToastActionItems
-            workspaceSlug={workspaceSlug.toString()}
-            projectId={response?.project_id}
-            issueId={response.id}
-          />
-        ),
-      });
-      if (!createMore) handleClose();
-      if (createMore && issueTitleRef) issueTitleRef?.current?.focus();
-      setDescription("<p></p>");
-      setChangesMade(null);
-      return response;
-    } catch (error: any) {
-      setToast({
-        type: TOAST_TYPE.ERROR,
-        title: t("error"),
-        message: error?.error ?? t(is_draft_issue ? "draft_creation_failed" : "issue_creation_failed"),
-      });
-      throw error;
-    }
+        if (!createMore) handleClose();
+        if (createMore && issueTitleRef) issueTitleRef.current?.focus();
+        setDescription("<p></p>");
+        setChangesMade(null);
+      },
+    });
   };
 
   const handleCycleChange = async (data: Partial<TIssue> | undefined, payload: Partial<TIssue>) => {

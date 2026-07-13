@@ -39,6 +39,7 @@ import { useWorkFlowFDragNDrop } from "@/plane-web/components/workflow";
 import { GroupDragOverlay } from "../group-drag-overlay";
 import {
   getCustomFieldGroupQuickAddData,
+  isCustomFieldGroupCreationDisabled,
   isCustomFieldGroupKey,
   isIssueGroupDragAllowed,
 } from "../custom-field-grouping";
@@ -270,8 +271,9 @@ export const ListGroup = observer(function ListGroup(props: Props) {
   const shouldExpand = (!!groupIssueCount && isExpanded) || !group_by;
   const groupedQuickAddCallback =
     quickAddCallback && isCustomFieldGroupKey(group_by)
-      ? customFieldGroupOperations.wrapQuickCreate(group.id, quickAddCallback)
+      ? customFieldGroupOperations.wrapQuickCreate(group.id, quickAddCallback, group_by)
       : quickAddCallback;
+  const isCustomGroupCreationDisabled = isCustomFieldGroupCreationDisabled(group_by, sourceModuleId);
 
   return validateEmptyIssueGroups(groupIssueCount) ? (
     <div
@@ -296,7 +298,11 @@ export const ListGroup = observer(function ListGroup(props: Props) {
           customFieldGroupOperations={customFieldGroupOperations}
           canEditProperties={canEditProperties}
           disableIssueCreation={
-            disableIssueCreation || isGroupByCreatedBy || isCompletedCycle || isWorkflowIssueCreationDisabled
+            disableIssueCreation ||
+            isCustomGroupCreationDisabled ||
+            isGroupByCreatedBy ||
+            isCompletedCycle ||
+            isWorkflowIssueCreationDisabled
           }
           addIssuesToView={addIssuesToView}
           selectionHelpers={selectionHelpers}
@@ -347,6 +353,7 @@ export const ListGroup = observer(function ListGroup(props: Props) {
 
           {enableIssueQuickAdd &&
             !disableIssueCreation &&
+            !isCustomGroupCreationDisabled &&
             !isGroupByCreatedBy &&
             !isCompletedCycle &&
             !isWorkflowIssueCreationDisabled && (

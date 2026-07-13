@@ -54,6 +54,16 @@ export const isIssueGroupDragAllowed = (groupBy: TIssueGroupByOptions | undefine
 
 export const normalizeCustomFieldGroupId = (groupId: string) => (groupId === "None" ? null : groupId);
 
+export const mergeModuleGroupIds = (moduleIds: string[] | null | undefined, groupId: string): string[] => {
+  const existingModuleIds = (moduleIds ?? []).filter((moduleId) => moduleId !== "None");
+  return [...new Set([...existingModuleIds, ...(groupId === "None" ? [] : [groupId])])];
+};
+
+export const isCustomFieldGroupCreationDisabled = (
+  key: TIssueGroupByOptions | string | null | undefined,
+  sourceModuleId?: string | null
+): boolean => parseCustomFieldGroupKey(key)?.scope === "module" && !sourceModuleId;
+
 export const getCustomFieldGroupQuickAddData = (
   key: TCustomFieldGroupKey,
   groupId: string,

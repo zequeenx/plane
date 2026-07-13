@@ -22,6 +22,7 @@ import type {
 import { ContentWrapper } from "@plane/ui";
 // components
 import RenderIfVisible from "@/components/core/render-if-visible-HOC";
+import { isCustomFieldGroupCreationDisabled } from "@/components/issues/issue-layouts/custom-field-grouping";
 import { KanbanColumnLoader } from "@/components/ui/loader/layouts/kanban-layout-loader";
 // hooks
 import { useKanbanView } from "@/hooks/store/use-kanban-view";
@@ -108,6 +109,7 @@ export const KanBan = observer(function KanBan(props: IKanBan) {
   const { moduleFieldsLoading, projectFieldsLoading, projectId, sourceModuleId } = useCustomFieldGrouping();
   // derived values
   const isDragDisabled = !issueKanBanView?.getCanUserDragDrop(group_by, sub_group_by);
+  const isCustomGroupCreationDisabled = isCustomFieldGroupCreationDisabled(group_by, sourceModuleId);
 
   const { getIsWorkflowWorkItemCreationDisabled } = useWorkFlowFDragNDrop(group_by, sub_group_by);
 
@@ -187,6 +189,7 @@ export const KanBan = observer(function KanBan(props: IKanBan) {
                     customFieldGroupOperations={customFieldGroupOperations}
                     disableIssueCreation={
                       disableIssueCreation ||
+                      isCustomGroupCreationDisabled ||
                       isGroupByCreatedBy ||
                       getIsWorkflowWorkItemCreationDisabled(subList.id, sub_group_id)
                     }

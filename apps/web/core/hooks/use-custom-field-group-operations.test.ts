@@ -179,6 +179,20 @@ describe("createCustomFieldGroupOperations", () => {
     expect(dependencies.updateModuleIssueValues).not.toHaveBeenCalled();
   });
 
+  it("does not fall back to ordinary create when missing module context omits the annotation", async () => {
+    const dependencies = dependencyFixture({ sourceModuleId: null });
+    const operations = createCustomFieldGroupOperations(dependencies);
+    const createIssue = vi.fn(async () => issueFixture({ id: "created-issue" }));
+    const data = issueFixture({ module_ids: [] });
+
+    await expect(
+      operations.wrapQuickCreate("member-2", createIssue, "modulecustomproperty_member-field")("project-1", data)
+    ).rejects.toThrow("module context");
+
+    expect(createIssue).not.toHaveBeenCalled();
+    expect(dependencies.updateModuleIssueValues).not.toHaveBeenCalled();
+  });
+
   it("handles modal creation from explicit grouping context when the response has no annotation", async () => {
     const dependencies = dependencyFixture();
     const operations = createCustomFieldGroupOperations(dependencies);
