@@ -18,6 +18,7 @@ import { shouldRenderColumn } from "@/helpers/issue-filter.helper";
 import { useModuleIssueFields } from "@/hooks/store/use-module-issue-fields";
 import { useProjectIssueFields } from "@/hooks/store/use-project-issue-fields";
 import { WithDisplayPropertiesHOC } from "../properties/with-display-properties-HOC";
+import { SpreadsheetCustomFieldCell } from "./custom-field-cell";
 
 type Props = {
   displayProperties: IIssueDisplayProperties;
@@ -104,7 +105,7 @@ export const IssueColumn = observer(function IssueColumn(props: Props) {
         ref={tableCellRef}
       >
         {customField ? (
-          <div className="flex h-full w-full items-center px-2">
+          <SpreadsheetCustomFieldCell>
             <ProjectFieldValueEditor
               commitPlainTextOnBlur
               disabled={disableUserActions}
@@ -114,9 +115,9 @@ export const IssueColumn = observer(function IssueColumn(props: Props) {
               value={issueDetail.field_values?.[customField.id]}
               workspaceSlug={workspaceSlug?.toString() ?? ""}
             />
-          </div>
+          </SpreadsheetCustomFieldCell>
         ) : moduleCustomField && sourceModuleId ? (
-          <div className="flex h-full w-full items-center px-2">
+          <SpreadsheetCustomFieldCell>
             <ProjectFieldValueEditor
               commitPlainTextOnBlur
               disabled={disableUserActions}
@@ -126,7 +127,7 @@ export const IssueColumn = observer(function IssueColumn(props: Props) {
               value={issueDetail.module_field_values?.[sourceModuleId]?.[moduleCustomField.id]}
               workspaceSlug={workspaceSlug?.toString() ?? ""}
             />
-          </div>
+          </SpreadsheetCustomFieldCell>
         ) : Column ? (
           <Column
             issue={issueDetail}
