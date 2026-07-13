@@ -118,17 +118,7 @@ export interface ViewFlags {
   enableInlineEditing: boolean;
 }
 
-export type GroupByColumnTypes =
-  | "project"
-  | "cycle"
-  | "module"
-  | "state"
-  | "state_detail.group"
-  | "priority"
-  | "labels"
-  | "assignees"
-  | "created_by"
-  | "team_project";
+export type GroupByColumnTypes = Exclude<TIssueGroupByOptions, null | "target_date">;
 
 export type TGetColumns = {
   isWorkspaceLevel?: boolean;

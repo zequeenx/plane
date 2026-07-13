@@ -32,7 +32,7 @@ export type TSystemIssueGroupByOptions =
   | "team_project"
   | null;
 
-export type TIssueGroupByOptions = TSystemIssueGroupByOptions | TModuleCustomPropertyKey;
+export type TIssueGroupByOptions = TSystemIssueGroupByOptions | TCustomPropertyKey | TModuleCustomPropertyKey;
 
 export type TIssueOrderByOptions =
   | "-created_at"

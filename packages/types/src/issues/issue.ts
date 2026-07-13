@@ -7,7 +7,12 @@
 import type { TIssuePriorities } from "../issues";
 import type { TStateGroups } from "../state";
 import type { TIssuePublicComment } from "./activity/issue_comment";
-import type { TIssueFieldValues, TIssueModuleFieldValues } from "./issue-fields";
+import type {
+  TCustomPropertyKey,
+  TIssueFieldValues,
+  TIssueModuleFieldValues,
+  TModuleCustomPropertyKey,
+} from "./issue-fields";
 import type { TIssueAttachment } from "./issue_attachment";
 import type { TIssueLink } from "./issue_link";
 import type { TIssueReaction, IIssuePublicReaction, IPublicVote } from "./issue_reaction";
@@ -43,7 +48,7 @@ export enum EIssuesStoreType {
   TEAM_PROJECT_WORK_ITEMS = "TEAM_PROJECT_WORK_ITEMS",
 }
 
-export type TBaseIssue = {
+type TIssueCore = {
   id: string;
   sequence_id: number;
   name: string;
@@ -82,6 +87,8 @@ export type TBaseIssue = {
   is_epic?: boolean;
   is_intake?: boolean;
 };
+
+export type TBaseIssue = TIssueCore & Partial<Record<TCustomPropertyKey | TModuleCustomPropertyKey, string | null>>;
 
 type IssueRelation = {
   id: string;
