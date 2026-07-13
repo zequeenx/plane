@@ -6,7 +6,7 @@
 
 import type { CSSProperties } from "react";
 import { extractInstruction } from "@atlaskit/pragmatic-drag-and-drop-hitbox/tree-item";
-import { clone, isNil, uniq } from "lodash-es";
+import { clone, isNil } from "lodash-es";
 import scrollIntoView from "smooth-scroll-into-view-if-needed";
 // plane types
 import { EIconSize, ISSUE_PRIORITIES, STATE_GROUPS } from "@plane/constants";
@@ -46,10 +46,10 @@ import { DEFAULT_DISPLAY_PROPERTIES } from "@/store/issue/issue-details/sub_issu
 import {
   getCustomFieldGroupColumns,
   isCustomFieldGroupKey,
-  normalizeCustomFieldGroupId,
   parseCustomFieldGroupKey,
   resolveCustomFieldGroupField,
 } from "./custom-field-grouping";
+import { buildGroupDragUpdate, getUpdatedStaticGroupValue } from "./group-drag-update";
 
 export const HIGHLIGHT_CLASS = "highlight";
 export const HIGHLIGHT_WITH_LINE = "highlight-with-line";
@@ -554,19 +554,6 @@ const getGroupId = (groupId: string) => {
   return [groupId];
 };
 
-const getUpdatedStaticGroupValue = (
-  currentValue: TIssue[keyof TIssue],
-  sourceGroupId: string,
-  destinationGroupId: string
-) => {
-  if (Array.isArray(currentValue)) {
-    const nextValue = currentValue.filter((value) => value !== sourceGroupId);
-    return destinationGroupId === "None" ? nextValue : uniq([...nextValue, destinationGroupId]);
-  }
-
-  return destinationGroupId === "None" ? null : destinationGroupId;
-};
-
 export const handleGroupDragDrop = async (
   source: GroupDropLocation,
   destination: GroupDropLocation,
@@ -607,10 +594,16 @@ export const handleGroupDragDrop = async (
   // update updatedIssue values based on the source and destination groupIds
   if (source.groupId && destination.groupId && source.groupId !== destination.groupId && groupBy) {
     const isCustomGroup = isCustomFieldGroupKey(groupBy);
-    const groupKey = isCustomGroup ? groupBy : ISSUE_FILTER_DEFAULT_DATA[groupBy];
-    const groupValue = isCustomGroup
-      ? normalizeCustomFieldGroupId(destination.groupId)
-      : getUpdatedStaticGroupValue(sourceIssue[groupKey], source.groupId, destination.groupId);
+    const staticGroupKey = isCustomGroup ? undefined : ISSUE_FILTER_DEFAULT_DATA[groupBy];
+    const groupUpdate = buildGroupDragUpdate({
+      currentValue: staticGroupKey ? sourceIssue[staticGroupKey] : undefined,
+      destinationGroupId: destination.groupId,
+      groupBy,
+      sourceGroupId: source.groupId,
+      staticGroupKey,
+    });
+    if (!groupUpdate) return;
+    const { groupKey, groupValue } = groupUpdate;
 
     // keep track of updates on what was added and what was removed
     issueUpdates[groupKey] = { ADD: getGroupId(destination.groupId), REMOVE: getGroupId(source.groupId) };

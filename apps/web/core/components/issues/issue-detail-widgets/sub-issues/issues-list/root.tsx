@@ -16,6 +16,7 @@ import { EIssueServiceType, EIssuesStoreType } from "@plane/types";
 import { SectionEmptyState } from "@/components/empty-state/section-empty-state-root";
 import { getGroupByColumns, isWorkspaceLevel } from "@/components/issues/issue-layouts/utils";
 import { useIssueDetail } from "@/hooks/store/use-issue-detail";
+import { useCustomFieldGrouping } from "@/hooks/use-custom-field-grouping";
 
 import { SubIssuesListGroup } from "./list-group";
 type Props = {
@@ -56,6 +57,7 @@ export const SubIssuesListRoot = observer(function SubIssuesListRoot(props: Prop
       filters: { getSubIssueFilters, getGroupedSubWorkItems, getFilteredSubWorkItems, resetFilters },
     },
   } = useIssueDetail(issueServiceType);
+  const { moduleFieldsLoading, projectFieldsLoading, sourceModuleId } = useCustomFieldGrouping();
 
   // derived values
   const filters = getSubIssueFilters(rootIssueId);
@@ -68,7 +70,10 @@ export const SubIssuesListRoot = observer(function SubIssuesListRoot(props: Prop
     includeNone: true,
     isWorkspaceLevel: isWorkspaceLevel(storeType),
     isEpic: issueServiceType === EIssueServiceType.EPICS,
+    moduleFieldsLoading,
     projectId,
+    projectFieldsLoading,
+    sourceModuleId,
   });
 
   const getWorkItemIds = useCallback(

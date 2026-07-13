@@ -5,7 +5,7 @@
  */
 
 import { set } from "lodash-es";
-import { action, makeObservable, observable, runInAction } from "mobx";
+import { action, computed, makeObservable, observable, runInAction } from "mobx";
 import { computedFn } from "mobx-utils";
 import type { EIssueFilterType } from "@plane/constants";
 import type {
@@ -16,6 +16,7 @@ import type {
   TGroupedIssues,
   TIssue,
 } from "@plane/types";
+import { resolveCustomFieldGroupSourceModuleId } from "@/hooks/custom-field-grouping-utils";
 import { getFilteredWorkItems, getGroupedWorkItemIds, updateSubWorkItemFilters } from "../helpers/base-issues-utils";
 import type { IssueSubIssuesStore } from "./sub_issues.store";
 
@@ -31,6 +32,7 @@ export const DEFAULT_DISPLAY_PROPERTIES = {
 };
 export interface IWorkItemSubIssueFiltersStore {
   subIssueFilters: Record<string, Partial<ISubWorkItemFilters>>;
+  sourceModuleId: string | null;
   // helpers methods
   updateSubWorkItemFilters: (
     filterType: EIssueFilterType,
@@ -53,12 +55,26 @@ export class WorkItemSubIssueFiltersStore implements IWorkItemSubIssueFiltersSto
   constructor(subIssueStore: IssueSubIssuesStore) {
     makeObservable(this, {
       subIssueFilters: observable,
+      sourceModuleId: computed,
       updateSubWorkItemFilters: action,
       getSubIssueFilters: action,
     });
 
     // root store
     this.subIssueStore = subIssueStore;
+  }
+
+  get sourceModuleId() {
+    const rootIssueStore = this.subIssueStore.rootIssueDetailStore.rootIssueStore;
+    const viewId = rootIssueStore.viewId;
+    const projectViewSourceModuleId = viewId
+      ? rootIssueStore.rootStore.projectView.getViewById(viewId)?.source_module
+      : null;
+
+    return resolveCustomFieldGroupSourceModuleId({
+      projectViewSourceModuleId,
+      routeModuleId: rootIssueStore.moduleId,
+    });
   }
 
   /**
@@ -112,7 +128,7 @@ export class WorkItemSubIssueFiltersStore implements IWorkItemSubIssueFiltersSto
     const groupByKey = subIssueFilters.displayFilters?.group_by;
     const orderByKey = subIssueFilters.displayFilters?.order_by;
 
-    const groupedWorkItemIds = getGroupedWorkItemIds(filteredWorkItems, groupByKey, orderByKey);
+    const groupedWorkItemIds = getGroupedWorkItemIds(filteredWorkItems, groupByKey, orderByKey, this.sourceModuleId);
 
     return groupedWorkItemIds;
   });

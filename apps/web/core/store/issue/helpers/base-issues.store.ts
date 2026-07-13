@@ -36,6 +36,7 @@ import {
   isCustomFieldGroupKey,
   stripCustomFieldGroupAnnotations,
 } from "@/components/issues/issue-layouts/custom-field-grouping";
+import { resolveCustomFieldGroupSourceModuleId } from "@/hooks/custom-field-grouping-utils";
 // services
 import { CycleService } from "@/services/cycle.service";
 import { IssueArchiveService, IssueService } from "@/services/issue";
@@ -282,12 +283,15 @@ export abstract class BaseIssuesStore implements IBaseIssuesStore {
   }
 
   get sourceModuleId() {
-    if (this.moduleId) return this.moduleId;
-
     const viewId = this.rootIssueStore.viewId;
-    if (!viewId) return null;
+    const projectViewSourceModuleId = viewId
+      ? this.rootIssueStore.rootStore.projectView.getViewById(viewId)?.source_module
+      : null;
 
-    return this.rootIssueStore.rootStore.projectView.getViewById(viewId)?.source_module ?? null;
+    return resolveCustomFieldGroupSourceModuleId({
+      projectViewSourceModuleId,
+      routeModuleId: this.moduleId,
+    });
   }
 
   // current Cycle Id from url
@@ -607,7 +611,7 @@ export abstract class BaseIssuesStore implements IBaseIssuesStore {
       } as TIssue);
 
       // call API to update the issue
-      await this.issueService.patchIssue(workspaceSlug, projectId, issueId, data);
+      await this.issueService.patchIssue(workspaceSlug, projectId, issueId, stripCustomFieldGroupAnnotations(data));
 
       // call fetch Parent Stats
       this.fetchParentStats(workspaceSlug, projectId);

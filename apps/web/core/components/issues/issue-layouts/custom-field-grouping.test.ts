@@ -1,6 +1,8 @@
 import type { TIssue, TModuleIssueField, TProjectIssueField } from "@plane/types";
 import { EProjectIssueFieldType } from "@plane/types";
-import { describe, expect, it } from "vitest";
+import { describe, expect, expectTypeOf, it } from "vitest";
+
+import type { TIssueApiPayload } from "./custom-field-grouping";
 
 import {
   applyCustomFieldGroupValue,
@@ -169,6 +171,7 @@ describe("stripCustomFieldGroupAnnotations", () => {
       module_field_values: { "module-1": { "member-field": "member-1" } },
       name: "Grouped work item",
     });
+    expectTypeOf(stripCustomFieldGroupAnnotations(data)).toEqualTypeOf<TIssueApiPayload>();
   });
 });
 

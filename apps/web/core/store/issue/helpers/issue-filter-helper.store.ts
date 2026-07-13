@@ -34,13 +34,13 @@ import { storage } from "@/lib/local-storage";
 import { isCustomFieldGroupKey } from "@/components/issues/issue-layouts/custom-field-grouping";
 import { getEnabledDisplayFilters } from "@/plane-web/store/issue/helpers/filter-utils";
 
-const getServerGroupBy = (groupBy: TIssueGroupByOptions | undefined) => {
+export const getServerGroupBy = (groupBy: TIssueGroupByOptions | undefined) => {
   if (!groupBy) return undefined;
   if (isCustomFieldGroupKey(groupBy)) return groupBy;
   return EIssueGroupByToServerOptions[groupBy as keyof typeof EIssueGroupByToServerOptions];
 };
 
-const getServerGroupFilter = (groupBy: string) => {
+export const getServerGroupFilter = (groupBy: string) => {
   if (isCustomFieldGroupKey(groupBy)) return `${groupBy}__exact`;
   return EServerGroupByToFilterOptions[groupBy as EIssueGroupByToServerOptions];
 };

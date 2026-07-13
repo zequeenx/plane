@@ -14,6 +14,7 @@ export const MODULE_CUSTOM_PROPERTY_PREFIX = "modulecustomproperty_";
 export type TCustomFieldGroupKey = TCustomPropertyKey | TModuleCustomPropertyKey;
 export type TCustomFieldGroupScope = "project" | "module";
 export type TParsedCustomFieldGroup = { fieldId: string; scope: TCustomFieldGroupScope };
+export type TIssueApiPayload = Omit<Partial<TIssue>, TCustomFieldGroupKey>;
 
 export type TCustomFieldGroupColumn = {
   avatarUrl?: string;
@@ -104,8 +105,13 @@ export const applyCustomFieldGroupValue = (
   };
 };
 
-export const stripCustomFieldGroupAnnotations = <T extends Partial<TIssue>>(data: T): T =>
-  Object.fromEntries(Object.entries(data).filter(([key]) => !isCustomFieldGroupKey(key))) as T;
+export const stripCustomFieldGroupAnnotations = (data: Partial<TIssue>): TIssueApiPayload => {
+  const payload: TIssueApiPayload = {};
+  for (const [key, value] of Object.entries(data)) {
+    if (!isCustomFieldGroupKey(key)) Object.assign(payload, { [key]: value });
+  }
+  return payload;
+};
 
 export const resolveCustomFieldGroupField = ({
   customGroup,
