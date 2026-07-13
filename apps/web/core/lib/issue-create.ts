@@ -21,3 +21,29 @@ export const getIssueCreateErrorMessage = (
     return error.message;
   return fallbackMessage;
 };
+
+export const settleIssueAttachmentOperations = async ({
+  auxiliaryOperations = [],
+  persistAttachment,
+  reportAuxiliaryError,
+}: {
+  auxiliaryOperations?: (() => Promise<unknown> | unknown)[];
+  persistAttachment: () => Promise<unknown> | unknown;
+  reportAuxiliaryError: (error: unknown) => void;
+}): Promise<void> => {
+  const operationResults = await Promise.allSettled(
+    [persistAttachment, ...auxiliaryOperations].map((operation) => Promise.resolve().then(operation))
+  );
+  const [attachmentResult, ...auxiliaryResults] = operationResults;
+
+  auxiliaryResults.forEach((result) => {
+    if (result.status !== "rejected") return;
+    try {
+      reportAuxiliaryError(result.reason);
+    } catch {
+      // Auxiliary reporting must not replace the persisted attachment result.
+    }
+  });
+
+  if (attachmentResult?.status === "rejected") throw attachmentResult.reason;
+};

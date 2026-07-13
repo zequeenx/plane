@@ -1,10 +1,105 @@
 import { describe, expect, it, vi } from "vitest";
-import { IssuePostCreateError } from "@/lib/issue-create";
+import { IssuePostCreateError, settleIssueAttachmentOperations } from "@/lib/issue-create";
 
 import { prepareGroupedIssueCreatePayload } from "./issue-create-context";
 import { executeIssueCreateLifecycle } from "./issue-create-lifecycle";
 
+const createDeferred = <T>() => {
+  let reject!: (reason?: unknown) => void;
+  let resolve!: (value: T | PromiseLike<T>) => void;
+  const promise = new Promise<T>((resolvePromise, rejectPromise) => {
+    reject = rejectPromise;
+    resolve = resolvePromise;
+  });
+  return { promise, reject, resolve };
+};
+
 describe("executeIssueCreateLifecycle", () => {
+  it("waits for module attachment after detail prefetch fails and continues custom finalization", async () => {
+    const issue = { id: "issue-1" };
+    const attachment = createDeferred<void>();
+    const detailPrefetch = createDeferred<void>();
+    const detailError = new Error("module detail failed");
+    const reportAuxiliaryError = vi.fn();
+    const customFieldFinalizer = vi.fn();
+    const onPostCreateFailure = vi.fn();
+    const onSuccess = vi.fn();
+
+    const result = executeIssueCreateLifecycle({
+      createIssue: async () => issue,
+      finalizeCreatedIssue: async () => {
+        await settleIssueAttachmentOperations({
+          auxiliaryOperations: [() => detailPrefetch.promise],
+          persistAttachment: () => attachment.promise,
+          reportAuxiliaryError,
+        });
+        customFieldFinalizer();
+      },
+      onCoreFailure: vi.fn(),
+      onPostCreateFailure,
+      onSuccess,
+    });
+
+    detailPrefetch.reject(detailError);
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(onPostCreateFailure).not.toHaveBeenCalled();
+    expect(onSuccess).not.toHaveBeenCalled();
+    expect(customFieldFinalizer).not.toHaveBeenCalled();
+
+    attachment.resolve();
+
+    await expect(result).resolves.toBe(issue);
+    expect(reportAuxiliaryError).toHaveBeenCalledWith(detailError);
+    expect(customFieldFinalizer).toHaveBeenCalledTimes(1);
+    expect(onPostCreateFailure).not.toHaveBeenCalled();
+    expect(onSuccess).toHaveBeenCalledWith(issue);
+  });
+
+  it("waits for detail prefetch after attachment fails and preserves the attachment error", async () => {
+    const issue = { id: "issue-1" };
+    const attachment = createDeferred<void>();
+    const detailPrefetch = createDeferred<void>();
+    const attachmentError = new Error("module attachment failed");
+    const detailError = new Error("module detail failed");
+    const reportingError = new Error("detail reporting failed");
+    const reportAuxiliaryError = vi.fn(() => {
+      throw reportingError;
+    });
+    const onCoreFailure = vi.fn();
+    const onPostCreateFailure = vi.fn();
+    const onSuccess = vi.fn();
+
+    const result = executeIssueCreateLifecycle({
+      createIssue: async () => issue,
+      finalizeCreatedIssue: async () => {
+        await settleIssueAttachmentOperations({
+          auxiliaryOperations: [() => detailPrefetch.promise],
+          persistAttachment: () => attachment.promise,
+          reportAuxiliaryError,
+        });
+      },
+      onCoreFailure,
+      onPostCreateFailure,
+      onSuccess,
+    });
+
+    attachment.reject(attachmentError);
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(onPostCreateFailure).not.toHaveBeenCalled();
+
+    detailPrefetch.reject(detailError);
+
+    await expect(result).rejects.toBe(attachmentError);
+    expect(reportAuxiliaryError).toHaveBeenCalledWith(detailError);
+    expect(onPostCreateFailure).toHaveBeenCalledWith(issue, attachmentError);
+    expect(onCoreFailure).not.toHaveBeenCalled();
+    expect(onSuccess).not.toHaveBeenCalled();
+  });
+
   it("recognizes a store-level post-create error carrying the created issue", async () => {
     const issue = { id: "issue-1" };
     const attachmentError = new Error("module attachment failed");

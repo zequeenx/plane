@@ -165,7 +165,17 @@ export const createCustomFieldGroupOperations = ({
       }
       throw error;
     }
-    if (!canReconcileLocally) await refetchCurrentGrouping();
+    if (!canReconcileLocally) {
+      try {
+        await refetchCurrentGrouping();
+      } catch (reconciliationError) {
+        try {
+          reportReconciliationError(reconciliationError);
+        } catch {
+          // Reporting must not turn successful field persistence into a partial create.
+        }
+      }
+    }
   };
 
   const persistCreatedModuleField = async (

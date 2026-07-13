@@ -124,6 +124,36 @@ describe("createCustomFieldGroupOperations", () => {
     expect(calls).toEqual(["create-and-attach", "field"]);
   });
 
+  it("keeps field creation successful when fallback grouping reconciliation fails", async () => {
+    const reconciliationError = new Error("group refetch failed");
+    const reportReconciliationError = vi.fn();
+    const dependencies = dependencyFixture({
+      fetchIssues: vi.fn(async () => {
+        throw reconciliationError;
+      }),
+      reportReconciliationError,
+      updateIssueLocalState: undefined,
+      updateModuleIssueValues: vi.fn(async () => ({})),
+    });
+    const operations = createCustomFieldGroupOperations(dependencies);
+    const createdIssue = issueFixture({ id: "created-issue", module_field_values: undefined });
+    const createIssue = vi.fn(async () => createdIssue);
+    const submittedData = issueFixture({
+      "modulecustomproperty_member-field": "member-2",
+      module_ids: ["module-1"],
+    });
+
+    await expect(operations.wrapQuickCreate("member-2", createIssue)("project-1", submittedData)).resolves.toBe(
+      createdIssue
+    );
+
+    expect(dependencies.updateModuleIssueValues).toHaveBeenCalledTimes(1);
+    expect(dependencies.fetchIssues).toHaveBeenCalledTimes(1);
+    expect(reportReconciliationError).toHaveBeenCalledTimes(1);
+    expect(reportReconciliationError).toHaveBeenCalledWith(reconciliationError);
+    expect(dependencies.reportPartialCreateError).not.toHaveBeenCalled();
+  });
+
   it("preserves ordinary quick create without wrapping behavior", async () => {
     const dependencies = dependencyFixture();
     const operations = createCustomFieldGroupOperations(dependencies);

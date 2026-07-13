@@ -23,6 +23,7 @@ import { useModule } from "@/hooks/store/use-module";
 import { useProject } from "@/hooks/store/use-project";
 import { useIssueStoreType } from "@/hooks/use-issue-layout-store";
 import { useIssuesActions } from "@/hooks/use-issues-actions";
+import { settleIssueAttachmentOperations } from "@/lib/issue-create";
 // services
 import { FileService } from "@/services/file.service";
 const fileService = new FileService();
@@ -139,14 +140,15 @@ export const CreateUpdateIssueModalBase = observer(function CreateUpdateIssueMod
   };
 
   const addIssueToModule = async (issue: TIssue, moduleIds: string[]) => {
-    if (!workspaceSlug || !issue.project_id) return;
+    const issueProjectId = issue.project_id;
+    if (!workspaceSlug || !issueProjectId) return;
+    const slug = workspaceSlug.toString();
 
-    await Promise.all([
-      issues.changeModulesInIssue(workspaceSlug.toString(), issue.project_id, issue.id, moduleIds, []),
-      ...moduleIds.map(
-        (moduleId) => issue.project_id && fetchModuleDetails(workspaceSlug.toString(), issue.project_id, moduleId)
-      ),
-    ]);
+    await settleIssueAttachmentOperations({
+      auxiliaryOperations: moduleIds.map((moduleId) => () => fetchModuleDetails(slug, issueProjectId, moduleId)),
+      persistAttachment: () => issues.changeModulesInIssue(slug, issueProjectId, issue.id, moduleIds, []),
+      reportAuxiliaryError: (error) => console.error("Failed to refresh module details after issue creation", error),
+    });
   };
 
   const handleCreateMoreToggleChange = (value: boolean) => {
