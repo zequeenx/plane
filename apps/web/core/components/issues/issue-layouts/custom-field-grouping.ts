@@ -1,5 +1,6 @@
 import type {
   TCustomPropertyKey,
+  TIssue,
   TIssueGroupByOptions,
   TModuleCustomPropertyKey,
   TModuleIssueField,
@@ -45,6 +46,66 @@ export const parseCustomFieldGroupKey = (
 export const isCustomFieldGroupKey = (
   key: TIssueGroupByOptions | string | null | undefined
 ): key is TCustomFieldGroupKey => !!parseCustomFieldGroupKey(key);
+
+export const normalizeCustomFieldGroupId = (groupId: string) => (groupId === "None" ? null : groupId);
+
+export const getCustomFieldGroupValue = (
+  issue: Partial<TIssue> | undefined,
+  key: TCustomFieldGroupKey,
+  moduleId?: string | null
+): string | null => {
+  if (!issue) return null;
+
+  const annotation = issue[key];
+  if (typeof annotation === "string" || annotation === null) return annotation;
+
+  const parsed = parseCustomFieldGroupKey(key);
+  if (!parsed) return null;
+
+  const fallback =
+    parsed.scope === "project"
+      ? issue.field_values?.[parsed.fieldId]
+      : moduleId
+        ? issue.module_field_values?.[moduleId]?.[parsed.fieldId]
+        : undefined;
+
+  return typeof fallback === "string" ? fallback : null;
+};
+
+export const applyCustomFieldGroupValue = (
+  issue: TIssue,
+  key: TCustomFieldGroupKey,
+  groupId: string,
+  moduleId?: string | null
+): TIssue => {
+  const value = normalizeCustomFieldGroupId(groupId);
+  const parsed = parseCustomFieldGroupKey(key);
+  if (!parsed) return issue;
+
+  if (parsed.scope === "project")
+    return {
+      ...issue,
+      [key]: value,
+      field_values: { ...issue.field_values, [parsed.fieldId]: value },
+    };
+
+  if (!moduleId) return issue;
+
+  return {
+    ...issue,
+    [key]: value,
+    module_field_values: {
+      ...issue.module_field_values,
+      [moduleId]: {
+        ...issue.module_field_values?.[moduleId],
+        [parsed.fieldId]: value,
+      },
+    },
+  };
+};
+
+export const stripCustomFieldGroupAnnotations = <T extends Partial<TIssue>>(data: T): T =>
+  Object.fromEntries(Object.entries(data).filter(([key]) => !isCustomFieldGroupKey(key))) as T;
 
 export const resolveCustomFieldGroupField = ({
   customGroup,

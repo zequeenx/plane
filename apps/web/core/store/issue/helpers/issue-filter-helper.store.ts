@@ -31,18 +31,17 @@ import { EIssueLayoutTypes } from "@plane/types";
 import { getComputedDisplayFilters, getComputedDisplayProperties } from "@plane/utils";
 // lib
 import { storage } from "@/lib/local-storage";
+import { isCustomFieldGroupKey } from "@/components/issues/issue-layouts/custom-field-grouping";
 import { getEnabledDisplayFilters } from "@/plane-web/store/issue/helpers/filter-utils";
-
-const MODULE_CUSTOM_PROPERTY_PREFIX = "modulecustomproperty_";
 
 const getServerGroupBy = (groupBy: TIssueGroupByOptions | undefined) => {
   if (!groupBy) return undefined;
-  if (groupBy.startsWith(MODULE_CUSTOM_PROPERTY_PREFIX)) return groupBy;
+  if (isCustomFieldGroupKey(groupBy)) return groupBy;
   return EIssueGroupByToServerOptions[groupBy as keyof typeof EIssueGroupByToServerOptions];
 };
 
 const getServerGroupFilter = (groupBy: string) => {
-  if (groupBy.startsWith(MODULE_CUSTOM_PROPERTY_PREFIX)) return `${groupBy}__exact`;
+  if (isCustomFieldGroupKey(groupBy)) return `${groupBy}__exact`;
   return EServerGroupByToFilterOptions[groupBy as EIssueGroupByToServerOptions];
 };
 

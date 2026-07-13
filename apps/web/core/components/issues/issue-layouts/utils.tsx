@@ -6,7 +6,7 @@
 
 import type { CSSProperties } from "react";
 import { extractInstruction } from "@atlaskit/pragmatic-drag-and-drop-hitbox/tree-item";
-import { clone, isNil, pull, uniq, concat } from "lodash-es";
+import { clone, isNil, uniq } from "lodash-es";
 import scrollIntoView from "smooth-scroll-into-view-if-needed";
 // plane types
 import { EIconSize, ISSUE_PRIORITIES, STATE_GROUPS } from "@plane/constants";
@@ -45,6 +45,8 @@ import { ISSUE_FILTER_DEFAULT_DATA } from "@/store/issue/helpers/base-issues.sto
 import { DEFAULT_DISPLAY_PROPERTIES } from "@/store/issue/issue-details/sub_issues_filter.store";
 import {
   getCustomFieldGroupColumns,
+  isCustomFieldGroupKey,
+  normalizeCustomFieldGroupId,
   parseCustomFieldGroupKey,
   resolveCustomFieldGroupField,
 } from "./custom-field-grouping";
@@ -552,6 +554,19 @@ const getGroupId = (groupId: string) => {
   return [groupId];
 };
 
+const getUpdatedStaticGroupValue = (
+  currentValue: TIssue[keyof TIssue],
+  sourceGroupId: string,
+  destinationGroupId: string
+) => {
+  if (Array.isArray(currentValue)) {
+    const nextValue = currentValue.filter((value) => value !== sourceGroupId);
+    return destinationGroupId === "None" ? nextValue : uniq([...nextValue, destinationGroupId]);
+  }
+
+  return destinationGroupId === "None" ? null : destinationGroupId;
+};
+
 export const handleGroupDragDrop = async (
   source: GroupDropLocation,
   destination: GroupDropLocation,
@@ -591,17 +606,11 @@ export const handleGroupDragDrop = async (
 
   // update updatedIssue values based on the source and destination groupIds
   if (source.groupId && destination.groupId && source.groupId !== destination.groupId && groupBy) {
-    const groupKey = ISSUE_FILTER_DEFAULT_DATA[groupBy];
-    let groupValue: any = clone(sourceIssue[groupKey]);
-
-    // If groupValues is an array, remove source groupId and add destination groupId
-    if (Array.isArray(groupValue)) {
-      pull(groupValue, source.groupId);
-      if (destination.groupId !== "None") groupValue = uniq(concat(groupValue, [destination.groupId]));
-    } // else just update the groupValue based on destination groupId
-    else {
-      groupValue = destination.groupId === "None" ? null : destination.groupId;
-    }
+    const isCustomGroup = isCustomFieldGroupKey(groupBy);
+    const groupKey = isCustomGroup ? groupBy : ISSUE_FILTER_DEFAULT_DATA[groupBy];
+    const groupValue = isCustomGroup
+      ? normalizeCustomFieldGroupId(destination.groupId)
+      : getUpdatedStaticGroupValue(sourceIssue[groupKey], source.groupId, destination.groupId);
 
     // keep track of updates on what was added and what was removed
     issueUpdates[groupKey] = { ADD: getGroupId(destination.groupId), REMOVE: getGroupId(source.groupId) };
@@ -612,16 +621,11 @@ export const handleGroupDragDrop = async (
   // update updatedIssue values based on the source and destination subGroupIds
   if (subGroupBy && source.subGroupId && destination.subGroupId && source.subGroupId !== destination.subGroupId) {
     const subGroupKey = ISSUE_FILTER_DEFAULT_DATA[subGroupBy];
-    let subGroupValue: any = clone(sourceIssue[subGroupKey]);
-
-    // If subGroupValue is an array, remove source subGroupId and add destination subGroupId
-    if (Array.isArray(subGroupValue)) {
-      pull(subGroupValue, source.subGroupId);
-      if (destination.subGroupId !== "None") subGroupValue = uniq(concat(subGroupValue, [destination.subGroupId]));
-    } // else just update the subGroupValue based on destination subGroupId
-    else {
-      subGroupValue = destination.subGroupId === "None" ? null : destination.subGroupId;
-    }
+    const subGroupValue = getUpdatedStaticGroupValue(
+      sourceIssue[subGroupKey],
+      source.subGroupId,
+      destination.subGroupId
+    );
 
     // keep track of updates on what was added and what was removed
     issueUpdates[subGroupKey] = { ADD: getGroupId(destination.subGroupId), REMOVE: getGroupId(source.subGroupId) };

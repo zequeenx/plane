@@ -16,6 +16,10 @@ import type {
   TIssueOrderByOptions,
 } from "@plane/types";
 import { checkDateCriteria, convertToISODateString, parseDateFilter } from "@plane/utils";
+import {
+  getCustomFieldGroupValue,
+  isCustomFieldGroupKey,
+} from "@/components/issues/issue-layouts/custom-field-grouping";
 import { store } from "@/lib/store-context";
 import { EIssueGroupedAction, ISSUE_GROUP_BY_KEY } from "./base-issues.store";
 
@@ -308,7 +312,8 @@ export const getOrderedWorkItems = (workItems: TIssue[], orderByKey: TIssueOrder
 export const getGroupedWorkItemIds = (
   workItems: TIssue[],
   groupByKey?: TIssueGroupByOptions,
-  orderByKey: TIssueOrderByOptions = "-created_at"
+  orderByKey: TIssueOrderByOptions = "-created_at",
+  sourceModuleId?: string | null
 ): Record<string, string[]> => {
   // If group by is not set set default as ALL ISSUES
   if (!groupByKey) {
@@ -332,7 +337,11 @@ export const getGroupedWorkItemIds = (
   // Group work items
   const groupKey = getDefaultGroupKey(groupByKey);
   const groupedWorkItems = groupBy(workItems, (item) => {
-    const value = groupKey ? item[groupKey] : null;
+    const value = isCustomFieldGroupKey(groupByKey)
+      ? getCustomFieldGroupValue(item, groupByKey, sourceModuleId)
+      : groupKey
+        ? item[groupKey]
+        : null;
     if (Array.isArray(value)) {
       if (value.length === 0) return "None";
       // Sort & join to build deterministic set-like key

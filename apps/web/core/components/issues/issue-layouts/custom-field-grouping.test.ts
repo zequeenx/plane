@@ -1,15 +1,51 @@
-import type { TModuleIssueField, TProjectIssueField } from "@plane/types";
+import type { TIssue, TModuleIssueField, TProjectIssueField } from "@plane/types";
 import { EProjectIssueFieldType } from "@plane/types";
 import { describe, expect, it } from "vitest";
 
 import {
+  applyCustomFieldGroupValue,
   buildCustomFieldGroupColumns,
   buildCustomFieldGroupOptions,
+  getCustomFieldGroupValue,
   getCustomFieldGroupColumns,
   isGroupableCustomField,
+  normalizeCustomFieldGroupId,
   parseCustomFieldGroupKey,
   resolveCustomFieldGroupField,
+  stripCustomFieldGroupAnnotations,
 } from "./custom-field-grouping";
+
+const issueFixture = (overrides: Partial<TIssue> = {}): TIssue => ({
+  archived_at: null,
+  assignee_ids: [],
+  attachment_count: 0,
+  completed_at: null,
+  created_at: "2026-07-13T00:00:00Z",
+  created_by: "member-1",
+  cycle_id: null,
+  estimate_point: null,
+  field_values: {},
+  id: "issue-1",
+  is_draft: false,
+  label_ids: [],
+  link_count: 0,
+  module_ids: ["module-1"],
+  name: "Grouped work item",
+  parent_id: null,
+  priority: "none",
+  project_id: "project-1",
+  sequence_id: 1,
+  sort_order: 100,
+  start_date: null,
+  state_id: "state-1",
+  sub_issues_count: 0,
+  sub_state_id: null,
+  target_date: null,
+  type_id: null,
+  updated_at: "2026-07-13T00:00:00Z",
+  updated_by: "member-1",
+  ...overrides,
+});
 
 const projectFieldBase: TProjectIssueField = {
   created_at: "2026-07-13T00:00:00Z",
@@ -80,6 +116,59 @@ describe("parseCustomFieldGroupKey", () => {
 
   it("ignores system group keys", () => {
     expect(parseCustomFieldGroupKey("priority")).toBeUndefined();
+  });
+});
+
+describe("custom field group values", () => {
+  it("projects project custom field groups into the field map and flattened annotation", () => {
+    const result = applyCustomFieldGroupValue(issueFixture(), "customproperty_select-field", "option-a");
+
+    expect(result.field_values["select-field"]).toBe("option-a");
+    expect(result["customproperty_select-field"]).toBe("option-a");
+  });
+
+  it("projects module custom field groups into the source module map and flattened annotation", () => {
+    const result = applyCustomFieldGroupValue(
+      issueFixture({ module_field_values: { "module-1": {} } }),
+      "modulecustomproperty_member-field",
+      "member-1",
+      "module-1"
+    );
+
+    expect(result.module_field_values?.["module-1"]?.["member-field"]).toBe("member-1");
+    expect(result["modulecustomproperty_member-field"]).toBe("member-1");
+  });
+
+  it("falls back to project and source module field maps", () => {
+    const issue = issueFixture({
+      field_values: { "select-field": "option-a" },
+      module_field_values: { "module-1": { "member-field": "member-1" } },
+    });
+
+    expect(getCustomFieldGroupValue(issue, "customproperty_select-field")).toBe("option-a");
+    expect(getCustomFieldGroupValue(issue, "modulecustomproperty_member-field", "module-1")).toBe("member-1");
+  });
+
+  it("normalizes the unassigned group to a null field value", () => {
+    expect(normalizeCustomFieldGroupId("None")).toBeNull();
+  });
+});
+
+describe("stripCustomFieldGroupAnnotations", () => {
+  it("removes project and module annotations while preserving issue fields and field maps", () => {
+    const data: Partial<TIssue> = {
+      "customproperty_select-field": "option-a",
+      field_values: { "select-field": "option-a" },
+      module_field_values: { "module-1": { "member-field": "member-1" } },
+      "modulecustomproperty_member-field": "member-1",
+      name: "Grouped work item",
+    };
+
+    expect(stripCustomFieldGroupAnnotations(data)).toEqual({
+      field_values: { "select-field": "option-a" },
+      module_field_values: { "module-1": { "member-field": "member-1" } },
+      name: "Grouped work item",
+    });
   });
 });
 

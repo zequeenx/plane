@@ -31,6 +31,11 @@ import { EIssueServiceType, EIssueLayoutTypes } from "@plane/types";
 import { convertToISODateString } from "@plane/utils";
 // plane web imports
 import { workItemSortWithOrderByExtended } from "@/plane-web/store/issue/helpers/base-issue.store";
+import {
+  getCustomFieldGroupValue,
+  isCustomFieldGroupKey,
+  stripCustomFieldGroupAnnotations,
+} from "@/components/issues/issue-layouts/custom-field-grouping";
 // services
 import { CycleService } from "@/services/cycle.service";
 import { IssueArchiveService, IssueService } from "@/services/issue";
@@ -65,6 +70,7 @@ export interface IBaseIssuesStore {
   //actions
   removeIssue: (workspaceSlug: string, projectId: string, issueId: string) => Promise<void>;
   clear(shouldClearPaginationOptions?: boolean): void;
+  updateIssueLocalState: (issueId: string, data: Partial<TIssue>) => void;
   // helper methods
   getIssueIds: (groupId?: string, subGroupId?: string) => string[] | undefined;
   issuesSortWithOrderBy(issueIds: string[], key: Partial<TIssueOrderByOptions>): string[];
@@ -214,6 +220,7 @@ export abstract class BaseIssuesStore implements IBaseIssuesStore {
       paginationOptions: observable,
       // computed
       moduleId: computed,
+      sourceModuleId: computed,
       cycleId: computed,
       orderBy: computed,
       groupBy: computed,
@@ -232,6 +239,7 @@ export abstract class BaseIssuesStore implements IBaseIssuesStore {
       removeIssueFromList: action.bound,
 
       createIssue: action,
+      updateIssueLocalState: action.bound,
       issueUpdate: action,
       updateIssueDates: action,
       issueQuickAdd: action.bound,
@@ -271,6 +279,15 @@ export abstract class BaseIssuesStore implements IBaseIssuesStore {
   // current Module Id from url
   get moduleId() {
     return this.rootIssueStore.moduleId;
+  }
+
+  get sourceModuleId() {
+    if (this.moduleId) return this.moduleId;
+
+    const viewId = this.rootIssueStore.viewId;
+    if (!viewId) return null;
+
+    return this.rootIssueStore.rootStore.projectView.getViewById(viewId)?.source_module ?? null;
   }
 
   // current Cycle Id from url
@@ -533,7 +550,11 @@ export abstract class BaseIssuesStore implements IBaseIssuesStore {
     shouldUpdateList = true
   ) {
     // perform an API call
-    const response = await this.issueService.createIssue(workspaceSlug, projectId, data);
+    const response = await this.issueService.createIssue(
+      workspaceSlug,
+      projectId,
+      stripCustomFieldGroupAnnotations(data)
+    );
 
     // add Issue to Store
     this.addIssue(response, shouldUpdateList);
@@ -542,6 +563,15 @@ export abstract class BaseIssuesStore implements IBaseIssuesStore {
     shouldUpdateList && (await this.fetchParentStats(workspaceSlug, projectId));
 
     return response;
+  }
+
+  updateIssueLocalState(issueId: string, data: Partial<TIssue>) {
+    const issueBeforeUpdate = clone(this.rootIssueStore.issues.getIssueById(issueId));
+    if (!issueBeforeUpdate) return;
+
+    const nextIssue = { ...issueBeforeUpdate, ...data };
+    this.rootIssueStore.issues.updateIssue(issueId, data);
+    this.updateIssueList(nextIssue, issueBeforeUpdate);
   }
 
   /**
@@ -1542,6 +1572,16 @@ export abstract class BaseIssuesStore implements IBaseIssuesStore {
     }
   }
 
+  private getGroupValue = (
+    issue: Partial<TIssue> | undefined,
+    groupBy: TIssueDisplayFilterOptions
+  ): string | string[] | null | undefined => {
+    if (isCustomFieldGroupKey(groupBy)) return getCustomFieldGroupValue(issue, groupBy, this.sourceModuleId);
+
+    const issueKey = ISSUE_GROUP_BY_KEY[groupBy];
+    return issue?.[issueKey] as string | string[] | null | undefined;
+  };
+
   /**
    * This method is used to get update Details that would be used to update the issue Ids at the path
    * @param issue current state of issue
@@ -1556,20 +1596,22 @@ export abstract class BaseIssuesStore implements IBaseIssuesStore {
   ): { path: string[]; action: EIssueGroupedAction }[] => {
     // check the before and after states to return if there needs to be a re-sorting of issueId list if the issue property that orderBy  depends on has changed
     const orderByUpdates = this.getOrderByUpdateDetails(issue, issueBeforeUpdate);
+    const groupBy = this.groupBy;
     // if unGrouped, then return the path as ALL_ISSUES along with orderByUpdates
-    if (!this.issueGroupKey) return action ? [{ path: [ALL_ISSUES], action }, ...orderByUpdates] : orderByUpdates;
+    if (!groupBy) return action ? [{ path: [ALL_ISSUES], action }, ...orderByUpdates] : orderByUpdates;
 
-    const issueGroupKeyValue = issue?.[this.issueGroupKey] as string | string[] | null | undefined;
-    const issueBeforeUpdateGroupKey = issueBeforeUpdate?.[this.issueGroupKey] as string | string[] | null | undefined;
+    const issueGroupKeyValue = this.getGroupValue(issue, groupBy);
+    const issueBeforeUpdateGroupKey = this.getGroupValue(issueBeforeUpdate, groupBy);
     // if grouped, the get the Difference between the two issue properties (this.issueGroupKey) on which groupBy is performed
     const groupActionsArray = getDifference(
-      this.getArrayStringArray(issue, issueGroupKeyValue, this.groupBy),
-      this.getArrayStringArray(issueBeforeUpdate, issueBeforeUpdateGroupKey, this.groupBy),
+      this.getArrayStringArray(issue, issueGroupKeyValue, groupBy),
+      this.getArrayStringArray(issueBeforeUpdate, issueBeforeUpdateGroupKey, groupBy),
       action
     );
 
+    const subGroupBy = this.subGroupBy;
     // if not subGrouped, then use the differences to construct an updateDetails Array
-    if (!this.issueSubGroupKey)
+    if (!subGroupBy)
       return [
         ...getGroupIssueKeyActions(
           groupActionsArray[EIssueGroupedAction.ADD],
@@ -1578,16 +1620,12 @@ export abstract class BaseIssuesStore implements IBaseIssuesStore {
         ...orderByUpdates,
       ];
 
-    const issueSubGroupKey = issue?.[this.issueSubGroupKey] as string | string[] | null | undefined;
-    const issueBeforeUpdateSubGroupKey = issueBeforeUpdate?.[this.issueSubGroupKey] as
-      | string
-      | string[]
-      | null
-      | undefined;
+    const issueSubGroupKey = this.getGroupValue(issue, subGroupBy);
+    const issueBeforeUpdateSubGroupKey = this.getGroupValue(issueBeforeUpdate, subGroupBy);
     // if subGrouped, the get the Difference between the two issue properties (this.issueGroupKey) on which subGroupBy is performed
     const subGroupActionsArray = getDifference(
-      this.getArrayStringArray(issue, issueSubGroupKey, this.subGroupBy),
-      this.getArrayStringArray(issueBeforeUpdate, issueBeforeUpdateSubGroupKey, this.subGroupBy),
+      this.getArrayStringArray(issue, issueSubGroupKey, subGroupBy),
+      this.getArrayStringArray(issueBeforeUpdate, issueBeforeUpdateSubGroupKey, subGroupBy),
       action
     );
 
@@ -1596,10 +1634,10 @@ export abstract class BaseIssuesStore implements IBaseIssuesStore {
       ...getSubGroupIssueKeyActions(
         groupActionsArray,
         subGroupActionsArray,
-        this.getArrayStringArray(issueBeforeUpdate, issueBeforeUpdateGroupKey, this.groupBy),
-        this.getArrayStringArray(issue, issueGroupKeyValue, this.groupBy),
-        this.getArrayStringArray(issueBeforeUpdate, issueBeforeUpdateSubGroupKey, this.subGroupBy),
-        this.getArrayStringArray(issue, issueSubGroupKey, this.subGroupBy)
+        this.getArrayStringArray(issueBeforeUpdate, issueBeforeUpdateGroupKey, groupBy),
+        this.getArrayStringArray(issue, issueGroupKeyValue, groupBy),
+        this.getArrayStringArray(issueBeforeUpdate, issueBeforeUpdateSubGroupKey, subGroupBy),
+        this.getArrayStringArray(issue, issueSubGroupKey, subGroupBy)
       ),
       ...orderByUpdates,
     ];
@@ -1625,15 +1663,17 @@ export abstract class BaseIssuesStore implements IBaseIssuesStore {
       return [];
 
     // if they are not equal and issues are not grouped then, provide path as ALL_ISSUES
-    if (!this.issueGroupKey) return [{ path: [ALL_ISSUES], action: EIssueGroupedAction.REORDER }];
+    const groupBy = this.groupBy;
+    if (!groupBy) return [{ path: [ALL_ISSUES], action: EIssueGroupedAction.REORDER }];
 
-    const issueGroupKey = issue?.[this.issueGroupKey] as string | string[] | null | undefined;
+    const issueGroupKey = this.getGroupValue(issue, groupBy);
     // if they are grouped then identify the paths based on props on which group by is dependent on
     const issueKeyActions: { path: string[]; action: EIssueGroupedAction.REORDER }[] = [];
-    const groupByValues = this.getArrayStringArray(issue, issueGroupKey);
+    const groupByValues = this.getArrayStringArray(issue, issueGroupKey, groupBy);
 
+    const subGroupBy = this.subGroupBy;
     // if issues are not subGrouped then, provide path from groupByValues
-    if (!this.issueSubGroupKey) {
+    if (!subGroupBy) {
       for (const groupKey of groupByValues) {
         issueKeyActions.push({ path: [groupKey], action: EIssueGroupedAction.REORDER });
       }
@@ -1641,9 +1681,9 @@ export abstract class BaseIssuesStore implements IBaseIssuesStore {
       return issueKeyActions;
     }
 
-    const issueSubGroupKey = issue?.[this.issueSubGroupKey] as string | string[] | null | undefined;
+    const issueSubGroupKey = this.getGroupValue(issue, subGroupBy);
     // if they are grouped then identify the paths based on props on which sub group by is dependent on
-    const subGroupByValues = this.getArrayStringArray(issue, issueSubGroupKey);
+    const subGroupByValues = this.getArrayStringArray(issue, issueSubGroupKey, subGroupBy);
 
     // if issues are subGrouped then, provide path from subGroupByValues
     for (const groupKey of groupByValues) {
