@@ -12,11 +12,12 @@ export const MODULE_CUSTOM_PROPERTY_PREFIX = "modulecustomproperty_";
 
 export type TCustomFieldGroupKey = TCustomPropertyKey | TModuleCustomPropertyKey;
 export type TCustomFieldGroupScope = "project" | "module";
+export type TParsedCustomFieldGroup = { fieldId: string; scope: TCustomFieldGroupScope };
 
 export type TCustomFieldGroupColumn = {
   avatarUrl?: string;
   id: string;
-  kind: "member" | "none" | "option";
+  kind: "all" | "member" | "none" | "option";
   name: string;
 };
 
@@ -28,7 +29,7 @@ type TMemberColumnInput = {
 
 export const parseCustomFieldGroupKey = (
   key: TIssueGroupByOptions | string | null | undefined
-): { fieldId: string; scope: TCustomFieldGroupScope } | undefined => {
+): TParsedCustomFieldGroup | undefined => {
   if (!key) return undefined;
   if (key.startsWith(MODULE_CUSTOM_PROPERTY_PREFIX)) {
     const fieldId = key.slice(MODULE_CUSTOM_PROPERTY_PREFIX.length);
@@ -44,6 +45,23 @@ export const parseCustomFieldGroupKey = (
 export const isCustomFieldGroupKey = (
   key: TIssueGroupByOptions | string | null | undefined
 ): key is TCustomFieldGroupKey => !!parseCustomFieldGroupKey(key);
+
+export const resolveCustomFieldGroupField = ({
+  customGroup,
+  getModuleField,
+  getProjectField,
+  projectId,
+  sourceModuleId,
+}: {
+  customGroup: TParsedCustomFieldGroup;
+  getModuleField: (moduleId: string, fieldId: string) => TModuleIssueField | undefined;
+  getProjectField: (projectId: string, fieldId: string) => TProjectIssueField | undefined;
+  projectId?: string;
+  sourceModuleId?: string | null;
+}): TProjectIssueField | TModuleIssueField | undefined => {
+  if (customGroup.scope === "project") return projectId ? getProjectField(projectId, customGroup.fieldId) : undefined;
+  return sourceModuleId ? getModuleField(sourceModuleId, customGroup.fieldId) : undefined;
+};
 
 export const isGroupableCustomField = (field: TProjectIssueField | TModuleIssueField) =>
   !field.is_disabled &&
@@ -90,4 +108,21 @@ export const buildCustomFieldGroupColumns = (
           name: member.displayName,
         }));
   return [...columns, { id: "None", kind: "none", name: "None" }];
+};
+
+export const getCustomFieldGroupColumns = ({
+  field,
+  isEpic,
+  isLoading,
+  members,
+}: {
+  field: TProjectIssueField | TModuleIssueField | undefined;
+  isEpic: boolean;
+  isLoading: boolean;
+  members: TMemberColumnInput[];
+}): TCustomFieldGroupColumn[] | undefined => {
+  if (isLoading) return undefined;
+  if (!field || !isGroupableCustomField(field))
+    return [{ id: "All Issues", kind: "all", name: `All ${isEpic ? "Epics" : "work items"}` }];
+  return buildCustomFieldGroupColumns(field, members);
 };

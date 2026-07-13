@@ -83,7 +83,7 @@ export const List = observer(function List(props: IList) {
   } = props;
 
   const storeType = useIssueStoreType();
-  const { projectId, sourceModuleId } = useCustomFieldGrouping();
+  const { moduleFieldsLoading, projectFieldsLoading, projectId, sourceModuleId } = useCustomFieldGrouping();
   // plane web hooks
   const isBulkOperationsEnabled = useBulkOperationStatus();
 
@@ -94,7 +94,9 @@ export const List = observer(function List(props: IList) {
     includeNone: true,
     isWorkspaceLevel: isWorkspaceLevel(storeType),
     isEpic: isEpic,
+    moduleFieldsLoading,
     projectId,
+    projectFieldsLoading,
     sourceModuleId,
   });
 

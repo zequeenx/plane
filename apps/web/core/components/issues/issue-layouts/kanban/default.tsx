@@ -102,7 +102,7 @@ export const KanBan = observer(function KanBan(props: IKanBan) {
   // store hooks
   const storeType = useIssueStoreType();
   const issueKanBanView = useKanbanView();
-  const { projectId, sourceModuleId } = useCustomFieldGrouping();
+  const { moduleFieldsLoading, projectFieldsLoading, projectId, sourceModuleId } = useCustomFieldGrouping();
   // derived values
   const isDragDisabled = !issueKanBanView?.getCanUserDragDrop(group_by, sub_group_by);
 
@@ -113,7 +113,9 @@ export const KanBan = observer(function KanBan(props: IKanBan) {
     includeNone: true,
     isWorkspaceLevel: isWorkspaceLevel(storeType),
     isEpic: isEpic,
+    moduleFieldsLoading,
     projectId,
+    projectFieldsLoading,
     sourceModuleId,
   });
 

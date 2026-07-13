@@ -44,9 +44,9 @@ import {
 import { ISSUE_FILTER_DEFAULT_DATA } from "@/store/issue/helpers/base-issues.store";
 import { DEFAULT_DISPLAY_PROPERTIES } from "@/store/issue/issue-details/sub_issues_filter.store";
 import {
-  buildCustomFieldGroupColumns,
-  isGroupableCustomField,
+  getCustomFieldGroupColumns,
   parseCustomFieldGroupKey,
+  resolveCustomFieldGroupField,
 } from "./custom-field-grouping";
 
 export const HIGHLIGHT_CLASS = "highlight";
@@ -82,7 +82,9 @@ type TGetGroupByColumns = {
   includeNone: boolean;
   isWorkspaceLevel: boolean;
   isEpic?: boolean;
+  moduleFieldsLoading?: boolean;
   projectId?: string;
+  projectFieldsLoading?: boolean;
   sourceModuleId?: string | null;
 };
 
@@ -94,7 +96,9 @@ export const getGroupByColumns = ({
   includeNone,
   isWorkspaceLevel: workspaceLevel,
   isEpic = false,
+  moduleFieldsLoading = false,
   projectId,
+  projectFieldsLoading = false,
   sourceModuleId,
 }: TGetGroupByColumns): IGroupByColumn[] | undefined => {
   // If no groupBy is specified and includeNone is true, return "All Issues" group
@@ -114,13 +118,13 @@ export const getGroupByColumns = ({
 
   const customGroup = parseCustomFieldGroupKey(groupBy);
   if (customGroup) {
-    const field =
-      customGroup.scope === "project" && projectId
-        ? store.projectRoot.projectIssueFields.getFieldById(projectId, customGroup.fieldId)
-        : sourceModuleId
-          ? store.moduleIssueFields.getFieldById(sourceModuleId, customGroup.fieldId)
-          : undefined;
-    if (!field || !isGroupableCustomField(field)) return undefined;
+    const field = resolveCustomFieldGroupField({
+      customGroup,
+      getModuleField: store.moduleIssueFields.getFieldById,
+      getProjectField: store.projectRoot.projectIssueFields.getFieldById,
+      projectId,
+      sourceModuleId,
+    });
 
     const memberIds = projectId ? (store.memberRoot.project.getProjectMemberIds(projectId, false) ?? []) : [];
     const members = memberIds.flatMap((memberId) => {
@@ -130,7 +134,13 @@ export const getGroupByColumns = ({
         : [];
     });
 
-    return buildCustomFieldGroupColumns(field, members).map((column) => ({
+    const columns = getCustomFieldGroupColumns({
+      field,
+      isEpic,
+      isLoading: customGroup.scope === "project" ? projectFieldsLoading : moduleFieldsLoading,
+      members,
+    });
+    return columns?.map((column) => ({
       id: column.id,
       name: column.name,
       icon:

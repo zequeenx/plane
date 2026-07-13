@@ -5,8 +5,10 @@ import { describe, expect, it } from "vitest";
 import {
   buildCustomFieldGroupColumns,
   buildCustomFieldGroupOptions,
+  getCustomFieldGroupColumns,
   isGroupableCustomField,
   parseCustomFieldGroupKey,
+  resolveCustomFieldGroupField,
 } from "./custom-field-grouping";
 
 const projectFieldBase: TProjectIssueField = {
@@ -125,6 +127,91 @@ describe("buildCustomFieldGroupColumns", () => {
       ])
     ).toEqual([
       { avatarUrl: "avatar.png", id: "member-1", kind: "member", name: "Ada Lovelace" },
+      { id: "None", kind: "none", name: "None" },
+    ]);
+  });
+});
+
+describe("resolveCustomFieldGroupField", () => {
+  it("does not resolve a project group key from the module field store", () => {
+    expect(
+      resolveCustomFieldGroupField({
+        customGroup: { fieldId: "select-field", scope: "project" },
+        getModuleField: () => moduleField,
+        getProjectField: () => projectFieldBase,
+        sourceModuleId: "module-1",
+      })
+    ).toBeUndefined();
+  });
+
+  it("does not resolve a module group key from the project field store", () => {
+    expect(
+      resolveCustomFieldGroupField({
+        customGroup: { fieldId: "select-field", scope: "module" },
+        getModuleField: () => moduleField,
+        getProjectField: () => projectFieldBase,
+        projectId: "project-1",
+      })
+    ).toBeUndefined();
+  });
+
+  it("resolves a module group key from its source module field store", () => {
+    expect(
+      resolveCustomFieldGroupField({
+        customGroup: { fieldId: "select-field", scope: "module" },
+        getModuleField: () => moduleField,
+        getProjectField: () => projectFieldBase,
+        projectId: "project-1",
+        sourceModuleId: "module-1",
+      })
+    ).toBe(moduleField);
+  });
+});
+
+describe("getCustomFieldGroupColumns", () => {
+  it("waits for an active custom field definition request", () => {
+    expect(
+      getCustomFieldGroupColumns({
+        field: undefined,
+        isEpic: false,
+        isLoading: true,
+        members: [],
+      })
+    ).toBeUndefined();
+  });
+
+  it("returns the ungrouped column when a saved custom field is unavailable", () => {
+    expect(
+      getCustomFieldGroupColumns({
+        field: undefined,
+        isEpic: false,
+        isLoading: false,
+        members: [],
+      })
+    ).toEqual([{ id: "All Issues", kind: "all", name: "All work items" }]);
+  });
+
+  it("returns the ungrouped column when a saved custom field is disabled", () => {
+    expect(
+      getCustomFieldGroupColumns({
+        field: disabledField,
+        isEpic: true,
+        isLoading: false,
+        members: [],
+      })
+    ).toEqual([{ id: "All Issues", kind: "all", name: "All Epics" }]);
+  });
+
+  it("returns field-backed columns when the saved custom field is eligible", () => {
+    expect(
+      getCustomFieldGroupColumns({
+        field: projectFieldBase,
+        isEpic: false,
+        isLoading: false,
+        members: [],
+      })
+    ).toEqual([
+      { id: "option-1", kind: "option", name: "Urgent" },
       { id: "None", kind: "none", name: "None" },
     ]);
   });

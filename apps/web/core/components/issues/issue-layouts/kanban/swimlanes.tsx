@@ -290,14 +290,16 @@ export const KanBanSwimLanes = observer(function KanBanSwimLanes(props: IKanBanS
   } = props;
   // store hooks
   const storeType = useIssueStoreType();
-  const { projectId, sourceModuleId } = useCustomFieldGrouping();
+  const { moduleFieldsLoading, projectFieldsLoading, projectId, sourceModuleId } = useCustomFieldGrouping();
   // derived values
   const groupByList = getGroupByColumns({
     groupBy: group_by as GroupByColumnTypes,
     includeNone: true,
     isWorkspaceLevel: isWorkspaceLevel(storeType),
     isEpic: isEpic,
+    moduleFieldsLoading,
     projectId,
+    projectFieldsLoading,
     sourceModuleId,
   });
   const subGroupByList = getGroupByColumns({
@@ -305,7 +307,9 @@ export const KanBanSwimLanes = observer(function KanBanSwimLanes(props: IKanBanS
     includeNone: true,
     isWorkspaceLevel: isWorkspaceLevel(storeType),
     isEpic: isEpic,
+    moduleFieldsLoading,
     projectId,
+    projectFieldsLoading,
     sourceModuleId,
   });
 

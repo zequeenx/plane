@@ -8,6 +8,7 @@ import { useParams } from "next/navigation";
 // hooks
 import { useModule } from "@/hooks/store/use-module";
 import { useProjectView } from "@/hooks/store/use-project-view";
+import { resolveCustomFieldGroupSourceModuleId } from "@/hooks/custom-field-grouping-utils";
 
 export const useCustomFieldGroupContext = (sourceModuleIdOverride?: string | null) => {
   const { moduleId, projectId, viewId, workspaceSlug } = useParams();
@@ -15,7 +16,11 @@ export const useCustomFieldGroupContext = (sourceModuleIdOverride?: string | nul
   const { getViewById } = useProjectView();
   // derived values
   const projectView = viewId ? getViewById(viewId.toString()) : undefined;
-  const sourceModuleId = sourceModuleIdOverride ?? moduleId?.toString() ?? projectView?.source_module ?? null;
+  const sourceModuleId = resolveCustomFieldGroupSourceModuleId({
+    projectViewSourceModuleId: projectView?.source_module,
+    routeModuleId: moduleId?.toString(),
+    sourceModuleIdOverride,
+  });
   const sourceModule = sourceModuleId ? getModuleById(sourceModuleId) : null;
 
   return {
