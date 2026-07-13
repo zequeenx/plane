@@ -462,6 +462,52 @@ describe("executeCustomFieldGroupDrop", () => {
 
     expect(onReconciliationError).toHaveBeenCalledWith(refetchError);
   });
+
+  it("rolls back when the field persistence callback throws synchronously", async () => {
+    const fieldError = new Error("field callback threw");
+    const onPartialFailure = vi.fn<() => Promise<void>>().mockResolvedValue();
+    const onReconciliationError = vi.fn<(error: unknown) => void>();
+    const onRollback = vi.fn<() => void>();
+    const persistFieldValue = vi.fn(() => {
+      throw fieldError;
+    });
+
+    await expect(
+      executeCustomFieldGroupDrop({
+        onPartialFailure,
+        onReconciliationError,
+        onRollback,
+        persistFieldValue,
+      })
+    ).rejects.toBe(fieldError);
+
+    expect(onRollback).toHaveBeenCalledTimes(1);
+    expect(onPartialFailure).not.toHaveBeenCalled();
+  });
+
+  it("refetches when an additional persistence callback throws after the field succeeds", async () => {
+    const staticError = new Error("static callback threw");
+    const onPartialFailure = vi.fn<() => Promise<void>>().mockResolvedValue();
+    const onReconciliationError = vi.fn<(error: unknown) => void>();
+    const onRollback = vi.fn<() => void>();
+    const persistFieldValue = vi.fn<() => Promise<void>>().mockResolvedValue();
+    const persistStaticValue = vi.fn(() => {
+      throw staticError;
+    });
+
+    await expect(
+      executeCustomFieldGroupDrop({
+        onPartialFailure,
+        onReconciliationError,
+        onRollback,
+        persistAdditionalOperations: [persistStaticValue],
+        persistFieldValue,
+      })
+    ).rejects.toBe(staticError);
+
+    expect(onPartialFailure).toHaveBeenCalledTimes(1);
+    expect(onRollback).not.toHaveBeenCalled();
+  });
 });
 
 describe("isIssueGroupDragAllowed", () => {

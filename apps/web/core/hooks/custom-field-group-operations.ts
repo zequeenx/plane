@@ -4,12 +4,7 @@
  * See the LICENSE file for details.
  */
 
-import type {
-  TIssue,
-  TIssueFieldValuesUpdatePayload,
-  TIssueGroupByOptions,
-  TModuleIssueFieldValuesUpdatePayload,
-} from "@plane/types";
+import type { TIssue, TIssueFieldValuesUpdatePayload, TModuleIssueFieldValuesUpdatePayload } from "@plane/types";
 import type { TCustomFieldGroupKey } from "@/components/issues/issue-layouts/custom-field-grouping";
 import {
   applyCustomFieldGroupValue,
@@ -22,8 +17,19 @@ import type { IssueActions } from "@/hooks/use-issues-actions";
 
 export type TOperations = {
   applyOptimisticValue: (issue: TIssue, groupKey: TCustomFieldGroupKey, groupId: string) => TIssue;
-  persistDrop: (issue: TIssue, groupKey: TCustomFieldGroupKey, groupId: string, sortOrder?: number) => Promise<void>;
+  persistDrop: (
+    issueId: string,
+    groupKey: TCustomFieldGroupKey,
+    groupId: string,
+    options?: TCustomFieldGroupDropPersistenceOptions
+  ) => Promise<void>;
   refetchCurrentGrouping: () => Promise<void>;
+};
+
+export type TCustomFieldGroupDropPersistenceOptions = {
+  additionalPersistenceOperations?: (() => Promise<unknown> | unknown)[];
+  prepare?: (issue: TIssue) => Promise<boolean> | boolean;
+  sortOrder?: number;
 };
 
 type TUpdateProjectIssueValues = (
@@ -44,7 +50,7 @@ type TUpdateModuleIssueValues = (
 export type TCustomFieldGroupOperationDependencies = {
   currentViewId?: string;
   fetchIssues: IssueActions["fetchIssues"];
-  groupBy: TIssueGroupByOptions | undefined;
+  getIssueById: (issueId: string) => TIssue | undefined;
   projectId?: string;
   reportReconciliationError: (error: unknown) => void;
   sourceModuleId?: string | null;
@@ -55,12 +61,29 @@ export type TCustomFieldGroupOperationDependencies = {
   workspaceSlug?: string;
 };
 
-const getUnavailableContextError = (context: "group" | "module" | "project" | "sort") =>
+const customFieldGroupDropQueues = new Map<string, Promise<void>>();
+
+const enqueueCustomFieldGroupDrop = (issueId: string, operation: () => Promise<void>): Promise<void> => {
+  const previousOperation = customFieldGroupDropQueues.get(issueId) ?? Promise.resolve();
+  const currentOperation = previousOperation.then(operation);
+  const queueTail = currentOperation.then(
+    () => undefined,
+    () => undefined
+  );
+  customFieldGroupDropQueues.set(issueId, queueTail);
+
+  return currentOperation.finally(() => {
+    if (customFieldGroupDropQueues.get(issueId) === queueTail) customFieldGroupDropQueues.delete(issueId);
+  });
+};
+
+const getUnavailableContextError = (context: "group" | "issue" | "module" | "project" | "sort") =>
   new Error(`Custom field ${context} context is unavailable`);
 
 export const createCustomFieldGroupOperations = ({
   currentViewId,
   fetchIssues,
+  getIssueById,
   projectId,
   reportReconciliationError,
   sourceModuleId,
@@ -87,38 +110,54 @@ export const createCustomFieldGroupOperations = ({
     await fetchIssues("mutation", { canGroup: true, perPageCount: 50 }, currentViewId);
   };
 
-  const persistDrop = async (issue: TIssue, groupKey: TCustomFieldGroupKey, groupId: string, sortOrder?: number) => {
+  const persistDrop = async (
+    issueId: string,
+    groupKey: TCustomFieldGroupKey,
+    groupId: string,
+    { additionalPersistenceOperations = [], prepare, sortOrder }: TCustomFieldGroupDropPersistenceOptions = {}
+  ) => {
     const customGroup = parseCustomFieldGroupKey(groupKey);
     if (!customGroup || !isCustomFieldGroupKey(groupKey)) throw getUnavailableContextError("group");
     if (!workspaceSlug || !projectId || !updateIssueLocalState) throw getUnavailableContextError("project");
+    if (customGroup.scope === "module" && !sourceModuleId) throw getUnavailableContextError("module");
+    if (sortOrder !== undefined && !updateIssue) throw getUnavailableContextError("sort");
 
-    const issueBeforeDrop = { ...issue };
-    const nextIssue = applyCustomFieldGroupValue(issue, groupKey, groupId, sourceModuleId);
-    const normalizedValue = normalizeCustomFieldGroupId(groupId);
-    const fieldValuePayload = { field_values: { [customGroup.fieldId]: normalizedValue } };
-    let persistFieldValue: () => Promise<unknown>;
-    if (customGroup.scope === "project") {
-      persistFieldValue = () => updateProjectIssueValues(workspaceSlug, projectId, issue.id, fieldValuePayload);
-    } else {
-      if (!sourceModuleId) throw getUnavailableContextError("module");
-      persistFieldValue = () =>
-        updateModuleIssueValues(workspaceSlug, projectId, sourceModuleId, issue.id, fieldValuePayload);
-    }
+    return await enqueueCustomFieldGroupDrop(issueId, async () => {
+      const issue = getIssueById(issueId);
+      if (!issue) throw getUnavailableContextError("issue");
+      if (prepare && !(await Promise.resolve().then(() => prepare(issue)))) return;
 
-    let persistSortOrder: (() => Promise<unknown>) | undefined;
-    if (sortOrder !== undefined) {
-      if (!updateIssue) throw getUnavailableContextError("sort");
-      persistSortOrder = () => updateIssue(projectId, issue.id, { sort_order: sortOrder });
-    }
+      const issueBeforeDrop = { ...issue };
+      const nextIssue = applyCustomFieldGroupValue(issue, groupKey, groupId, sourceModuleId);
+      const normalizedValue = normalizeCustomFieldGroupId(groupId);
+      const fieldValuePayload = { field_values: { [customGroup.fieldId]: normalizedValue } };
+      let persistFieldValue: () => Promise<unknown>;
+      if (customGroup.scope === "project") {
+        persistFieldValue = () => updateProjectIssueValues(workspaceSlug, projectId, issue.id, fieldValuePayload);
+      } else {
+        if (!sourceModuleId) throw getUnavailableContextError("module");
+        const moduleId = sourceModuleId;
+        persistFieldValue = () =>
+          updateModuleIssueValues(workspaceSlug, projectId, moduleId, issue.id, fieldValuePayload);
+      }
 
-    updateIssueLocalState(issue.id, nextIssue);
+      let persistSortOrder: (() => Promise<unknown>) | undefined;
+      if (sortOrder !== undefined) {
+        if (!updateIssue) throw getUnavailableContextError("sort");
+        const updateIssueAction = updateIssue;
+        persistSortOrder = () => updateIssueAction(projectId, issue.id, { sort_order: sortOrder });
+      }
 
-    await executeCustomFieldGroupDrop({
-      onPartialFailure: refetchCurrentGrouping,
-      onReconciliationError: reportReconciliationError,
-      onRollback: () => updateIssueLocalState(issue.id, issueBeforeDrop),
-      persistFieldValue,
-      persistSortOrder,
+      updateIssueLocalState(issue.id, nextIssue);
+
+      await executeCustomFieldGroupDrop({
+        onPartialFailure: refetchCurrentGrouping,
+        onReconciliationError: reportReconciliationError,
+        onRollback: () => updateIssueLocalState(issue.id, issueBeforeDrop),
+        persistAdditionalOperations: additionalPersistenceOperations,
+        persistFieldValue,
+        persistSortOrder,
+      });
     });
   };
 

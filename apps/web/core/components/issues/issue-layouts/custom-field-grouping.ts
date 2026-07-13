@@ -202,16 +202,23 @@ export const executeCustomFieldGroupDrop = async ({
   onPartialFailure,
   onReconciliationError,
   onRollback,
+  persistAdditionalOperations = [],
   persistFieldValue,
   persistSortOrder,
 }: {
   onPartialFailure: () => Promise<void>;
   onReconciliationError: (error: unknown) => void;
   onRollback: () => Promise<void> | void;
-  persistFieldValue: () => Promise<unknown>;
-  persistSortOrder?: () => Promise<unknown>;
+  persistAdditionalOperations?: (() => Promise<unknown> | unknown)[];
+  persistFieldValue: () => Promise<unknown> | unknown;
+  persistSortOrder?: () => Promise<unknown> | unknown;
 }) => {
-  const operations = [persistFieldValue(), ...(persistSortOrder ? [persistSortOrder()] : [])];
+  const operationCallbacks = [
+    persistFieldValue,
+    ...(persistSortOrder ? [persistSortOrder] : []),
+    ...persistAdditionalOperations,
+  ];
+  const operations = operationCallbacks.map((operation) => Promise.resolve().then(operation));
   const results = await Promise.allSettled(operations);
   const rejected = results.find((result): result is PromiseRejectedResult => result.status === "rejected");
   if (!rejected) return;

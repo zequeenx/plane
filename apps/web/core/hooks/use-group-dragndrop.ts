@@ -8,10 +8,10 @@ import { useParams } from "next/navigation";
 import { TOAST_TYPE, setToast } from "@plane/propel/toast";
 import type { EIssuesStoreType, TIssue, TIssueGroupByOptions, TIssueOrderByOptions } from "@plane/types";
 import { getModuleIdsWithFieldValues } from "@plane/utils";
-import { isCustomFieldGroupKey } from "@/components/issues/issue-layouts/custom-field-grouping";
 import type { GroupDropLocation } from "@/components/issues/issue-layouts/utils";
 import { handleGroupDragDrop } from "@/components/issues/issue-layouts/utils";
 import { ISSUE_FILTER_DEFAULT_DATA } from "@/store/issue/helpers/base-issues.store";
+import { buildCustomFieldGroupDropPlan } from "./custom-field-group-drop-routing";
 import { useIssueDetail } from "./store/use-issue-detail";
 import { useIssues } from "./store/use-issues";
 import { useCustomFieldGroupOperations } from "./use-custom-field-group-operations";
@@ -45,7 +45,12 @@ export const useGroupIssuesDragNDrop = (
   const {
     issues: { getIssueIds, addCycleToIssue, removeCycleFromIssue, changeModulesInIssue },
   } = useIssues(storeType);
-  const customFieldGroupOperations = useCustomFieldGroupOperations({ fetchIssues, groupBy, storeType, updateIssue });
+  const customFieldGroupOperations = useCustomFieldGroupOperations({
+    fetchIssues,
+    getIssueById,
+    storeType,
+    updateIssue,
+  });
 
   /**
    * update Issue on Drop, checks if modules or cycles are changed and then calls appropriate functions
@@ -72,16 +77,66 @@ export const useGroupIssuesDragNDrop = (
     };
     const moduleKey = ISSUE_FILTER_DEFAULT_DATA["module"];
     const cycleKey = ISSUE_FILTER_DEFAULT_DATA["cycle"];
-    const customGroupKey = Object.keys(data).find(isCustomFieldGroupKey);
+    const customDropPlan = buildCustomFieldGroupDropPlan({ cycleKey, data, issueUpdates, moduleKey });
 
-    if (customGroupKey) {
-      const issue = getIssueById(issueId);
-      const customGroupValue = data[customGroupKey];
-      if (!issue || (typeof customGroupValue !== "string" && customGroupValue !== null))
-        throw new Error("Custom field group drop data is unavailable");
+    if (customDropPlan) {
+      const additionalPersistenceOperations: (() => Promise<unknown>)[] = [];
 
-      const sortOrder = typeof data.sort_order === "number" ? data.sort_order : undefined;
-      await customFieldGroupOperations.persistDrop(issue, customGroupKey, customGroupValue ?? "None", sortOrder);
+      if (customDropPlan.cycleChange) {
+        additionalPersistenceOperations.push(async () => {
+          if (!workspaceSlug) throw new Error("Workspace context is unavailable");
+          if (customDropPlan.cycleChange?.cycleId)
+            return await addCycleToIssue(
+              workspaceSlug.toString(),
+              projectId,
+              customDropPlan.cycleChange.cycleId,
+              issueId
+            );
+          return await removeCycleFromIssue(workspaceSlug.toString(), projectId, issueId);
+        });
+      }
+
+      let prepare: ((issue: TIssue) => boolean) | undefined;
+      if (customDropPlan.moduleChange) {
+        prepare = (issue) => {
+          const removedModulesWithValues = getModuleIdsWithFieldValues(
+            issue.module_field_values,
+            customDropPlan.moduleChange?.remove ?? []
+          );
+          return (
+            removedModulesWithValues.length === 0 ||
+            window.confirm("Removing this module will delete its saved module field values from this work item.")
+          );
+        };
+        additionalPersistenceOperations.push(async () => {
+          if (!workspaceSlug) throw new Error("Workspace context is unavailable");
+          return await changeModulesInIssue(
+            workspaceSlug.toString(),
+            projectId,
+            issueId,
+            customDropPlan.moduleChange?.add ?? [],
+            customDropPlan.moduleChange?.remove ?? [],
+            true
+          );
+        });
+      }
+
+      if (customDropPlan.standardIssuePatch) {
+        if (!updateIssue) throw new Error("Work item update context is unavailable");
+        const standardIssuePatch = customDropPlan.standardIssuePatch;
+        additionalPersistenceOperations.push(() => updateIssue(projectId, issueId, standardIssuePatch));
+      }
+
+      await customFieldGroupOperations.persistDrop(
+        issueId,
+        customDropPlan.customGroupKey,
+        customDropPlan.customGroupId,
+        {
+          additionalPersistenceOperations,
+          prepare,
+          sortOrder: customDropPlan.sortOrder,
+        }
+      );
       return;
     }
 

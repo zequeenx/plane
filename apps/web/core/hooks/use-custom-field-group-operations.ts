@@ -6,7 +6,7 @@
 
 import { useMemo } from "react";
 import { useParams } from "next/navigation";
-import type { EIssuesStoreType, TIssueGroupByOptions } from "@plane/types";
+import type { EIssuesStoreType, TIssue } from "@plane/types";
 import { useModuleIssueFields } from "@/hooks/store/use-module-issue-fields";
 import { useProjectIssueFields } from "@/hooks/store/use-project-issue-fields";
 import { useIssues } from "@/hooks/store/use-issues";
@@ -23,12 +23,12 @@ const reportCustomFieldGroupReconciliationError = (error: unknown) => {
 
 export const useCustomFieldGroupOperations = ({
   fetchIssues,
-  groupBy,
+  getIssueById,
   storeType,
   updateIssue,
 }: {
   fetchIssues: IssueActions["fetchIssues"];
-  groupBy: TIssueGroupByOptions | undefined;
+  getIssueById: (issueId: string) => TIssue | undefined;
   storeType: EIssuesStoreType;
   updateIssue: IssueActions["updateIssue"];
 }): TOperations => {
@@ -49,7 +49,7 @@ export const useCustomFieldGroupOperations = ({
       createCustomFieldGroupOperations({
         currentViewId,
         fetchIssues,
-        groupBy,
+        getIssueById,
         projectId,
         reportReconciliationError: reportCustomFieldGroupReconciliationError,
         sourceModuleId,
@@ -62,7 +62,7 @@ export const useCustomFieldGroupOperations = ({
     [
       currentViewId,
       fetchIssues,
-      groupBy,
+      getIssueById,
       projectId,
       sourceModuleId,
       updateIssue,
