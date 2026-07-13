@@ -26,7 +26,7 @@ import type { IRouterStore } from "@/store/router.store";
 import type { IUserStore } from "@/store/user";
 // local imports
 import type { IMemberRootStore } from "../index";
-import { sortProjectMembers } from "../utils";
+import { filterActiveProjectMemberships, sortProjectMembers } from "../utils";
 import type { IProjectMemberFiltersStore } from "./project-member-filters.store";
 import { ProjectMemberFiltersStore } from "./project-member-filters.store";
 
@@ -53,6 +53,7 @@ export interface IBaseProjectMemberStore {
   getProjectMemberFetchStatus: (projectId: string) => boolean;
   getProjectMemberDetails: (userId: string, projectId: string) => IProjectMemberDetails | null;
   getProjectMemberIds: (projectId: string, includeGuestUsers: boolean) => string[] | null;
+  getActiveProjectMemberIds: (projectId: string, includeGuestUsers: boolean) => string[] | null;
   getFilteredProjectMemberDetails: (userId: string, projectId: string) => IProjectMemberDetails | null;
   getProjectUserProperties: (projectId: string) => IProjectUserPropertiesResponse | null;
   // fetch actions
@@ -244,6 +245,15 @@ export abstract class BaseProjectMemberStore implements IBaseProjectMemberStore 
     ]);
     const memberIds = members.map((m) => m.member);
     return memberIds;
+  });
+
+  getActiveProjectMemberIds = computedFn((projectId: string, includeGuestUsers: boolean): string[] | null => {
+    if (!this.projectMemberMap?.[projectId]) return null;
+    const members = sortBy(filterActiveProjectMemberships(this.getProjectMemberships(projectId), includeGuestUsers), [
+      (membership) => membership.member !== this.userStore.data?.id,
+      (membership) => this.memberRoot?.memberMap?.[membership.member]?.display_name?.toLowerCase(),
+    ]);
+    return members.map((membership) => membership.member);
   });
 
   /**

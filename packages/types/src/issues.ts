@@ -130,6 +130,7 @@ export interface IGroupByColumn {
   name: string;
   icon?: React.ReactElement | undefined;
   payload: Partial<TIssue>;
+  isCreateDisabled?: boolean;
   isDropDisabled?: boolean;
   dropErrorMessage?: string;
 }

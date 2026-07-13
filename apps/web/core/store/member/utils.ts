@@ -5,7 +5,8 @@
  */
 
 // Types and utilities for member filtering
-import type { EUserPermissions, TMemberOrderByOptions } from "@plane/constants";
+import { EUserPermissions } from "@plane/constants";
+import type { TMemberOrderByOptions } from "@plane/constants";
 import type { IUserLite, TProjectMembership } from "@plane/types";
 
 export interface IMemberFilters {
@@ -71,6 +72,14 @@ export const filterProjectMembersByRole = (
     return roleFilters.includes(memberRole);
   });
 };
+
+export const filterActiveProjectMemberships = (
+  members: TProjectMembership[],
+  includeGuestUsers: boolean
+): TProjectMembership[] =>
+  members.filter(
+    (membership) => membership.is_active !== false && (includeGuestUsers || membership.role !== EUserPermissions.GUEST)
+  );
 
 export const filterWorkspaceMembersByRole = <T extends { role: string | EUserPermissions; is_active?: boolean }>(
   members: T[],

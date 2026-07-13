@@ -10,6 +10,7 @@ const issueFieldMocks = vi.hoisted(() => ({
   getProjectFieldById: vi.fn(),
   updateModuleIssueValues: vi.fn(),
   updateProjectIssueValues: vi.fn(),
+  updateCustomFieldValueLocalState: vi.fn(),
 }));
 
 vi.mock("mobx-react", () => ({
@@ -49,6 +50,10 @@ vi.mock("@/hooks/store/use-project-issue-fields", () => ({
     getFieldById: issueFieldMocks.getProjectFieldById,
     updateIssueValues: issueFieldMocks.updateProjectIssueValues,
   }),
+}));
+
+vi.mock("@/hooks/use-custom-field-value-local-update", () => ({
+  useCustomFieldValueLocalUpdate: () => issueFieldMocks.updateCustomFieldValueLocalState,
 }));
 
 vi.mock("@/plane-web/components/issues/issue-layouts/utils", () => ({

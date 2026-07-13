@@ -17,6 +17,7 @@ import { SPREADSHEET_COLUMNS } from "@/plane-web/components/issues/issue-layouts
 import { shouldRenderColumn } from "@/helpers/issue-filter.helper";
 import { useModuleIssueFields } from "@/hooks/store/use-module-issue-fields";
 import { useProjectIssueFields } from "@/hooks/store/use-project-issue-fields";
+import { useCustomFieldValueLocalUpdate } from "@/hooks/use-custom-field-value-local-update";
 import { WithDisplayPropertiesHOC } from "../properties/with-display-properties-HOC";
 import { SpreadsheetCustomFieldCell } from "./custom-field-cell";
 
@@ -38,6 +39,7 @@ export const IssueColumn = observer(function IssueColumn(props: Props) {
   const { t } = useTranslation();
   const { getFieldById, updateIssueValues } = useProjectIssueFields();
   const { getFieldById: getModuleFieldById, updateIssueValues: updateModuleIssueValues } = useModuleIssueFields();
+  const updateCustomFieldValueLocalState = useCustomFieldValueLocalUpdate();
 
   const shouldRenderProperty = shouldRenderColumn(property);
   const issueProjectId = issueDetail.project_id;
@@ -61,11 +63,17 @@ export const IssueColumn = observer(function IssueColumn(props: Props) {
     if (!workspaceSlug || !issueProjectId) return;
 
     try {
-      await updateIssueValues(workspaceSlug.toString(), issueProjectId, issueDetail.id, {
-        field_values: {
-          [fieldId]: Array.isArray(value) && value.length === 0 ? null : value,
+      await updateIssueValues(
+        workspaceSlug.toString(),
+        issueProjectId,
+        issueDetail.id,
+        {
+          field_values: {
+            [fieldId]: Array.isArray(value) && value.length === 0 ? null : value,
+          },
         },
-      });
+        updateCustomFieldValueLocalState
+      );
     } catch {
       setToast({
         type: TOAST_TYPE.ERROR,
@@ -79,11 +87,18 @@ export const IssueColumn = observer(function IssueColumn(props: Props) {
     if (!workspaceSlug || !issueProjectId || !sourceModuleId) return;
 
     try {
-      await updateModuleIssueValues(workspaceSlug.toString(), issueProjectId, sourceModuleId, issueDetail.id, {
-        field_values: {
-          [fieldId]: Array.isArray(value) && value.length === 0 ? null : value,
+      await updateModuleIssueValues(
+        workspaceSlug.toString(),
+        issueProjectId,
+        sourceModuleId,
+        issueDetail.id,
+        {
+          field_values: {
+            [fieldId]: Array.isArray(value) && value.length === 0 ? null : value,
+          },
         },
-      });
+        updateCustomFieldValueLocalState
+      );
     } catch {
       setToast({
         type: TOAST_TYPE.ERROR,

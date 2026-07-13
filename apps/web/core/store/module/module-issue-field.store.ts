@@ -10,6 +10,7 @@ import { computedFn } from "mobx-utils";
 // types
 import type {
   TIssueFieldValue,
+  TIssueCustomFieldLocalUpdater,
   TIssueModuleFieldValues,
   TModuleIssueField,
   TModuleIssueFieldOption,
@@ -76,7 +77,8 @@ export interface IModuleIssueFieldStore {
     projectId: string,
     moduleId: string,
     issueId: string,
-    data: TModuleIssueFieldValuesUpdatePayload
+    data: TModuleIssueFieldValuesUpdatePayload,
+    updateLocalState?: TIssueCustomFieldLocalUpdater
   ) => Promise<TModuleFieldValuesResponse>;
   deleteIssueValue: (
     workspaceSlug: string,
@@ -317,15 +319,31 @@ export class ModuleIssueFieldStore implements IModuleIssueFieldStore {
     projectId: string,
     moduleId: string,
     issueId: string,
-    data: TModuleIssueFieldValuesUpdatePayload
+    data: TModuleIssueFieldValuesUpdatePayload,
+    updateLocalState?: TIssueCustomFieldLocalUpdater
   ) => {
-    const response = await this.moduleIssueFieldService.updateIssueValues(
-      workspaceSlug,
-      projectId,
-      moduleId,
-      issueId,
-      data
+    const issue = this.rootStore.issue.issues.getIssueById(issueId);
+    const previousFieldValues = Object.fromEntries(
+      Object.keys(data.field_values).map((fieldId) => [
+        fieldId,
+        issue?.module_field_values?.[moduleId]?.[fieldId] ?? null,
+      ])
     );
+    updateLocalState?.(issueId, { fieldValues: data.field_values, moduleId, scope: "module" });
+
+    let response: TModuleFieldValuesResponse;
+    try {
+      response = await this.moduleIssueFieldService.updateIssueValues(
+        workspaceSlug,
+        projectId,
+        moduleId,
+        issueId,
+        data
+      );
+    } catch (error) {
+      updateLocalState?.(issueId, { fieldValues: previousFieldValues, moduleId, scope: "module" });
+      throw error;
+    }
 
     this.updateIssueModuleFieldValues(issueId, moduleId, response, data);
 

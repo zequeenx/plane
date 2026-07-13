@@ -212,6 +212,82 @@ describe("BaseIssuesStore dynamic custom field grouping", () => {
     expect(issueMap[issue.id]?.["customproperty_select-field"]).toBe("option-b");
   });
 
+  it("reconciles ordinary project field edits from old to new and then None exactly once", () => {
+    const issue = issueFixture({
+      field_values: { "select-field": "option-a" },
+    });
+    const { issueMap, store } = createStore({
+      groupBy: "customproperty_select-field",
+      issues: [issue],
+    });
+    store.groupedIssueIds = { None: [], "option-a": [issue.id], "option-b": [] };
+    store.groupedIssueCount = { None: 0, "option-a": 1, "option-b": 0 };
+
+    store.updateCustomFieldValueLocalState(issue.id, {
+      fieldValues: { "select-field": "option-b" },
+      scope: "project",
+    });
+
+    expect(store.groupedIssueIds).toEqual({ None: [], "option-a": [], "option-b": [issue.id] });
+    expect(store.groupedIssueCount).toEqual({ None: 0, "option-a": 0, "option-b": 1 });
+    expect(issueMap[issue.id]?.["customproperty_select-field"]).toBe("option-b");
+
+    store.updateCustomFieldValueLocalState(issue.id, {
+      fieldValues: { "select-field": null },
+      scope: "project",
+    });
+
+    expect(store.groupedIssueIds).toEqual({ None: [issue.id], "option-a": [], "option-b": [] });
+    expect(store.groupedIssueCount).toEqual({ None: 1, "option-a": 0, "option-b": 0 });
+    expect(issueMap[issue.id]?.field_values["select-field"]).toBeNull();
+    expect(issueMap[issue.id]?.["customproperty_select-field"]).toBeNull();
+  });
+
+  it("reconciles only the exact active module custom field context", () => {
+    const issue = issueFixture({
+      module_field_values: {
+        "module-1": { "member-field": "member-1" },
+        "module-2": { "member-field": "member-elsewhere" },
+      },
+    });
+    const { issueMap, store } = createStore({
+      groupBy: "modulecustomproperty_member-field",
+      issues: [issue],
+      sourceModuleId: "module-1",
+    });
+    store.groupedIssueIds = { None: [], "member-1": [issue.id], "member-2": [] };
+    store.groupedIssueCount = { None: 0, "member-1": 1, "member-2": 0 };
+
+    store.updateCustomFieldValueLocalState(issue.id, {
+      fieldValues: { "member-field": "member-2" },
+      moduleId: "module-1",
+      scope: "module",
+    });
+
+    expect(store.groupedIssueIds).toEqual({ None: [], "member-1": [], "member-2": [issue.id] });
+    expect(store.groupedIssueCount).toEqual({ None: 0, "member-1": 0, "member-2": 1 });
+
+    store.updateCustomFieldValueLocalState(issue.id, {
+      fieldValues: { "member-field": "member-3" },
+      moduleId: "module-2",
+      scope: "module",
+    });
+
+    expect(store.groupedIssueIds).toEqual({ None: [], "member-1": [], "member-2": [issue.id] });
+    expect(store.groupedIssueCount).toEqual({ None: 0, "member-1": 0, "member-2": 1 });
+    expect(issueMap[issue.id]?.["modulecustomproperty_member-field"]).toBe("member-2");
+    expect(issueMap[issue.id]?.module_field_values?.["module-2"]?.["member-field"]).toBe("member-3");
+
+    store.updateCustomFieldValueLocalState(issue.id, {
+      fieldValues: { "member-field": null },
+      moduleId: "module-1",
+      scope: "module",
+    });
+
+    expect(store.groupedIssueIds).toEqual({ None: [issue.id], "member-1": [], "member-2": [] });
+    expect(store.groupedIssueCount).toEqual({ None: 1, "member-1": 0, "member-2": 0 });
+  });
+
   it("uses None paths for empty project groups and source-module subgroups", () => {
     const before = issueFixture({
       field_values: { "select-field": "option-a" },

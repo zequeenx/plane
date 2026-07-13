@@ -25,6 +25,7 @@ import type {
   TPaginationData,
   TBulkOperationsPayload,
   IBlockUpdateDependencyData,
+  TIssueCustomFieldLocalUpdate,
 } from "@plane/types";
 import { EIssueServiceType, EIssueLayoutTypes } from "@plane/types";
 // helpers
@@ -73,6 +74,7 @@ export interface IBaseIssuesStore {
   removeIssue: (workspaceSlug: string, projectId: string, issueId: string) => Promise<void>;
   clear(shouldClearPaginationOptions?: boolean): void;
   updateIssueLocalState: (issueId: string, data: Partial<TIssue>) => void;
+  updateCustomFieldValueLocalState: (issueId: string, update: TIssueCustomFieldLocalUpdate) => void;
   // helper methods
   getIssueIds: (groupId?: string, subGroupId?: string) => string[] | undefined;
   issuesSortWithOrderBy(issueIds: string[], key: Partial<TIssueOrderByOptions>): string[];
@@ -242,6 +244,7 @@ export abstract class BaseIssuesStore implements IBaseIssuesStore {
 
       createIssue: action,
       updateIssueLocalState: action.bound,
+      updateCustomFieldValueLocalState: action.bound,
       issueUpdate: action,
       updateIssueDates: action,
       issueQuickAdd: action.bound,
@@ -581,6 +584,38 @@ export abstract class BaseIssuesStore implements IBaseIssuesStore {
     const nextIssue = { ...issueBeforeUpdate, ...data };
     this.rootIssueStore.issues.updateIssue(issueId, data);
     this.updateIssueList(nextIssue, issueBeforeUpdate);
+  }
+
+  updateCustomFieldValueLocalState(issueId: string, updateData: TIssueCustomFieldLocalUpdate) {
+    const issue = clone(this.rootIssueStore.issues.getIssueById(issueId));
+    if (!issue) return;
+
+    const data: Partial<TIssue> = {};
+    if (updateData.scope === "project") {
+      data.field_values = { ...issue.field_values, ...updateData.fieldValues };
+      for (const [fieldId, value] of Object.entries(updateData.fieldValues)) {
+        const groupKey = `customproperty_${fieldId}` as const;
+        if (this.groupBy === groupKey || Object.prototype.hasOwnProperty.call(issue, groupKey))
+          Object.assign(data, { [groupKey]: typeof value === "string" ? value : null });
+      }
+    } else {
+      data.module_field_values = {
+        ...issue.module_field_values,
+        [updateData.moduleId]: {
+          ...issue.module_field_values?.[updateData.moduleId],
+          ...updateData.fieldValues,
+        },
+      };
+      if (updateData.moduleId === this.sourceModuleId) {
+        for (const [fieldId, value] of Object.entries(updateData.fieldValues)) {
+          const groupKey = `modulecustomproperty_${fieldId}` as const;
+          if (this.groupBy === groupKey || Object.prototype.hasOwnProperty.call(issue, groupKey))
+            Object.assign(data, { [groupKey]: typeof value === "string" ? value : null });
+        }
+      }
+    }
+
+    this.updateIssueLocalState(issueId, data);
   }
 
   /**

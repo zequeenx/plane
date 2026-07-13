@@ -15,6 +15,7 @@ import { ProjectFieldValueEditors } from "@/components/project-fields/value-edit
 // hooks
 import { useIssueDetail } from "@/hooks/store/use-issue-detail";
 import { useProjectIssueFields } from "@/hooks/store/use-project-issue-fields";
+import { useCustomFieldValueLocalUpdate } from "@/hooks/use-custom-field-value-local-update";
 
 export type TWorkItemAdditionalSidebarProperties = {
   workItemId: string;
@@ -35,6 +36,7 @@ export const WorkItemAdditionalSidebarProperties = observer(function WorkItemAdd
     issue: { getIssueById },
   } = useIssueDetail();
   const { fieldsLoader, getFields, getFieldsByProjectId, updateIssueValues } = useProjectIssueFields();
+  const updateCustomFieldValueLocalState = useCustomFieldValueLocalUpdate();
 
   const issue = getIssueById(workItemId);
   const fields = getFieldsByProjectId(projectId);
@@ -49,11 +51,17 @@ export const WorkItemAdditionalSidebarProperties = observer(function WorkItemAdd
 
   const handleChange = async (fieldId: string, value: TIssueFieldValue) => {
     try {
-      await updateIssueValues(workspaceSlug, projectId, workItemId, {
-        field_values: {
-          [fieldId]: Array.isArray(value) && value.length === 0 ? null : value,
+      await updateIssueValues(
+        workspaceSlug,
+        projectId,
+        workItemId,
+        {
+          field_values: {
+            [fieldId]: Array.isArray(value) && value.length === 0 ? null : value,
+          },
         },
-      });
+        updateCustomFieldValueLocalState
+      );
     } catch {
       setToast({
         type: TOAST_TYPE.ERROR,

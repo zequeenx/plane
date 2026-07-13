@@ -13,11 +13,13 @@ import {
   executeCustomFieldGroupDrop,
   executeCustomFieldGroupQuickCreate,
   getCustomFieldGroupQuickAddData,
+  getCanonicalCustomFieldGroupValue,
   getCustomFieldGroupValue,
   getCustomFieldGroupColumns,
   isCustomFieldGroupCreationDisabled,
   isGroupableCustomField,
   isIssueGroupDragAllowed,
+  isStaticIssueSubGroup,
   normalizeCustomFieldGroupId,
   parseCustomFieldGroupKey,
   mergeModuleGroupIds,
@@ -162,6 +164,16 @@ describe("custom field group values", () => {
   it("normalizes the unassigned group to a null field value", () => {
     expect(normalizeCustomFieldGroupId("None")).toBeNull();
   });
+
+  it("keeps an explicit optimistic null annotation authoritative over stale nested data", () => {
+    const issue = issueFixture({
+      "customproperty_select-field": null,
+      field_values: { "select-field": "option-a" },
+    });
+
+    expect(getCustomFieldGroupValue(issue, "customproperty_select-field")).toBeNull();
+    expect(getCanonicalCustomFieldGroupValue(issue, "customproperty_select-field")).toBe("option-a");
+  });
 });
 
 describe("getCustomFieldGroupQuickAddData", () => {
@@ -169,6 +181,14 @@ describe("getCustomFieldGroupQuickAddData", () => {
     expect(getCustomFieldGroupQuickAddData("customproperty_select-field", "option-a")).toEqual({
       "customproperty_select-field": "option-a",
       field_values: { "select-field": "option-a" },
+    });
+  });
+
+  it("attaches a project custom group create to its source module context", () => {
+    expect(getCustomFieldGroupQuickAddData("customproperty_select-field", "option-a", "module-1")).toEqual({
+      "customproperty_select-field": "option-a",
+      field_values: { "select-field": "option-a" },
+      module_ids: ["module-1"],
     });
   });
 
@@ -352,7 +372,15 @@ describe("getCustomFieldGroupColumns", () => {
         isLoading: false,
         members: [],
       })
-    ).toEqual([{ id: "All Issues", kind: "all", name: "All work items" }]);
+    ).toEqual([
+      {
+        id: "All Issues",
+        isCreateDisabled: true,
+        isDropDisabled: true,
+        kind: "all",
+        name: "All work items",
+      },
+    ]);
   });
 
   it("returns the ungrouped column when a saved custom field is disabled", () => {
@@ -363,7 +391,7 @@ describe("getCustomFieldGroupColumns", () => {
         isLoading: false,
         members: [],
       })
-    ).toEqual([{ id: "All Issues", kind: "all", name: "All Epics" }]);
+    ).toEqual([{ id: "All Issues", isCreateDisabled: true, isDropDisabled: true, kind: "all", name: "All Epics" }]);
   });
 
   it("returns field-backed columns when the saved custom field is eligible", () => {
@@ -378,6 +406,15 @@ describe("getCustomFieldGroupColumns", () => {
       { id: "option-1", kind: "option", name: "Urgent" },
       { id: "None", kind: "none", name: "None" },
     ]);
+  });
+});
+
+describe("isStaticIssueSubGroup", () => {
+  it("allows static or absent subgroups and rejects injected custom subgroups", () => {
+    expect(isStaticIssueSubGroup(undefined)).toBe(true);
+    expect(isStaticIssueSubGroup("priority")).toBe(true);
+    expect(isStaticIssueSubGroup("customproperty_select-field")).toBe(false);
+    expect(isStaticIssueSubGroup("modulecustomproperty_member-field")).toBe(false);
   });
 });
 

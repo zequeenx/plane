@@ -11,6 +11,7 @@ import {
   CustomFieldGroupPartialCreateError,
   executeCustomFieldGroupDrop,
   executeCustomFieldGroupQuickCreate,
+  getCanonicalCustomFieldGroupValue,
   getCustomFieldGroupValue,
   isCustomFieldGroupKey,
   normalizeCustomFieldGroupId,
@@ -257,6 +258,8 @@ export const createCustomFieldGroupOperations = ({
       if (prepare && !(await Promise.resolve().then(() => prepare(issue)))) return;
 
       const issueBeforeDrop = { ...issue };
+      const previousGroupId = getCanonicalCustomFieldGroupValue(issueBeforeDrop, groupKey, sourceModuleId) ?? "None";
+      const rollbackIssue = applyCustomFieldGroupValue(issueBeforeDrop, groupKey, previousGroupId, sourceModuleId);
       const nextIssue = applyCustomFieldGroupValue(issue, groupKey, groupId, sourceModuleId);
       const normalizedValue = normalizeCustomFieldGroupId(groupId);
       const fieldValuePayload = { field_values: { [customGroup.fieldId]: normalizedValue } };
@@ -282,7 +285,7 @@ export const createCustomFieldGroupOperations = ({
       await executeCustomFieldGroupDrop({
         onPartialFailure: refetchCurrentGrouping,
         onReconciliationError: reportReconciliationError,
-        onRollback: () => updateIssueLocalState(issue.id, issueBeforeDrop),
+        onRollback: () => updateIssueLocalState(issue.id, rollbackIssue),
         persistAdditionalOperations: additionalPersistenceOperations,
         persistFieldValue,
         persistSortOrder,

@@ -21,6 +21,8 @@ export type TIssueApiPayload = Omit<Partial<TIssue>, TCustomFieldGroupKey>;
 export type TCustomFieldGroupColumn = {
   avatarUrl?: string;
   id: string;
+  isCreateDisabled?: boolean;
+  isDropDisabled?: boolean;
   kind: "all" | "member" | "none" | "option";
   name: string;
 };
@@ -53,6 +55,9 @@ export const isCustomFieldGroupKey = (
 export const isIssueGroupDragAllowed = (groupBy: TIssueGroupByOptions | undefined) =>
   !!groupBy && (isCustomFieldGroupKey(groupBy) || DRAG_ALLOWED_GROUPS.includes(groupBy));
 
+export const isStaticIssueSubGroup = (subGroupBy: TIssueGroupByOptions | undefined) =>
+  !isCustomFieldGroupKey(subGroupBy);
+
 export const normalizeCustomFieldGroupId = (groupId: string) => (groupId === "None" ? null : groupId);
 
 export const mergeModuleGroupIds = (moduleIds: string[] | null | undefined, groupId: string): string[] => {
@@ -77,6 +82,7 @@ export const getCustomFieldGroupQuickAddData = (
   if (parsed.scope === "project") {
     const data: Partial<TIssue> = {
       field_values: value === null ? {} : { [parsed.fieldId]: value },
+      ...(moduleId ? { module_ids: [moduleId] } : {}),
     };
     data[key] = value;
     return data;
@@ -111,6 +117,25 @@ export const getCustomFieldGroupValue = (
         : undefined;
 
   return typeof fallback === "string" ? fallback : null;
+};
+
+export const getCanonicalCustomFieldGroupValue = (
+  issue: Partial<TIssue>,
+  key: TCustomFieldGroupKey,
+  moduleId?: string | null
+): string | null => {
+  const parsed = parseCustomFieldGroupKey(key);
+  if (!parsed) return null;
+
+  const fieldValues =
+    parsed.scope === "project" ? issue.field_values : moduleId ? issue.module_field_values?.[moduleId] : undefined;
+  if (fieldValues && Object.prototype.hasOwnProperty.call(fieldValues, parsed.fieldId)) {
+    const value = fieldValues[parsed.fieldId];
+    return typeof value === "string" ? value : null;
+  }
+
+  const annotation = issue[key];
+  return typeof annotation === "string" ? annotation : null;
 };
 
 export const applyCustomFieldGroupValue = (
@@ -230,7 +255,15 @@ export const getCustomFieldGroupColumns = ({
 }): TCustomFieldGroupColumn[] | undefined => {
   if (isLoading) return undefined;
   if (!field || !isGroupableCustomField(field))
-    return [{ id: "All Issues", kind: "all", name: `All ${isEpic ? "Epics" : "work items"}` }];
+    return [
+      {
+        id: "All Issues",
+        isCreateDisabled: true,
+        isDropDisabled: true,
+        kind: "all",
+        name: `All ${isEpic ? "Epics" : "work items"}`,
+      },
+    ];
   return buildCustomFieldGroupColumns(field, members);
 };
 

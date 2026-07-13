@@ -40,10 +40,13 @@ export const getServerGroupBy = (groupBy: TIssueGroupByOptions | undefined) => {
   return EIssueGroupByToServerOptions[groupBy as keyof typeof EIssueGroupByToServerOptions];
 };
 
-export const getServerGroupFilter = (groupBy: string) => {
-  if (isCustomFieldGroupKey(groupBy)) return `${groupBy}__exact`;
+export const getServerGroupFilter = (groupBy: string, groupId?: string) => {
+  if (isCustomFieldGroupKey(groupBy)) return `${groupBy}__${groupId === "None" ? "is_empty" : "exact"}`;
   return EServerGroupByToFilterOptions[groupBy as EIssueGroupByToServerOptions];
 };
+
+const getServerGroupFilterValue = (groupBy: string, groupId: string): string | boolean =>
+  isCustomFieldGroupKey(groupBy) && groupId === "None" ? true : groupId;
 
 interface ILocalStoreIssueFilters {
   key: EIssuesStoreType;
@@ -338,8 +341,8 @@ export class IssueFilterHelperStore implements IIssueFilterHelperStore {
       delete paginationParams["group_by"];
 
       if (groupBy) {
-        const groupByFilterOption = getServerGroupFilter(groupBy);
-        paginationParams[groupByFilterOption as TIssueParams] = groupId;
+        const groupByFilterOption = getServerGroupFilter(groupBy, groupId);
+        paginationParams[groupByFilterOption as TIssueParams] = getServerGroupFilterValue(groupBy, groupId);
       }
     }
 
@@ -349,8 +352,8 @@ export class IssueFilterHelperStore implements IIssueFilterHelperStore {
       delete paginationParams["sub_group_by"];
 
       if (subGroupBy) {
-        const subGroupByFilterOption = getServerGroupFilter(subGroupBy);
-        paginationParams[subGroupByFilterOption as TIssueParams] = subGroupId;
+        const subGroupByFilterOption = getServerGroupFilter(subGroupBy, subGroupId);
+        paginationParams[subGroupByFilterOption as TIssueParams] = getServerGroupFilterValue(subGroupBy, subGroupId);
       }
     }
 

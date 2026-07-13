@@ -108,6 +108,12 @@ export type TModuleIssueFieldValuesUpdatePayload = {
   field_values: TModuleIssueFieldValues;
 };
 
+export type TIssueCustomFieldLocalUpdate =
+  | { fieldValues: TIssueFieldValues; scope: "project" }
+  | { fieldValues: TModuleIssueFieldValues; moduleId: string; scope: "module" };
+
+export type TIssueCustomFieldLocalUpdater = (issueId: string, update: TIssueCustomFieldLocalUpdate) => void;
+
 export type TModuleIssueFieldValueDeletePayload = {
   field_values: Record<TModuleIssueFieldId, null>;
 };

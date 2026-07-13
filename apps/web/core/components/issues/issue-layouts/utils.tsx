@@ -47,6 +47,7 @@ import {
   getCustomFieldGroupColumns,
   getCustomFieldGroupQuickAddData,
   isCustomFieldGroupKey,
+  isStaticIssueSubGroup,
   parseCustomFieldGroupKey,
   resolveCustomFieldGroupField,
 } from "./custom-field-grouping";
@@ -129,12 +130,14 @@ export const getGroupByColumns = ({
       sourceModuleId,
     });
 
-    const memberIds = projectId ? (store.memberRoot.project.getProjectMemberIds(projectId, false) ?? []) : [];
-    const members = memberIds.flatMap((memberId) => {
+    const memberIds = projectId ? (store.memberRoot.project.getActiveProjectMemberIds(projectId, false) ?? []) : [];
+    const members = memberIds.map((memberId) => {
       const member = store.memberRoot.getUserDetails(memberId);
-      return member
-        ? [{ avatarUrl: member.avatar_url ?? undefined, displayName: member.display_name, id: memberId }]
-        : [];
+      return {
+        avatarUrl: member?.avatar_url ?? undefined,
+        displayName: member?.display_name ?? memberId,
+        id: memberId,
+      };
     });
 
     const columns = getCustomFieldGroupColumns({
@@ -150,7 +153,9 @@ export const getGroupByColumns = ({
         column.kind === "member" ? (
           <Avatar name={column.name} src={getFileURL(column.avatarUrl ?? "")} size="md" />
         ) : undefined,
-      payload: getCustomFieldGroupQuickAddData(groupBy, column.id, sourceModuleId),
+      payload: column.isCreateDisabled ? {} : getCustomFieldGroupQuickAddData(groupBy, column.id, sourceModuleId),
+      isCreateDisabled: column.isCreateDisabled,
+      isDropDisabled: column.isDropDisabled,
     }));
   }
 
@@ -565,6 +570,7 @@ export const handleGroupDragDrop = async (
   subGroupBy: TIssueGroupByOptions | undefined,
   shouldAddIssueAtTop = false
 ) => {
+  if (!isStaticIssueSubGroup(subGroupBy)) return;
   if (!source.id || (subGroupBy && (!source.subGroupId || !destination.subGroupId))) return;
 
   let updatedIssue: Partial<TIssue> = {};

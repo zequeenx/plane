@@ -48,6 +48,7 @@ import {
   isCustomFieldGroupCreationDisabled,
   isCustomFieldGroupKey,
   isIssueGroupDragAllowed,
+  isStaticIssueSubGroup,
   mergeModuleGroupIds,
 } from "../custom-field-grouping";
 import type { TRenderQuickActions } from "../list/list-view-types";
@@ -172,12 +173,13 @@ export const KanbanGroup = observer(function KanbanGroup(props: IKanbanGroup) {
 
           if (!source || !destination) return;
 
-          if ((isWorkflowDropDisabled || isDropDisabled) && dropErrorMessage) {
-            setToast({
-              type: TOAST_TYPE.WARNING,
-              title: t("common.warning"),
-              message: dropErrorMessage,
-            });
+          if (isWorkflowDropDisabled || isDropDisabled) {
+            if (dropErrorMessage)
+              setToast({
+                type: TOAST_TYPE.WARNING,
+                title: t("common.warning"),
+                message: dropErrorMessage,
+              });
             return;
           }
 
@@ -287,12 +289,15 @@ export const KanbanGroup = observer(function KanbanGroup(props: IKanbanGroup) {
   );
 
   const shouldLoadMore = nextPageResults === undefined ? issueIds?.length < groupIssueCount : !!nextPageResults;
+  const isCustomSubGroupUnsupported = !isStaticIssueSubGroup(sub_group_by);
   const canOverlayBeVisible = isWorkflowDropDisabled || orderBy !== "sort_order" || isDropDisabled;
   const shouldOverlayBeVisible = isDraggingOverColumn && canOverlayBeVisible;
   const canDragIssuesInCurrentGrouping =
-    isIssueGroupDragAllowed(group_by) && (sub_group_by ? isIssueGroupDragAllowed(sub_group_by) : true);
+    isIssueGroupDragAllowed(group_by) &&
+    isStaticIssueSubGroup(sub_group_by) &&
+    (sub_group_by ? isIssueGroupDragAllowed(sub_group_by) : true);
   const groupedQuickAddCallback =
-    quickAddCallback && isCustomFieldGroupKey(group_by)
+    quickAddCallback && isCustomFieldGroupKey(group_by) && !isCustomSubGroupUnsupported && !disableIssueCreation
       ? customFieldGroupOperations.wrapQuickCreate(groupId, quickAddCallback, group_by)
       : quickAddCallback;
   const isCustomGroupCreationDisabled = isCustomFieldGroupCreationDisabled(group_by, sourceModuleId);
@@ -346,6 +351,7 @@ export const KanbanGroup = observer(function KanbanGroup(props: IKanbanGroup) {
 
       {enableQuickIssueCreate &&
         !disableIssueCreation &&
+        !isCustomSubGroupUnsupported &&
         !isCustomGroupCreationDisabled &&
         !getIsWorkflowWorkItemCreationDisabled(groupId, sub_group_id) && (
           <div className="sticky bottom-0 w-full bg-surface-2 py-0.5">

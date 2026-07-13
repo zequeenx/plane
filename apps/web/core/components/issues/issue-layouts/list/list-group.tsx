@@ -263,14 +263,14 @@ export const ListGroup = observer(function ListGroup(props: Props) {
     isWorkflowDropDisabled,
   ]);
 
-  const isDragAllowed = group_by ? isIssueGroupDragAllowed(group_by) : true;
+  const isDragAllowed = (group_by ? isIssueGroupDragAllowed(group_by) : true) && !group.isDropDisabled;
   const canOverlayBeVisible = isWorkflowDropDisabled || orderBy !== "sort_order" || !!group.isDropDisabled;
   const isDropDisabled = isWorkflowDropDisabled || !!group.isDropDisabled;
 
   const isGroupByCreatedBy = group_by === "created_by";
   const shouldExpand = (!!groupIssueCount && isExpanded) || !group_by;
   const groupedQuickAddCallback =
-    quickAddCallback && isCustomFieldGroupKey(group_by)
+    quickAddCallback && isCustomFieldGroupKey(group_by) && !group.isCreateDisabled
       ? customFieldGroupOperations.wrapQuickCreate(group.id, quickAddCallback, group_by)
       : quickAddCallback;
   const isCustomGroupCreationDisabled = isCustomFieldGroupCreationDisabled(group_by, sourceModuleId);
@@ -299,6 +299,7 @@ export const ListGroup = observer(function ListGroup(props: Props) {
           canEditProperties={canEditProperties}
           disableIssueCreation={
             disableIssueCreation ||
+            group.isCreateDisabled ||
             isCustomGroupCreationDisabled ||
             isGroupByCreatedBy ||
             isCompletedCycle ||
@@ -353,6 +354,7 @@ export const ListGroup = observer(function ListGroup(props: Props) {
 
           {enableIssueQuickAdd &&
             !disableIssueCreation &&
+            !group.isCreateDisabled &&
             !isCustomGroupCreationDisabled &&
             !isGroupByCreatedBy &&
             !isCompletedCycle &&

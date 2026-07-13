@@ -275,6 +275,8 @@ export const CreateUpdateIssueModalBase = observer(function CreateUpdateIssueMod
         setChangesMade(null);
         handleClose();
       },
+      reportCleanupFailure: (cleanupError, lifecycleError) =>
+        console.error("Failed to clean up a partially created work item", { cleanupError, lifecycleError }),
       onSuccess: (response) => {
         setToast({
           type: TOAST_TYPE.SUCCESS,

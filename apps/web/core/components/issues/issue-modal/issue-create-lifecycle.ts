@@ -6,6 +6,19 @@ type TIssueCreateLifecycleOptions<TIssue> = {
   onCoreFailure: (error: unknown) => Promise<void> | void;
   onPostCreateFailure: (issue: TIssue, error: unknown) => Promise<void> | void;
   onSuccess: (issue: TIssue) => Promise<void> | void;
+  reportCleanupFailure?: (cleanupError: unknown, lifecycleError: unknown) => void;
+};
+
+const reportCleanupFailureWithoutReplacingOriginal = (
+  reporter: TIssueCreateLifecycleOptions<unknown>["reportCleanupFailure"],
+  cleanupError: unknown,
+  lifecycleError: unknown
+) => {
+  try {
+    reporter?.(cleanupError, lifecycleError);
+  } catch {
+    // Error reporting must not replace the lifecycle error consumed by the create form.
+  }
 };
 
 export const executeIssueCreateLifecycle = async <TIssue>({
@@ -14,6 +27,7 @@ export const executeIssueCreateLifecycle = async <TIssue>({
   onCoreFailure,
   onPostCreateFailure,
   onSuccess,
+  reportCleanupFailure,
 }: TIssueCreateLifecycleOptions<TIssue>): Promise<TIssue> => {
   let issue: TIssue;
   try {
@@ -23,8 +37,8 @@ export const executeIssueCreateLifecycle = async <TIssue>({
       const createdIssue = error.createdIssue as TIssue;
       try {
         await onPostCreateFailure(createdIssue, error);
-      } catch {
-        // Cleanup must not replace the post-create error consumed by the create form.
+      } catch (cleanupError) {
+        reportCleanupFailureWithoutReplacingOriginal(reportCleanupFailure, cleanupError, error);
       }
       throw error;
     }
@@ -37,8 +51,8 @@ export const executeIssueCreateLifecycle = async <TIssue>({
   } catch (error) {
     try {
       await onPostCreateFailure(issue, error);
-    } catch {
-      // Cleanup must not replace the finalization error consumed by the create form.
+    } catch (cleanupError) {
+      reportCleanupFailureWithoutReplacingOriginal(reportCleanupFailure, cleanupError, error);
     }
     throw error;
   }

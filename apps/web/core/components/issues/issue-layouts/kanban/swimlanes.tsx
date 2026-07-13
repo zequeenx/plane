@@ -20,7 +20,10 @@ import type {
   TIssueOrderByOptions,
 } from "@plane/types";
 import { Row } from "@plane/ui";
-import { isCustomFieldGroupCreationDisabled } from "@/components/issues/issue-layouts/custom-field-grouping";
+import {
+  isCustomFieldGroupCreationDisabled,
+  isStaticIssueSubGroup,
+} from "@/components/issues/issue-layouts/custom-field-grouping";
 // hooks
 import { useIssueStoreType } from "@/hooks/use-issue-layout-store";
 import { useCustomFieldGrouping } from "@/hooks/use-custom-field-grouping";
@@ -102,7 +105,9 @@ const SubGroupSwimlaneHeader = observer(function SubGroupSwimlaneHeader({
                 customFieldGroupOperations={customFieldGroupOperations}
                 handleCollapsedGroups={handleCollapsedGroups}
                 issuePayload={_list.payload}
-                disableIssueCreation={disableIssueCreation || getIsWorkflowWorkItemCreationDisabled(_list.id)}
+                disableIssueCreation={
+                  disableIssueCreation || _list.isCreateDisabled || getIsWorkflowWorkItemCreationDisabled(_list.id)
+                }
                 isEpic={isEpic}
               />
             </div>
@@ -224,7 +229,7 @@ const SubGroupSwimlane = observer(function SubGroupSwimlane(props: ISubGroupSwim
                     handleCollapsedGroups={handleCollapsedGroups}
                     showEmptyGroup={showEmptyGroup}
                     enableQuickIssueCreate={enableQuickIssueCreate}
-                    disableIssueCreation={disableIssueCreation}
+                    disableIssueCreation={disableIssueCreation || _list.isCreateDisabled}
                     canEditProperties={canEditProperties}
                     addIssuesToView={addIssuesToView}
                     quickAddCallback={quickAddCallback}
@@ -303,6 +308,7 @@ export const KanBanSwimLanes = observer(function KanBanSwimLanes(props: IKanBanS
   const storeType = useIssueStoreType();
   const { moduleFieldsLoading, projectFieldsLoading, projectId, sourceModuleId } = useCustomFieldGrouping();
   const isCustomGroupCreationDisabled = isCustomFieldGroupCreationDisabled(group_by, sourceModuleId);
+  const isCustomSubGroupUnsupported = !isStaticIssueSubGroup(sub_group_by);
   // derived values
   const groupByList = getGroupByColumns({
     groupBy: group_by as GroupByColumnTypes,
@@ -336,7 +342,7 @@ export const KanBanSwimLanes = observer(function KanBanSwimLanes(props: IKanBanS
           sub_group_by={sub_group_by}
           collapsedGroups={collapsedGroups}
           customFieldGroupOperations={customFieldGroupOperations}
-          disableIssueCreation={disableIssueCreation || isCustomGroupCreationDisabled}
+          disableIssueCreation={disableIssueCreation || isCustomGroupCreationDisabled || isCustomSubGroupUnsupported}
           handleCollapsedGroups={handleCollapsedGroups}
           list={groupByList}
           showEmptyGroup={showEmptyGroup}
@@ -362,7 +368,7 @@ export const KanBanSwimLanes = observer(function KanBanSwimLanes(props: IKanBanS
           loadMoreIssues={loadMoreIssues}
           showEmptyGroup={showEmptyGroup}
           handleOnDrop={handleOnDrop}
-          disableIssueCreation={disableIssueCreation}
+          disableIssueCreation={disableIssueCreation || isCustomSubGroupUnsupported}
           enableQuickIssueCreate={enableQuickIssueCreate}
           addIssuesToView={addIssuesToView}
           canEditProperties={canEditProperties}

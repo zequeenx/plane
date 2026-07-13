@@ -391,8 +391,66 @@ describe("createCustomFieldGroupOperations", () => {
     ).rejects.toBe(fieldError);
 
     expect(dependencies.updateIssueLocalState).toHaveBeenCalledTimes(2);
-    expect(dependencies.updateIssueLocalState).toHaveBeenNthCalledWith(2, issue.id, issue);
+    expect(dependencies.updateIssueLocalState).toHaveBeenNthCalledWith(
+      2,
+      issue.id,
+      expect.objectContaining({
+        "customproperty_select-field": "option-a",
+        field_values: { "select-field": "option-a" },
+      })
+    );
     expect(dependencies.fetchIssues).not.toHaveBeenCalled();
+  });
+
+  it("restores a project field annotation from nested state when total persistence fails", async () => {
+    const fieldError = new Error("field request failed");
+    const issues = {
+      "issue-1": issueFixture({
+        field_values: { "select-field": "option-a" },
+      }),
+    };
+    delete issues["issue-1"]["customproperty_select-field"];
+    const dependencies = statefulDependencyFixture(
+      issues,
+      vi.fn(async () => {
+        throw fieldError;
+      })
+    );
+    const operations = createCustomFieldGroupOperations(dependencies);
+
+    await expect(operations.persistDrop("issue-1", "customproperty_select-field", "None")).rejects.toBe(fieldError);
+
+    expect(issues["issue-1"].field_values["select-field"]).toBe("option-a");
+    expect(issues["issue-1"]["customproperty_select-field"]).toBe("option-a");
+    expect(dependencies.updateIssueLocalState).toHaveBeenCalledTimes(2);
+  });
+
+  it("restores an explicit module None annotation from nested state when total persistence fails", async () => {
+    const fieldError = new Error("field request failed");
+    const issues = {
+      "issue-1": issueFixture({
+        module_field_values: { "module-1": { "member-field": null } },
+      }),
+    };
+    delete issues["issue-1"]["modulecustomproperty_member-field"];
+    const dependencies = statefulDependencyFixture(
+      issues,
+      vi.fn(async () => ({})),
+      {
+        updateModuleIssueValues: vi.fn(async () => {
+          throw fieldError;
+        }),
+      }
+    );
+    const operations = createCustomFieldGroupOperations(dependencies);
+
+    await expect(operations.persistDrop("issue-1", "modulecustomproperty_member-field", "member-2")).rejects.toBe(
+      fieldError
+    );
+
+    expect(issues["issue-1"].module_field_values?.["module-1"]?.["member-field"]).toBeNull();
+    expect(issues["issue-1"]["modulecustomproperty_member-field"]).toBeNull();
+    expect(dependencies.updateIssueLocalState).toHaveBeenCalledTimes(2);
   });
 
   it("refetches the current grouping after a partial persistence failure", async () => {

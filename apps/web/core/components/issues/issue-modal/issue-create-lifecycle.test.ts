@@ -229,6 +229,31 @@ describe("executeIssueCreateLifecycle", () => {
     expect(onSuccess).not.toHaveBeenCalled();
   });
 
+  it("reports cleanup failure once while preserving the original finalization error", async () => {
+    const issue = { id: "issue-1" };
+    const finalizationError = new Error("group field failed");
+    const cleanupError = new Error("reconciliation failed");
+    const reportCleanupFailure = vi.fn();
+
+    await expect(
+      executeIssueCreateLifecycle({
+        createIssue: async () => issue,
+        finalizeCreatedIssue: async () => {
+          throw finalizationError;
+        },
+        onCoreFailure: vi.fn(),
+        onPostCreateFailure: async () => {
+          throw cleanupError;
+        },
+        onSuccess: vi.fn(),
+        reportCleanupFailure,
+      })
+    ).rejects.toBe(finalizationError);
+
+    expect(reportCleanupFailure).toHaveBeenCalledOnce();
+    expect(reportCleanupFailure).toHaveBeenCalledWith(cleanupError, finalizationError);
+  });
+
   it("retains existing core-create failure reporting", async () => {
     const calls: string[] = [];
     const createError = new Error("create failed");

@@ -93,6 +93,7 @@ export interface IProjectMemberLite {
 }
 
 export type TProjectMembership = {
+  is_active?: boolean;
   member: string;
   role: TUserPermissions | EUserProjectRoles;
 } & (

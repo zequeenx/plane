@@ -22,7 +22,10 @@ import type {
 import { ContentWrapper } from "@plane/ui";
 // components
 import RenderIfVisible from "@/components/core/render-if-visible-HOC";
-import { isCustomFieldGroupCreationDisabled } from "@/components/issues/issue-layouts/custom-field-grouping";
+import {
+  isCustomFieldGroupCreationDisabled,
+  isStaticIssueSubGroup,
+} from "@/components/issues/issue-layouts/custom-field-grouping";
 import { KanbanColumnLoader } from "@/components/ui/loader/layouts/kanban-layout-loader";
 // hooks
 import { useKanbanView } from "@/hooks/store/use-kanban-view";
@@ -110,6 +113,7 @@ export const KanBan = observer(function KanBan(props: IKanBan) {
   // derived values
   const isDragDisabled = !issueKanBanView?.getCanUserDragDrop(group_by, sub_group_by);
   const isCustomGroupCreationDisabled = isCustomFieldGroupCreationDisabled(group_by, sourceModuleId);
+  const isCustomSubGroupUnsupported = !isStaticIssueSubGroup(sub_group_by);
 
   const { getIsWorkflowWorkItemCreationDisabled } = useWorkFlowFDragNDrop(group_by, sub_group_by);
 
@@ -189,7 +193,9 @@ export const KanBan = observer(function KanBan(props: IKanBan) {
                     customFieldGroupOperations={customFieldGroupOperations}
                     disableIssueCreation={
                       disableIssueCreation ||
+                      subList.isCreateDisabled ||
                       isCustomGroupCreationDisabled ||
+                      isCustomSubGroupUnsupported ||
                       isGroupByCreatedBy ||
                       getIsWorkflowWorkItemCreationDisabled(subList.id, sub_group_id)
                     }
@@ -229,14 +235,16 @@ export const KanBan = observer(function KanBan(props: IKanBan) {
                     orderBy={orderBy}
                     sub_group_id={sub_group_id}
                     isDragDisabled={isDragDisabled}
-                    isDropDisabled={!!subList.isDropDisabled || !!isDropDisabled}
+                    isDropDisabled={!!subList.isDropDisabled || !!isDropDisabled || isCustomSubGroupUnsupported}
                     dropErrorMessage={subList.dropErrorMessage ?? dropErrorMessage}
                     updateIssue={updateIssue}
                     quickActions={quickActions}
                     enableQuickIssueCreate={enableQuickIssueCreate}
                     quickAddCallback={quickAddCallback}
                     customFieldGroupOperations={customFieldGroupOperations}
-                    disableIssueCreation={disableIssueCreation}
+                    disableIssueCreation={
+                      disableIssueCreation || subList.isCreateDisabled || isCustomSubGroupUnsupported
+                    }
                     canEditProperties={canEditProperties}
                     scrollableContainerRef={scrollableContainerRef}
                     loadMoreIssues={loadMoreIssues}

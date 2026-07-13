@@ -15,6 +15,7 @@ import type { TIssue, TIssueFieldValue, TIssueFieldValues } from "@plane/types";
 import { ProjectFieldValueEditors } from "@/components/project-fields/value-editors/root";
 // hooks
 import { useProjectIssueFields } from "@/hooks/store/use-project-issue-fields";
+import { useCustomFieldValueLocalUpdate } from "@/hooks/use-custom-field-value-local-update";
 
 const isEmptyFieldValue = (value: TIssueFieldValue | undefined) => {
   if (value === null || typeof value === "undefined") return true;
@@ -56,6 +57,7 @@ export const WorkItemModalAdditionalProperties = observer(function WorkItemModal
   const { setValue, watch } = useFormContext<TIssue>();
   // store hooks
   const { fieldsLoader, getFields, getFieldsByProjectId, updateIssueValues } = useProjectIssueFields();
+  const updateCustomFieldValueLocalState = useCustomFieldValueLocalUpdate();
 
   const fieldValues = watch("field_values") ?? {};
   const fields = projectId ? getFieldsByProjectId(projectId) : undefined;
@@ -81,11 +83,17 @@ export const WorkItemModalAdditionalProperties = observer(function WorkItemModal
     if (!shouldPersistImmediately || !projectId) return;
 
     try {
-      await updateIssueValues(workspaceSlug, projectId, workItemId, {
-        field_values: {
-          [fieldId]: getPersistedFieldValue(value),
+      await updateIssueValues(
+        workspaceSlug,
+        projectId,
+        workItemId,
+        {
+          field_values: {
+            [fieldId]: getPersistedFieldValue(value),
+          },
         },
-      });
+        updateCustomFieldValueLocalState
+      );
     } catch {
       setValue("field_values", previousFieldValues, { shouldDirty: false, shouldValidate: true });
       setToast({

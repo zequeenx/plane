@@ -17,6 +17,7 @@ import { ProjectFieldValueEditors } from "@/components/project-fields/value-edit
 import { useIssueDetail } from "@/hooks/store/use-issue-detail";
 import { useModule } from "@/hooks/store/use-module";
 import { useModuleIssueFields } from "@/hooks/store/use-module-issue-fields";
+import { useCustomFieldValueLocalUpdate } from "@/hooks/use-custom-field-value-local-update";
 
 type TWorkItemModuleFieldsProps = {
   workspaceSlug: string;
@@ -37,6 +38,7 @@ const WorkItemModuleFieldSection = observer(function WorkItemModuleFieldSection(
   const [hasFieldLoadFailed, setHasFieldLoadFailed] = useState(false);
   const { fetchModuleDetails, getModuleById } = useModule();
   const { fieldsLoader, getFields, getFieldsByModuleId, updateIssueValues } = useModuleIssueFields();
+  const updateCustomFieldValueLocalState = useCustomFieldValueLocalUpdate();
   const {
     issue: { getIssueById },
   } = useIssueDetail();
@@ -61,11 +63,18 @@ const WorkItemModuleFieldSection = observer(function WorkItemModuleFieldSection(
 
   const handleChange = async (fieldId: string, value: TIssueFieldValue) => {
     try {
-      await updateIssueValues(workspaceSlug, projectId, moduleId, issueId, {
-        field_values: {
-          [fieldId]: Array.isArray(value) && value.length === 0 ? null : value,
+      await updateIssueValues(
+        workspaceSlug,
+        projectId,
+        moduleId,
+        issueId,
+        {
+          field_values: {
+            [fieldId]: Array.isArray(value) && value.length === 0 ? null : value,
+          },
         },
-      });
+        updateCustomFieldValueLocalState
+      );
     } catch {
       setToast({
         type: TOAST_TYPE.ERROR,

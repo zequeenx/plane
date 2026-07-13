@@ -10,6 +10,7 @@ import type { EIssuesStoreType, TIssue, TIssueGroupByOptions, TIssueOrderByOptio
 import { getModuleIdsWithFieldValues } from "@plane/utils";
 import type { GroupDropLocation } from "@/components/issues/issue-layouts/utils";
 import { handleGroupDragDrop } from "@/components/issues/issue-layouts/utils";
+import { isStaticIssueSubGroup } from "@/components/issues/issue-layouts/custom-field-grouping";
 import { ISSUE_FILTER_DEFAULT_DATA } from "@/store/issue/helpers/base-issues.store";
 import { buildCustomFieldGroupDropPlan } from "./custom-field-group-drop-routing";
 import { useIssueDetail } from "./store/use-issue-detail";
@@ -181,6 +182,7 @@ export const useGroupIssuesDragNDrop = (
   };
 
   const handleOnDrop = async (source: GroupDropLocation, destination: GroupDropLocation) => {
+    if (!isStaticIssueSubGroup(subGroupBy)) return;
     if (
       source.columnId &&
       destination.columnId &&
