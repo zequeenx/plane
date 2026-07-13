@@ -26,9 +26,11 @@ import type {
   IIssueDisplayProperties,
   TGetColumns,
   TIssueGroupByOptions,
+  TSystemIssueGroupByOptions,
   TSpreadsheetColumn,
 } from "@plane/types";
 // components
+import { isCustomFieldGroupKey } from "@/components/issues/issue-layouts/custom-field-grouping";
 import {
   SpreadsheetAssigneeColumn,
   SpreadsheetAttachmentColumn,
@@ -119,9 +121,12 @@ export const SPREADSHEET_COLUMNS: { [key in keyof IIssueDisplayProperties]: TSpr
 export const useGroupByOptions = (
   options: TIssueGroupByOptions[]
 ): {
-  key: TIssueGroupByOptions;
+  key: TSystemIssueGroupByOptions;
   titleTranslationKey: string;
 }[] => {
-  const groupByOptions = ISSUE_GROUP_BY_OPTIONS.filter((option) => options.includes(option.key));
+  const groupByOptions = ISSUE_GROUP_BY_OPTIONS.filter(
+    (option): option is { key: TSystemIssueGroupByOptions; titleTranslationKey: string } =>
+      !isCustomFieldGroupKey(option.key) && options.includes(option.key)
+  );
   return groupByOptions;
 };

@@ -89,6 +89,7 @@ export const DisplayFiltersSelection = observer(function DisplayFiltersSelection
               })
             }
             ignoreGroupedFilters={[...ignoreGroupedFilters, ...computedIgnoreGroupedFilters]}
+            sourceModuleId={sourceModuleId}
           />
         </div>
       )}

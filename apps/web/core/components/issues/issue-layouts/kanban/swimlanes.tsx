@@ -22,6 +22,7 @@ import type {
 import { Row } from "@plane/ui";
 // hooks
 import { useIssueStoreType } from "@/hooks/use-issue-layout-store";
+import { useCustomFieldGrouping } from "@/hooks/use-custom-field-grouping";
 // plane web imports
 import { useWorkFlowFDragNDrop } from "@/plane-web/components/workflow";
 // local imports
@@ -289,18 +290,23 @@ export const KanBanSwimLanes = observer(function KanBanSwimLanes(props: IKanBanS
   } = props;
   // store hooks
   const storeType = useIssueStoreType();
+  const { projectId, sourceModuleId } = useCustomFieldGrouping();
   // derived values
   const groupByList = getGroupByColumns({
     groupBy: group_by as GroupByColumnTypes,
     includeNone: true,
     isWorkspaceLevel: isWorkspaceLevel(storeType),
     isEpic: isEpic,
+    projectId,
+    sourceModuleId,
   });
   const subGroupByList = getGroupByColumns({
     groupBy: sub_group_by as GroupByColumnTypes,
     includeNone: true,
     isWorkspaceLevel: isWorkspaceLevel(storeType),
     isEpic: isEpic,
+    projectId,
+    sourceModuleId,
   });
 
   if (!groupByList || !subGroupByList) return null;
