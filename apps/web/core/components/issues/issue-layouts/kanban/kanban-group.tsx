@@ -35,13 +35,19 @@ import {
 import { KanbanIssueBlockLoader } from "@/components/ui/loader/layouts/kanban-layout-loader";
 // hooks
 import { useProjectState } from "@/hooks/store/use-project-state";
+import { useCustomFieldGroupContext } from "@/hooks/use-custom-field-group-context";
+import type { TCustomFieldGroupCreationOperations } from "@/hooks/use-custom-field-group-operations";
 import { useIntersectionObserver } from "@/hooks/use-intersection-observer";
 import { useIssuesStore } from "@/hooks/use-issue-layout-store";
 // Plane-web
 import { useWorkFlowFDragNDrop } from "@/plane-web/components/workflow";
 //
 import { GroupDragOverlay } from "../group-drag-overlay";
-import { isIssueGroupDragAllowed } from "../custom-field-grouping";
+import {
+  getCustomFieldGroupQuickAddData,
+  isCustomFieldGroupKey,
+  isIssueGroupDragAllowed,
+} from "../custom-field-grouping";
 import type { TRenderQuickActions } from "../list/list-view-types";
 import { KanbanQuickAddIssueButton, QuickAddIssueRoot } from "../quick-add";
 import { KanbanIssueBlocksList } from "./blocks-list";
@@ -69,6 +75,7 @@ interface IKanbanGroup {
   handleOnDrop: (source: GroupDropLocation, destination: GroupDropLocation) => Promise<void>;
   orderBy: TIssueOrderByOptions | undefined;
   isEpic?: boolean;
+  customFieldGroupOperations: TCustomFieldGroupCreationOperations;
 }
 
 export const KanbanGroup = observer(function KanbanGroup(props: IKanbanGroup) {
@@ -93,11 +100,13 @@ export const KanbanGroup = observer(function KanbanGroup(props: IKanbanGroup) {
     scrollableContainerRef,
     handleOnDrop,
     isEpic = false,
+    customFieldGroupOperations,
   } = props;
   // i18n
   const { t } = useTranslation();
   // hooks
   const projectState = useProjectState();
+  const { sourceModuleId } = useCustomFieldGroupContext();
 
   const {
     issues: { getGroupIssueCount, getPaginationData, getIssueLoader },
@@ -204,7 +213,12 @@ export const KanbanGroup = observer(function KanbanGroup(props: IKanbanGroup) {
     let preloadedData: object = { state_id: defaultState?.id };
 
     if (groupByKey) {
-      if (groupByKey === "state") {
+      if (isCustomFieldGroupKey(groupByKey)) {
+        preloadedData = {
+          ...preloadedData,
+          ...getCustomFieldGroupQuickAddData(groupByKey, groupValue, sourceModuleId),
+        };
+      } else if (groupByKey === "state") {
         preloadedData = { ...preloadedData, state_id: groupValue };
       } else if (groupByKey === "priority") {
         preloadedData = { ...preloadedData, priority: groupValue };
@@ -272,6 +286,10 @@ export const KanbanGroup = observer(function KanbanGroup(props: IKanbanGroup) {
   const shouldOverlayBeVisible = isDraggingOverColumn && canOverlayBeVisible;
   const canDragIssuesInCurrentGrouping =
     isIssueGroupDragAllowed(group_by) && (sub_group_by ? isIssueGroupDragAllowed(sub_group_by) : true);
+  const groupedQuickAddCallback =
+    quickAddCallback && isCustomFieldGroupKey(group_by)
+      ? customFieldGroupOperations.wrapQuickCreate(groupId, quickAddCallback)
+      : quickAddCallback;
 
   return (
     <div
@@ -330,7 +348,7 @@ export const KanbanGroup = observer(function KanbanGroup(props: IKanbanGroup) {
               prePopulatedData={{
                 ...(group_by && prePopulateQuickAddData(group_by, sub_group_by, groupId, sub_group_id)),
               }}
-              quickAddCallback={quickAddCallback}
+              quickAddCallback={groupedQuickAddCallback}
               isEpic={isEpic}
             />
           </div>

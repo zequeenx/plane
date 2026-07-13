@@ -19,6 +19,7 @@ import { useIssues } from "@/hooks/store/use-issues";
 import { useUserPermissions } from "@/hooks/store/user";
 // hooks
 import { useGroupIssuesDragNDrop } from "@/hooks/use-group-dragndrop";
+import { useCustomFieldGroupOperations } from "@/hooks/use-custom-field-group-operations";
 import { useIssueStoreType } from "@/hooks/use-issue-layout-store";
 import { useIssuesActions } from "@/hooks/use-issues-actions";
 // components
@@ -73,6 +74,13 @@ export const BaseListRoot = observer(function BaseListRoot(props: IBaseListRoot)
   // mobx store
   const { allowPermissions } = useUserPermissions();
   const { issueMap } = useIssues();
+  const getIssueById = useCallback((issueId: string) => issueMap[issueId], [issueMap]);
+  const customFieldGroupOperations = useCustomFieldGroupOperations({
+    fetchIssues,
+    getIssueById,
+    storeType,
+    updateIssue,
+  });
 
   const displayFilters = issuesFilter?.issueFilters?.displayFilters;
   const displayProperties = issuesFilter?.issueFilters?.displayProperties;
@@ -176,6 +184,7 @@ export const BaseListRoot = observer(function BaseListRoot(props: IBaseListRoot)
           handleOnDrop={handleOnDrop}
           handleCollapsedGroups={handleCollapsedGroups}
           collapsedGroups={collapsedGroups}
+          customFieldGroupOperations={customFieldGroupOperations}
           isEpic={isEpic}
         />
       </div>

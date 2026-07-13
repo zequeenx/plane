@@ -17,8 +17,10 @@ import { CustomMenu } from "@plane/ui";
 // components
 import { ExistingIssuesListModal } from "@/components/core/modals/existing-issues-list-modal";
 import { CreateUpdateIssueModal } from "@/components/issues/issue-modal/modal";
+import { isCustomFieldGroupKey } from "@/components/issues/issue-layouts/custom-field-grouping";
 // constants
 import { useIssueStoreType } from "@/hooks/use-issue-layout-store";
+import type { TCustomFieldGroupCreationOperations } from "@/hooks/use-custom-field-group-operations";
 import { CreateUpdateEpicModal } from "@/plane-web/components/epics/epic-modal";
 // types
 // Plane-web
@@ -36,6 +38,7 @@ interface IHeaderGroupByCard {
   issuePayload: Partial<TIssue>;
   disableIssueCreation?: boolean;
   addIssuesToView?: (issueIds: string[]) => Promise<TIssue>;
+  customFieldGroupOperations: TCustomFieldGroupCreationOperations;
   isEpic?: boolean;
 }
 
@@ -52,6 +55,7 @@ export const HeaderGroupByCard = observer(function HeaderGroupByCard(props: IHea
     issuePayload,
     disableIssueCreation,
     addIssuesToView,
+    customFieldGroupOperations,
     isEpic = false,
   } = props;
   const verticalAlignPosition = sub_group_by ? false : collapsedGroups?.group_by.includes(column_id);
@@ -65,6 +69,9 @@ export const HeaderGroupByCard = observer(function HeaderGroupByCard(props: IHea
 
   const renderExistingIssueModal = moduleId || cycleId;
   const ExistingIssuesListModalPayload = moduleId ? { module: moduleId.toString() } : { cycle: true };
+  const handleCreatedIssue = isCustomFieldGroupKey(group_by)
+    ? (issue: TIssue) => customFieldGroupOperations.handleCreatedIssue(issue, group_by, column_id)
+    : undefined;
 
   const handleAddIssuesToView = async (data: ISearchIssueResponse[]) => {
     if (!workspaceSlug || !projectId) return;
@@ -97,6 +104,7 @@ export const HeaderGroupByCard = observer(function HeaderGroupByCard(props: IHea
           isOpen={isOpen}
           onClose={() => setIsOpen(false)}
           data={issuePayload}
+          onSubmit={handleCreatedIssue}
           storeType={storeType}
         />
       )}

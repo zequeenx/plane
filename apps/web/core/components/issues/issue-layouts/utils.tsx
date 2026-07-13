@@ -45,6 +45,7 @@ import { ISSUE_FILTER_DEFAULT_DATA } from "@/store/issue/helpers/base-issues.sto
 import { DEFAULT_DISPLAY_PROPERTIES } from "@/store/issue/issue-details/sub_issues_filter.store";
 import {
   getCustomFieldGroupColumns,
+  getCustomFieldGroupQuickAddData,
   isCustomFieldGroupKey,
   parseCustomFieldGroupKey,
   resolveCustomFieldGroupField,
@@ -119,7 +120,7 @@ export const getGroupByColumns = ({
   if (!groupBy) return undefined;
 
   const customGroup = parseCustomFieldGroupKey(groupBy);
-  if (customGroup) {
+  if (customGroup && isCustomFieldGroupKey(groupBy)) {
     const field = resolveCustomFieldGroupField({
       customGroup,
       getModuleField: store.moduleIssueFields.getFieldById,
@@ -149,7 +150,7 @@ export const getGroupByColumns = ({
         column.kind === "member" ? (
           <Avatar name={column.name} src={getFileURL(column.avatarUrl ?? "")} size="md" />
         ) : undefined,
-      payload: {},
+      payload: getCustomFieldGroupQuickAddData(groupBy, column.id, sourceModuleId),
     }));
   }
 

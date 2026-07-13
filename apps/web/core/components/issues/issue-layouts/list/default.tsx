@@ -27,6 +27,7 @@ import { MultipleSelectGroup } from "@/components/core/multiple-select";
 // hooks
 import { useIssueStoreType } from "@/hooks/use-issue-layout-store";
 import { useCustomFieldGrouping } from "@/hooks/use-custom-field-grouping";
+import type { TCustomFieldGroupCreationOperations } from "@/hooks/use-custom-field-group-operations";
 // plane web components
 import { IssueBulkOperationsRoot } from "@/plane-web/components/issues/bulk-operations";
 // plane web hooks
@@ -56,6 +57,7 @@ export interface IList {
   loadMoreIssues: (groupId?: string) => void;
   handleCollapsedGroups: (value: string) => void;
   collapsedGroups: TIssueKanbanFilters;
+  customFieldGroupOperations: TCustomFieldGroupCreationOperations;
   isEpic?: boolean;
 }
 
@@ -79,6 +81,7 @@ export const List = observer(function List(props: IList) {
     loadMoreIssues,
     handleCollapsedGroups,
     collapsedGroups,
+    customFieldGroupOperations,
     isEpic = false,
   } = props;
 
@@ -173,6 +176,7 @@ export const List = observer(function List(props: IList) {
                     selectionHelpers={helpers}
                     handleCollapsedGroups={handleCollapsedGroups}
                     collapsedGroups={collapsedGroups}
+                    customFieldGroupOperations={customFieldGroupOperations}
                     isEpic={isEpic}
                   />
                 ))}

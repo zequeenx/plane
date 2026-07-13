@@ -26,6 +26,7 @@ import { KanbanColumnLoader } from "@/components/ui/loader/layouts/kanban-layout
 // hooks
 import { useKanbanView } from "@/hooks/store/use-kanban-view";
 import { useCustomFieldGrouping } from "@/hooks/use-custom-field-grouping";
+import type { TCustomFieldGroupCreationOperations } from "@/hooks/use-custom-field-group-operations";
 import { useIssueStoreType } from "@/hooks/use-issue-layout-store";
 // types
 // parent components
@@ -56,6 +57,7 @@ export interface IKanBan {
   updateIssue: ((projectId: string | null, issueId: string, data: Partial<TIssue>) => Promise<void>) | undefined;
   quickActions: TRenderQuickActions;
   collapsedGroups: TIssueKanbanFilters;
+  customFieldGroupOperations: TCustomFieldGroupCreationOperations;
   handleCollapsedGroups: (toggle: "group_by" | "sub_group_by", value: string) => void;
   loadMoreIssues: (groupId?: string, subGroupId?: string) => void;
   enableQuickIssueCreate?: boolean;
@@ -82,6 +84,7 @@ export const KanBan = observer(function KanBan(props: IKanBan) {
     updateIssue,
     quickActions,
     collapsedGroups,
+    customFieldGroupOperations,
     handleCollapsedGroups,
     enableQuickIssueCreate,
     quickAddCallback,
@@ -181,6 +184,7 @@ export const KanBan = observer(function KanBan(props: IKanBan) {
                     title={subList.name}
                     count={getGroupIssueCount(subList.id, undefined, false) ?? 0}
                     issuePayload={subList.payload}
+                    customFieldGroupOperations={customFieldGroupOperations}
                     disableIssueCreation={
                       disableIssueCreation ||
                       isGroupByCreatedBy ||
@@ -228,6 +232,7 @@ export const KanBan = observer(function KanBan(props: IKanBan) {
                     quickActions={quickActions}
                     enableQuickIssueCreate={enableQuickIssueCreate}
                     quickAddCallback={quickAddCallback}
+                    customFieldGroupOperations={customFieldGroupOperations}
                     disableIssueCreation={disableIssueCreation}
                     canEditProperties={canEditProperties}
                     scrollableContainerRef={scrollableContainerRef}

@@ -19,8 +19,10 @@ import { cn } from "@plane/utils";
 import { ExistingIssuesListModal } from "@/components/core/modals/existing-issues-list-modal";
 import { MultipleSelectGroupAction } from "@/components/core/multiple-select";
 import { CreateUpdateIssueModal } from "@/components/issues/issue-modal/modal";
+import { isCustomFieldGroupKey } from "@/components/issues/issue-layouts/custom-field-grouping";
 // constants
 import { useIssueStoreType } from "@/hooks/use-issue-layout-store";
+import type { TCustomFieldGroupCreationOperations } from "@/hooks/use-custom-field-group-operations";
 import type { TSelectionHelper } from "@/hooks/use-multiple-select";
 // plane-web
 import { CreateUpdateEpicModal } from "@/plane-web/components/epics/epic-modal";
@@ -39,6 +41,7 @@ interface IHeaderGroupByCard {
   addIssuesToView?: (issueIds: string[]) => Promise<TIssue>;
   selectionHelpers: TSelectionHelper;
   handleCollapsedGroups: (value: string) => void;
+  customFieldGroupOperations: TCustomFieldGroupCreationOperations;
   isEpic?: boolean;
 }
 
@@ -55,6 +58,7 @@ export const HeaderGroupByCard = observer(function HeaderGroupByCard(props: IHea
     addIssuesToView,
     selectionHelpers,
     handleCollapsedGroups,
+    customFieldGroupOperations,
     isEpic = false,
   } = props;
   // states
@@ -69,6 +73,9 @@ export const HeaderGroupByCard = observer(function HeaderGroupByCard(props: IHea
   const isGroupSelectionEmpty = selectionHelpers.isGroupSelected(groupID) === "empty";
   // auth
   const canSelectIssues = canEditProperties(projectId?.toString()) && !selectionHelpers.isSelectionDisabled;
+  const handleCreatedIssue = isCustomFieldGroupKey(groupBy)
+    ? (issue: TIssue) => customFieldGroupOperations.handleCreatedIssue(issue, groupBy, groupID)
+    : undefined;
 
   const handleAddIssuesToView = async (data: ISearchIssueResponse[]) => {
     if (!workspaceSlug || !projectId) return;
@@ -167,6 +174,7 @@ export const HeaderGroupByCard = observer(function HeaderGroupByCard(props: IHea
             isOpen={isOpen}
             onClose={() => setIsOpen(false)}
             data={issuePayload}
+            onSubmit={handleCreatedIssue}
             storeType={storeType}
           />
         )}

@@ -28,6 +28,8 @@ import { cn } from "@plane/utils";
 import { ListLoaderItemRow } from "@/components/ui/loader/layouts/list-layout-loader";
 // hooks
 import { useProjectState } from "@/hooks/store/use-project-state";
+import { useCustomFieldGroupContext } from "@/hooks/use-custom-field-group-context";
+import type { TCustomFieldGroupCreationOperations } from "@/hooks/use-custom-field-group-operations";
 import { useIntersectionObserver } from "@/hooks/use-intersection-observer";
 import { useIssuesStore } from "@/hooks/use-issue-layout-store";
 import type { TSelectionHelper } from "@/hooks/use-multiple-select";
@@ -35,7 +37,11 @@ import type { TSelectionHelper } from "@/hooks/use-multiple-select";
 import { useWorkFlowFDragNDrop } from "@/plane-web/components/workflow";
 //
 import { GroupDragOverlay } from "../group-drag-overlay";
-import { isIssueGroupDragAllowed } from "../custom-field-grouping";
+import {
+  getCustomFieldGroupQuickAddData,
+  isCustomFieldGroupKey,
+  isIssueGroupDragAllowed,
+} from "../custom-field-grouping";
 import { ListQuickAddIssueButton, QuickAddIssueRoot } from "../quick-add";
 import type { GroupDropLocation } from "../utils";
 import {
@@ -71,6 +77,7 @@ interface Props {
   selectionHelpers: TSelectionHelper;
   handleCollapsedGroups: (value: string) => void;
   collapsedGroups: TIssueKanbanFilters;
+  customFieldGroupOperations: TCustomFieldGroupCreationOperations;
   isEpic?: boolean;
 }
 
@@ -98,6 +105,7 @@ export const ListGroup = observer(function ListGroup(props: Props) {
     selectionHelpers,
     handleCollapsedGroups,
     collapsedGroups,
+    customFieldGroupOperations,
     isEpic = false,
   } = props;
 
@@ -107,6 +115,7 @@ export const ListGroup = observer(function ListGroup(props: Props) {
   const groupRef = useRef<HTMLDivElement | null>(null);
   const { t } = useTranslation();
   const projectState = useProjectState();
+  const { sourceModuleId } = useCustomFieldGroupContext();
 
   const {
     issues: { getGroupIssueCount, getPaginationData, getIssueLoader },
@@ -150,6 +159,13 @@ export const ListGroup = observer(function ListGroup(props: Props) {
   const prePopulateQuickAddData = (groupByKey: string | null, value: any) => {
     const defaultState = projectState.projectStates?.find((state) => state.default);
     let preloadedData: object = { state_id: defaultState?.id };
+
+    if (isCustomFieldGroupKey(groupByKey)) {
+      return {
+        ...preloadedData,
+        ...getCustomFieldGroupQuickAddData(groupByKey, value, sourceModuleId),
+      };
+    }
 
     if (groupByKey === null) {
       preloadedData = { ...preloadedData };
@@ -252,6 +268,10 @@ export const ListGroup = observer(function ListGroup(props: Props) {
 
   const isGroupByCreatedBy = group_by === "created_by";
   const shouldExpand = (!!groupIssueCount && isExpanded) || !group_by;
+  const groupedQuickAddCallback =
+    quickAddCallback && isCustomFieldGroupKey(group_by)
+      ? customFieldGroupOperations.wrapQuickCreate(group.id, quickAddCallback)
+      : quickAddCallback;
 
   return validateEmptyIssueGroups(groupIssueCount) ? (
     <div
@@ -273,6 +293,7 @@ export const ListGroup = observer(function ListGroup(props: Props) {
           title={group.name}
           count={groupIssueCount}
           issuePayload={group.payload}
+          customFieldGroupOperations={customFieldGroupOperations}
           canEditProperties={canEditProperties}
           disableIssueCreation={
             disableIssueCreation || isGroupByCreatedBy || isCompletedCycle || isWorkflowIssueCreationDisabled
@@ -335,7 +356,7 @@ export const ListGroup = observer(function ListGroup(props: Props) {
                   QuickAddButton={ListQuickAddIssueButton}
                   prePopulatedData={prePopulateQuickAddData(group_by, group.id)}
                   containerClassName="border-b border-t border-subtle bg-surface-1 "
-                  quickAddCallback={quickAddCallback}
+                  quickAddCallback={groupedQuickAddCallback}
                   isEpic={isEpic}
                 />
               </div>

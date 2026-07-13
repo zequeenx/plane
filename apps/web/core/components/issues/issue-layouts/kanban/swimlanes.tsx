@@ -23,6 +23,7 @@ import { Row } from "@plane/ui";
 // hooks
 import { useIssueStoreType } from "@/hooks/use-issue-layout-store";
 import { useCustomFieldGrouping } from "@/hooks/use-custom-field-grouping";
+import type { TCustomFieldGroupCreationOperations } from "@/hooks/use-custom-field-group-operations";
 // plane web imports
 import { useWorkFlowFDragNDrop } from "@/plane-web/components/workflow";
 // local imports
@@ -35,6 +36,7 @@ import { HeaderSubGroupByCard } from "./headers/sub-group-by-card";
 
 interface ISubGroupSwimlaneHeader {
   collapsedGroups: TIssueKanbanFilters;
+  customFieldGroupOperations: TCustomFieldGroupCreationOperations;
   group_by: TIssueGroupByOptions | undefined;
   getGroupIssueCount: (
     groupId: string | undefined,
@@ -62,6 +64,7 @@ const visibilitySubGroupByGroupCount = (subGroupIssueCount: number, showEmptyGro
 
 const SubGroupSwimlaneHeader = observer(function SubGroupSwimlaneHeader({
   collapsedGroups,
+  customFieldGroupOperations,
   getGroupIssueCount,
   group_by,
   handleCollapsedGroups,
@@ -93,6 +96,7 @@ const SubGroupSwimlaneHeader = observer(function SubGroupSwimlaneHeader({
                 title={_list.name}
                 count={groupCount}
                 collapsedGroups={collapsedGroups}
+                customFieldGroupOperations={customFieldGroupOperations}
                 handleCollapsedGroups={handleCollapsedGroups}
                 issuePayload={_list.payload}
                 disableIssueCreation={getIsWorkflowWorkItemCreationDisabled(_list.id)}
@@ -136,6 +140,7 @@ const SubGroupSwimlane = observer(function SubGroupSwimlane(props: ISubGroupSwim
     addIssuesToView,
     canEditProperties,
     collapsedGroups,
+    customFieldGroupOperations,
     disableIssueCreation,
     displayProperties,
     enableQuickIssueCreate,
@@ -212,6 +217,7 @@ const SubGroupSwimlane = observer(function SubGroupSwimlane(props: ISubGroupSwim
                     updateIssue={updateIssue}
                     quickActions={quickActions}
                     collapsedGroups={collapsedGroups}
+                    customFieldGroupOperations={customFieldGroupOperations}
                     handleCollapsedGroups={handleCollapsedGroups}
                     showEmptyGroup={showEmptyGroup}
                     enableQuickIssueCreate={enableQuickIssueCreate}
@@ -240,6 +246,7 @@ export interface IKanBanSwimLanes {
   addIssuesToView?: (issueIds: string[]) => Promise<TIssue>;
   canEditProperties: (projectId: string | undefined) => boolean;
   collapsedGroups: TIssueKanbanFilters;
+  customFieldGroupOperations: TCustomFieldGroupCreationOperations;
   disableIssueCreation?: boolean;
   displayProperties: IIssueDisplayProperties | undefined;
   enableQuickIssueCreate: boolean;
@@ -276,6 +283,7 @@ export const KanBanSwimLanes = observer(function KanBanSwimLanes(props: IKanBanS
     updateIssue,
     quickActions,
     collapsedGroups,
+    customFieldGroupOperations,
     handleCollapsedGroups,
     loadMoreIssues,
     showEmptyGroup,
@@ -323,6 +331,7 @@ export const KanBanSwimLanes = observer(function KanBanSwimLanes(props: IKanBanS
           group_by={group_by}
           sub_group_by={sub_group_by}
           collapsedGroups={collapsedGroups}
+          customFieldGroupOperations={customFieldGroupOperations}
           handleCollapsedGroups={handleCollapsedGroups}
           list={groupByList}
           showEmptyGroup={showEmptyGroup}
@@ -343,6 +352,7 @@ export const KanBanSwimLanes = observer(function KanBanSwimLanes(props: IKanBanS
           updateIssue={updateIssue}
           quickActions={quickActions}
           collapsedGroups={collapsedGroups}
+          customFieldGroupOperations={customFieldGroupOperations}
           handleCollapsedGroups={handleCollapsedGroups}
           loadMoreIssues={loadMoreIssues}
           showEmptyGroup={showEmptyGroup}

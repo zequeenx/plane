@@ -20,6 +20,7 @@ import { useIssues } from "@/hooks/store/use-issues";
 import { useKanbanView } from "@/hooks/store/use-kanban-view";
 import { useUserPermissions } from "@/hooks/store/user";
 import { useGroupIssuesDragNDrop } from "@/hooks/use-group-dragndrop";
+import { useCustomFieldGroupOperations } from "@/hooks/use-custom-field-group-operations";
 import { useIssueStoreType } from "@/hooks/use-issue-layout-store";
 import { useIssuesActions } from "@/hooks/use-issues-actions";
 // store
@@ -81,6 +82,12 @@ export const BaseKanBanRoot = observer(function BaseKanBanRoot(props: IBaseKanBa
     restoreIssue,
     updateFilters,
   } = useIssuesActions(storeType);
+  const customFieldGroupOperations = useCustomFieldGroupOperations({
+    fetchIssues,
+    getIssueById,
+    storeType,
+    updateIssue,
+  });
 
   const deleteAreaRef = useRef<HTMLDivElement | null>(null);
   const [isDragOverDelete, setIsDragOverDelete] = useState(false);
@@ -280,6 +287,7 @@ export const BaseKanBanRoot = observer(function BaseKanBanRoot(props: IBaseKanBa
                 quickActions={renderQuickActions}
                 handleCollapsedGroups={handleCollapsedGroups}
                 collapsedGroups={collapsedGroups}
+                customFieldGroupOperations={customFieldGroupOperations}
                 enableQuickIssueCreate={enableQuickAdd}
                 showEmptyGroup={userDisplayFilters?.show_empty_groups ?? true}
                 quickAddCallback={quickAddIssue}

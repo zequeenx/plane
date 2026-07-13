@@ -4,8 +4,10 @@
  * See the LICENSE file for details.
  */
 
-import { useMemo } from "react";
+import { useCallback, useMemo } from "react";
 import { useParams } from "next/navigation";
+import { useTranslation } from "@plane/i18n";
+import { TOAST_TYPE, setToast } from "@plane/propel/toast";
 import type { EIssuesStoreType, TIssue } from "@plane/types";
 import { useModuleIssueFields } from "@/hooks/store/use-module-issue-fields";
 import { useProjectIssueFields } from "@/hooks/store/use-project-issue-fields";
@@ -15,10 +17,10 @@ import type { IssueActions } from "@/hooks/use-issues-actions";
 import { createCustomFieldGroupOperations } from "@/hooks/custom-field-group-operations";
 import type { TOperations } from "@/hooks/custom-field-group-operations";
 
-export type { TOperations } from "@/hooks/custom-field-group-operations";
+export type { TCustomFieldGroupCreationOperations, TOperations } from "@/hooks/custom-field-group-operations";
 
 const reportCustomFieldGroupReconciliationError = (error: unknown) => {
-  console.error("Failed to reconcile custom field group drop", error);
+  console.error("Failed to reconcile custom field group operation", error);
 };
 
 export const useCustomFieldGroupOperations = ({
@@ -32,6 +34,7 @@ export const useCustomFieldGroupOperations = ({
   storeType: EIssuesStoreType;
   updateIssue: IssueActions["updateIssue"];
 }): TOperations => {
+  const { t } = useTranslation();
   const { cycleId, moduleId, profileViewId, viewId } = useParams();
   const { projectId, sourceModuleId, workspaceSlug } = useCustomFieldGroupContext();
   const { updateIssueValues: updateModuleIssueValues } = useModuleIssueFields();
@@ -43,6 +46,13 @@ export const useCustomFieldGroupOperations = ({
       ? issues.updateIssueLocalState
       : undefined;
   const currentViewId = viewId?.toString() ?? cycleId?.toString() ?? moduleId?.toString() ?? profileViewId?.toString();
+  const reportPartialCreateError = useCallback(() => {
+    setToast({
+      type: TOAST_TYPE.ERROR,
+      title: t("common.error"),
+      message: `${t("issue_created_successfully")}. ${t("project_settings.fields.toasts.updated.error.message")}`,
+    });
+  }, [t]);
 
   return useMemo(
     () =>
@@ -51,6 +61,7 @@ export const useCustomFieldGroupOperations = ({
         fetchIssues,
         getIssueById,
         projectId,
+        reportPartialCreateError,
         reportReconciliationError: reportCustomFieldGroupReconciliationError,
         sourceModuleId,
         updateIssue,
@@ -64,6 +75,7 @@ export const useCustomFieldGroupOperations = ({
       fetchIssues,
       getIssueById,
       projectId,
+      reportPartialCreateError,
       sourceModuleId,
       updateIssue,
       updateIssueLocalState,

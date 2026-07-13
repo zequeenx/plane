@@ -8,7 +8,9 @@ import type { TIssue, TIssueFieldValuesUpdatePayload, TModuleIssueFieldValuesUpd
 import type { TCustomFieldGroupKey } from "@/components/issues/issue-layouts/custom-field-grouping";
 import {
   applyCustomFieldGroupValue,
+  CustomFieldGroupPartialCreateError,
   executeCustomFieldGroupDrop,
+  executeCustomFieldGroupQuickCreate,
   isCustomFieldGroupKey,
   normalizeCustomFieldGroupId,
   parseCustomFieldGroupKey,
@@ -17,6 +19,7 @@ import type { IssueActions } from "@/hooks/use-issues-actions";
 
 export type TOperations = {
   applyOptimisticValue: (issue: TIssue, groupKey: TCustomFieldGroupKey, groupId: string) => TIssue;
+  handleCreatedIssue: (issue: TIssue, groupKey: TCustomFieldGroupKey, groupId: string) => Promise<void>;
   persistDrop: (
     issueId: string,
     groupKey: TCustomFieldGroupKey,
@@ -24,7 +27,13 @@ export type TOperations = {
     options?: TCustomFieldGroupDropPersistenceOptions
   ) => Promise<void>;
   refetchCurrentGrouping: () => Promise<void>;
+  wrapQuickCreate: (
+    groupId: string,
+    createIssue: (projectId: string | null | undefined, data: TIssue) => Promise<TIssue | undefined>
+  ) => (projectId: string | null | undefined, data: TIssue) => Promise<TIssue | undefined>;
 };
+
+export type TCustomFieldGroupCreationOperations = Pick<TOperations, "handleCreatedIssue" | "wrapQuickCreate">;
 
 export type TCustomFieldGroupDropPersistenceOptions = {
   additionalPersistenceOperations?: (() => Promise<unknown> | unknown)[];
@@ -52,6 +61,7 @@ export type TCustomFieldGroupOperationDependencies = {
   fetchIssues: IssueActions["fetchIssues"];
   getIssueById: (issueId: string) => TIssue | undefined;
   projectId?: string;
+  reportPartialCreateError?: (error: CustomFieldGroupPartialCreateError) => void;
   reportReconciliationError: (error: unknown) => void;
   sourceModuleId?: string | null;
   updateIssue: IssueActions["updateIssue"];
@@ -85,6 +95,7 @@ export const createCustomFieldGroupOperations = ({
   fetchIssues,
   getIssueById,
   projectId,
+  reportPartialCreateError,
   reportReconciliationError,
   sourceModuleId,
   updateIssue,
@@ -109,6 +120,69 @@ export const createCustomFieldGroupOperations = ({
   const refetchCurrentGrouping = async () => {
     await fetchIssues("mutation", { canGroup: true, perPageCount: 50 }, currentViewId);
   };
+
+  const persistCreatedModuleFieldValue = async (
+    issue: TIssue,
+    groupKey: TCustomFieldGroupKey,
+    value: string
+  ): Promise<void> => {
+    const customGroup = parseCustomFieldGroupKey(groupKey);
+    const createdIssueProjectId = issue.project_id ?? projectId;
+    if (!customGroup || customGroup.scope !== "module") throw getUnavailableContextError("group");
+    if (!workspaceSlug || !createdIssueProjectId) throw getUnavailableContextError("project");
+    if (!sourceModuleId) throw getUnavailableContextError("module");
+    await updateModuleIssueValues(workspaceSlug, createdIssueProjectId, sourceModuleId, issue.id, {
+      field_values: { [customGroup.fieldId]: value },
+    });
+  };
+
+  const persistCreatedModuleField = async (
+    issue: TIssue,
+    groupKey: TCustomFieldGroupKey,
+    groupId: string
+  ): Promise<TIssue | undefined> =>
+    await executeCustomFieldGroupQuickCreate({
+      createIssue: async () => issue,
+      groupId,
+      groupKey,
+      onPartialFailure: refetchCurrentGrouping,
+      onReconciliationError: reportReconciliationError,
+      persistModuleFieldValue: (createdIssue, value) => persistCreatedModuleFieldValue(createdIssue, groupKey, value),
+    });
+
+  const handleCreatedIssue = async (issue: TIssue, groupKey: TCustomFieldGroupKey, groupId: string): Promise<void> => {
+    try {
+      await persistCreatedModuleField(issue, groupKey, groupId);
+    } catch (error) {
+      if (error instanceof CustomFieldGroupPartialCreateError) reportPartialCreateError?.(error);
+      throw error;
+    }
+  };
+
+  const wrapQuickCreate =
+    (
+      groupId: string,
+      createIssue: (projectId: string | null | undefined, data: TIssue) => Promise<TIssue | undefined>
+    ) =>
+    async (quickCreateProjectId: string | null | undefined, data: TIssue): Promise<TIssue | undefined> => {
+      const groupKey = Object.keys(data).find(isCustomFieldGroupKey);
+      if (!groupKey) return await createIssue(quickCreateProjectId, data);
+
+      const customGroup = parseCustomFieldGroupKey(groupKey);
+      if (customGroup?.scope === "module" && !sourceModuleId) throw getUnavailableContextError("module");
+      const submittedGroupValue = data[groupKey];
+      const authoritativeGroupId =
+        submittedGroupValue === null ? "None" : typeof submittedGroupValue === "string" ? submittedGroupValue : groupId;
+
+      return await executeCustomFieldGroupQuickCreate({
+        createIssue: () => createIssue(quickCreateProjectId, data),
+        groupId: authoritativeGroupId,
+        groupKey,
+        onPartialFailure: refetchCurrentGrouping,
+        onReconciliationError: reportReconciliationError,
+        persistModuleFieldValue: (createdIssue, value) => persistCreatedModuleFieldValue(createdIssue, groupKey, value),
+      });
+    };
 
   const persistDrop = async (
     issueId: string,
@@ -161,5 +235,5 @@ export const createCustomFieldGroupOperations = ({
     });
   };
 
-  return { applyOptimisticValue, persistDrop, refetchCurrentGrouping };
+  return { applyOptimisticValue, handleCreatedIssue, persistDrop, refetchCurrentGrouping, wrapQuickCreate };
 };

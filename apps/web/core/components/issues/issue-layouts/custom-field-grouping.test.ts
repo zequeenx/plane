@@ -8,7 +8,10 @@ import {
   applyCustomFieldGroupValue,
   buildCustomFieldGroupColumns,
   buildCustomFieldGroupOptions,
+  CustomFieldGroupPartialCreateError,
   executeCustomFieldGroupDrop,
+  executeCustomFieldGroupQuickCreate,
+  getCustomFieldGroupQuickAddData,
   getCustomFieldGroupValue,
   getCustomFieldGroupColumns,
   isGroupableCustomField,
@@ -155,6 +158,40 @@ describe("custom field group values", () => {
 
   it("normalizes the unassigned group to a null field value", () => {
     expect(normalizeCustomFieldGroupId("None")).toBeNull();
+  });
+});
+
+describe("getCustomFieldGroupQuickAddData", () => {
+  it("preloads a populated project group into its annotation and create field map", () => {
+    expect(getCustomFieldGroupQuickAddData("customproperty_select-field", "option-a")).toEqual({
+      "customproperty_select-field": "option-a",
+      field_values: { "select-field": "option-a" },
+    });
+  });
+
+  it("preloads an empty project group without creating a null field write", () => {
+    expect(getCustomFieldGroupQuickAddData("customproperty_select-field", "None")).toEqual({
+      "customproperty_select-field": null,
+      field_values: {},
+    });
+  });
+
+  it("preloads a populated module group with its source module attachment", () => {
+    expect(getCustomFieldGroupQuickAddData("modulecustomproperty_member-field", "member-1", "module-1")).toEqual({
+      "modulecustomproperty_member-field": "member-1",
+      module_ids: ["module-1"],
+    });
+  });
+
+  it("preloads an empty module group with its source module attachment", () => {
+    expect(getCustomFieldGroupQuickAddData("modulecustomproperty_member-field", "None", "module-1")).toEqual({
+      "modulecustomproperty_member-field": null,
+      module_ids: ["module-1"],
+    });
+  });
+
+  it("does not advertise module grouping when source module context is unavailable", () => {
+    expect(getCustomFieldGroupQuickAddData("modulecustomproperty_member-field", "member-1")).toEqual({});
   });
 });
 
@@ -507,6 +544,161 @@ describe("executeCustomFieldGroupDrop", () => {
 
     expect(onPartialFailure).toHaveBeenCalledTimes(1);
     expect(onRollback).not.toHaveBeenCalled();
+  });
+});
+
+describe("executeCustomFieldGroupQuickCreate", () => {
+  it("persists a populated module group only after create and attachment complete", async () => {
+    const calls: string[] = [];
+    const issue = issueFixture();
+
+    const result = await executeCustomFieldGroupQuickCreate({
+      createIssue: async () => {
+        calls.push("create-and-attach");
+        return issue;
+      },
+      groupId: "member-1",
+      groupKey: "modulecustomproperty_member-field",
+      onPartialFailure: async () => {
+        calls.push("refetch");
+      },
+      onReconciliationError: vi.fn(),
+      persistModuleFieldValue: async () => {
+        calls.push("field");
+      },
+    });
+
+    expect(result).toBe(issue);
+    expect(calls).toEqual(["create-and-attach", "field"]);
+  });
+
+  it("returns a project-group issue without a module field request", async () => {
+    const issue = issueFixture();
+    const persistModuleFieldValue = vi.fn();
+    const onPartialFailure = vi.fn<() => Promise<void>>().mockResolvedValue();
+
+    await expect(
+      executeCustomFieldGroupQuickCreate({
+        createIssue: async () => issue,
+        groupId: "option-a",
+        groupKey: "customproperty_select-field",
+        onPartialFailure,
+        onReconciliationError: vi.fn(),
+        persistModuleFieldValue,
+      })
+    ).resolves.toBe(issue);
+
+    expect(persistModuleFieldValue).not.toHaveBeenCalled();
+    expect(onPartialFailure).not.toHaveBeenCalled();
+  });
+
+  it("returns an empty module-group issue without a field request", async () => {
+    const issue = issueFixture();
+    const persistModuleFieldValue = vi.fn();
+
+    await expect(
+      executeCustomFieldGroupQuickCreate({
+        createIssue: async () => issue,
+        groupId: "None",
+        groupKey: "modulecustomproperty_member-field",
+        onPartialFailure: vi.fn<() => Promise<void>>().mockResolvedValue(),
+        onReconciliationError: vi.fn(),
+        persistModuleFieldValue,
+      })
+    ).resolves.toBe(issue);
+
+    expect(persistModuleFieldValue).not.toHaveBeenCalled();
+  });
+
+  it("does not persist or refetch when create returns no issue", async () => {
+    const onPartialFailure = vi.fn<() => Promise<void>>().mockResolvedValue();
+    const persistModuleFieldValue = vi.fn();
+
+    await expect(
+      executeCustomFieldGroupQuickCreate({
+        createIssue: async () => undefined,
+        groupId: "member-1",
+        groupKey: "modulecustomproperty_member-field",
+        onPartialFailure,
+        onReconciliationError: vi.fn(),
+        persistModuleFieldValue,
+      })
+    ).resolves.toBeUndefined();
+
+    expect(persistModuleFieldValue).not.toHaveBeenCalled();
+    expect(onPartialFailure).not.toHaveBeenCalled();
+  });
+
+  it("propagates a create rejection without attempting reconciliation", async () => {
+    const createError = new Error("create failed");
+    const onPartialFailure = vi.fn<() => Promise<void>>().mockResolvedValue();
+    const persistModuleFieldValue = vi.fn();
+
+    await expect(
+      executeCustomFieldGroupQuickCreate({
+        createIssue: async () => {
+          throw createError;
+        },
+        groupId: "member-1",
+        groupKey: "modulecustomproperty_member-field",
+        onPartialFailure,
+        onReconciliationError: vi.fn(),
+        persistModuleFieldValue,
+      })
+    ).rejects.toBe(createError);
+
+    expect(persistModuleFieldValue).not.toHaveBeenCalled();
+    expect(onPartialFailure).not.toHaveBeenCalled();
+  });
+
+  it("reports a partial create while retaining the created issue when module field persistence fails", async () => {
+    const issue = issueFixture();
+    const fieldError = new Error("field failed");
+    const onPartialFailure = vi.fn<() => Promise<void>>().mockResolvedValue();
+
+    const result = executeCustomFieldGroupQuickCreate({
+      createIssue: async () => issue,
+      groupId: "member-1",
+      groupKey: "modulecustomproperty_member-field",
+      onPartialFailure,
+      onReconciliationError: vi.fn(),
+      persistModuleFieldValue: async () => {
+        throw fieldError;
+      },
+    });
+
+    await expect(result).rejects.toMatchObject({
+      cause: fieldError,
+      message: "Work item was created, but its grouping field could not be set.",
+      name: "CustomFieldGroupPartialCreateError",
+    });
+    await expect(result).rejects.toBeInstanceOf(CustomFieldGroupPartialCreateError);
+    expect(onPartialFailure).toHaveBeenCalledTimes(1);
+  });
+
+  it("keeps the partial-create error authoritative when reconciliation also fails", async () => {
+    const fieldError = new Error("field failed");
+    const refetchError = new Error("refetch failed");
+    const onReconciliationError = vi.fn<(error: unknown) => void>();
+
+    const result = executeCustomFieldGroupQuickCreate({
+      createIssue: async () => issueFixture(),
+      groupId: "member-1",
+      groupKey: "modulecustomproperty_member-field",
+      onPartialFailure: async () => {
+        throw refetchError;
+      },
+      onReconciliationError,
+      persistModuleFieldValue: async () => {
+        throw fieldError;
+      },
+    });
+
+    await expect(result).rejects.toMatchObject({
+      cause: fieldError,
+      message: "Work item was created, but its grouping field could not be set.",
+    });
+    expect(onReconciliationError).toHaveBeenCalledWith(refetchError);
   });
 });
 

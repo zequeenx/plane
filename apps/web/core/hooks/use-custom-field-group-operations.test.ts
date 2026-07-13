@@ -45,6 +45,7 @@ const dependencyFixture = (
   fetchIssues: vi.fn(async () => undefined),
   getIssueById: vi.fn(() => issueFixture()),
   projectId: "project-1",
+  reportPartialCreateError: vi.fn(),
   reportReconciliationError: vi.fn(),
   sourceModuleId: "module-1",
   updateIssue: vi.fn(async () => undefined),
@@ -86,6 +87,150 @@ const missingContextCases = [
 ] satisfies [string, Partial<TCustomFieldGroupOperationDependencies>][];
 
 describe("createCustomFieldGroupOperations", () => {
+  it("wraps quick create using the dynamic annotation in the submitted data", async () => {
+    const calls: string[] = [];
+    const dependencies = dependencyFixture({
+      updateModuleIssueValues: vi.fn(async () => {
+        calls.push("field");
+        return {};
+      }),
+    });
+    const operations = createCustomFieldGroupOperations(dependencies);
+    const submittedData = issueFixture({
+      "modulecustomproperty_member-field": "member-2",
+      module_ids: ["module-1"],
+    });
+    const createdIssue = issueFixture({
+      id: "created-issue",
+      module_field_values: undefined,
+    });
+    const createIssue = vi.fn(async (_projectId: string | null | undefined, data: TIssue) => {
+      calls.push("create-and-attach");
+      expect(data).toBe(submittedData);
+      return createdIssue;
+    });
+
+    const result = await operations.wrapQuickCreate("stale-member", createIssue)("project-1", submittedData);
+
+    expect(result).toBe(createdIssue);
+    expect(createIssue).toHaveBeenCalledTimes(1);
+    expect(dependencies.updateModuleIssueValues).toHaveBeenCalledWith(
+      "workspace-1",
+      "project-1",
+      "module-1",
+      "created-issue",
+      { field_values: { "member-field": "member-2" } }
+    );
+    expect(calls).toEqual(["create-and-attach", "field"]);
+  });
+
+  it("preserves ordinary quick create without wrapping behavior", async () => {
+    const dependencies = dependencyFixture();
+    const operations = createCustomFieldGroupOperations(dependencies);
+    const data = issueFixture();
+    const createdIssue = issueFixture({ id: "created-issue" });
+    const createIssue = vi.fn(async () => createdIssue);
+
+    await expect(operations.wrapQuickCreate("state-1", createIssue)("project-1", data)).resolves.toBe(createdIssue);
+
+    expect(createIssue).toHaveBeenCalledTimes(1);
+    expect(dependencies.updateModuleIssueValues).not.toHaveBeenCalled();
+    expect(dependencies.fetchIssues).not.toHaveBeenCalled();
+  });
+
+  it("does not post-write project or empty module groups after quick create", async () => {
+    const dependencies = dependencyFixture();
+    const operations = createCustomFieldGroupOperations(dependencies);
+    const createIssue = vi.fn(async () => issueFixture({ id: "created-issue" }));
+
+    await operations.wrapQuickCreate("option-a", createIssue)(
+      "project-1",
+      issueFixture({
+        "customproperty_select-field": "option-a",
+        field_values: { "select-field": "option-a" },
+      })
+    );
+    await operations.wrapQuickCreate("None", createIssue)(
+      "project-1",
+      issueFixture({
+        "modulecustomproperty_member-field": null,
+        module_ids: ["module-1"],
+      })
+    );
+
+    expect(createIssue).toHaveBeenCalledTimes(2);
+    expect(dependencies.updateModuleIssueValues).not.toHaveBeenCalled();
+  });
+
+  it("fails a module-group quick create before creation when module context is unavailable", async () => {
+    const dependencies = dependencyFixture({ sourceModuleId: null });
+    const operations = createCustomFieldGroupOperations(dependencies);
+    const createIssue = vi.fn(async () => issueFixture({ id: "created-issue" }));
+    const data = issueFixture({
+      "modulecustomproperty_member-field": "member-2",
+      module_ids: [],
+    });
+
+    await expect(operations.wrapQuickCreate("member-2", createIssue)("project-1", data)).rejects.toThrow(
+      "module context"
+    );
+
+    expect(createIssue).not.toHaveBeenCalled();
+    expect(dependencies.updateModuleIssueValues).not.toHaveBeenCalled();
+  });
+
+  it("handles modal creation from explicit grouping context when the response has no annotation", async () => {
+    const dependencies = dependencyFixture();
+    const operations = createCustomFieldGroupOperations(dependencies);
+    const createdIssue = issueFixture({ id: "created-issue", module_field_values: undefined });
+
+    await operations.handleCreatedIssue(createdIssue, "modulecustomproperty_member-field", "member-2");
+
+    expect(dependencies.updateModuleIssueValues).toHaveBeenCalledWith(
+      "workspace-1",
+      "project-1",
+      "module-1",
+      "created-issue",
+      { field_values: { "member-field": "member-2" } }
+    );
+  });
+
+  it("does not post-write project or empty module groups after modal creation", async () => {
+    const dependencies = dependencyFixture();
+    const operations = createCustomFieldGroupOperations(dependencies);
+    const createdIssue = issueFixture({ id: "created-issue" });
+
+    await operations.handleCreatedIssue(createdIssue, "customproperty_select-field", "option-a");
+    await operations.handleCreatedIssue(createdIssue, "modulecustomproperty_member-field", "None");
+
+    expect(dependencies.updateModuleIssueValues).not.toHaveBeenCalled();
+    expect(dependencies.fetchIssues).not.toHaveBeenCalled();
+    expect(dependencies.reportPartialCreateError).not.toHaveBeenCalled();
+  });
+
+  it("reports modal partial creation after refetch and rethrows the partial-create error", async () => {
+    const fieldError = new Error("field failed");
+    const dependencies = dependencyFixture({
+      updateModuleIssueValues: vi.fn(async () => {
+        throw fieldError;
+      }),
+    });
+    const operations = createCustomFieldGroupOperations(dependencies);
+
+    const result = operations.handleCreatedIssue(
+      issueFixture({ id: "created-issue" }),
+      "modulecustomproperty_member-field",
+      "member-2"
+    );
+
+    await expect(result).rejects.toMatchObject({
+      cause: fieldError,
+      message: "Work item was created, but its grouping field could not be set.",
+    });
+    expect(dependencies.fetchIssues).toHaveBeenCalledWith("mutation", { canGroup: true, perPageCount: 50 }, "view-1");
+    expect(dependencies.reportPartialCreateError).toHaveBeenCalledTimes(1);
+  });
+
   it("persists project field and sort values through separate endpoints", async () => {
     const dependencies = dependencyFixture();
     const operations = createCustomFieldGroupOperations(dependencies);

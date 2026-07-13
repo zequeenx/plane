@@ -54,6 +54,31 @@ export const isIssueGroupDragAllowed = (groupBy: TIssueGroupByOptions | undefine
 
 export const normalizeCustomFieldGroupId = (groupId: string) => (groupId === "None" ? null : groupId);
 
+export const getCustomFieldGroupQuickAddData = (
+  key: TCustomFieldGroupKey,
+  groupId: string,
+  moduleId?: string | null
+): Partial<TIssue> => {
+  const parsed = parseCustomFieldGroupKey(key);
+  if (!parsed) return {};
+
+  const value = normalizeCustomFieldGroupId(groupId);
+  if (parsed.scope === "project") {
+    const data: Partial<TIssue> = {
+      field_values: value === null ? {} : { [parsed.fieldId]: value },
+    };
+    data[key] = value;
+    return data;
+  }
+
+  if (!moduleId) return {};
+  const data: Partial<TIssue> = {
+    module_ids: [moduleId],
+  };
+  data[key] = value;
+  return data;
+};
+
 export const getCustomFieldGroupValue = (
   issue: Partial<TIssue> | undefined,
   key: TCustomFieldGroupKey,
@@ -236,4 +261,51 @@ export const executeCustomFieldGroupDrop = async ({
   }
 
   throw rejected.reason;
+};
+
+export class CustomFieldGroupPartialCreateError extends Error {
+  constructor(cause: unknown) {
+    super("Work item was created, but its grouping field could not be set.", { cause });
+    this.name = "CustomFieldGroupPartialCreateError";
+  }
+}
+
+export const executeCustomFieldGroupQuickCreate = async ({
+  createIssue,
+  groupId,
+  groupKey,
+  onPartialFailure,
+  onReconciliationError,
+  persistModuleFieldValue,
+}: {
+  createIssue: () => Promise<TIssue | undefined>;
+  groupId: string;
+  groupKey: TCustomFieldGroupKey;
+  onPartialFailure: () => Promise<void>;
+  onReconciliationError: (error: unknown) => void;
+  persistModuleFieldValue: (issue: TIssue, value: string) => Promise<unknown>;
+}): Promise<TIssue | undefined> => {
+  const issue = await createIssue();
+  if (!issue) return undefined;
+
+  const parsed = parseCustomFieldGroupKey(groupKey);
+  const value = normalizeCustomFieldGroupId(groupId);
+  if (parsed?.scope !== "module" || value === null) return issue;
+
+  try {
+    await persistModuleFieldValue(issue, value);
+  } catch (cause) {
+    try {
+      await onPartialFailure();
+    } catch (reconciliationError) {
+      try {
+        onReconciliationError(reconciliationError);
+      } catch {
+        // Reporting must not replace the persistence error consumed by the create surface.
+      }
+    }
+    throw new CustomFieldGroupPartialCreateError(cause);
+  }
+
+  return issue;
 };
