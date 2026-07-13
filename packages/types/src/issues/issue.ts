@@ -9,6 +9,7 @@ import type { TStateGroups } from "../state";
 import type { TIssuePublicComment } from "./activity/issue_comment";
 import type {
   TCustomPropertyKey,
+  TIssueFieldValue,
   TIssueFieldValues,
   TIssueModuleFieldValues,
   TModuleCustomPropertyKey,
@@ -88,7 +89,7 @@ type TIssueCore = {
   is_intake?: boolean;
 };
 
-export type TBaseIssue = TIssueCore & Partial<Record<TCustomPropertyKey | TModuleCustomPropertyKey, string | null>>;
+export type TBaseIssue = TIssueCore & Partial<Record<TCustomPropertyKey | TModuleCustomPropertyKey, TIssueFieldValue>>;
 
 type IssueRelation = {
   id: string;
