@@ -1,5 +1,6 @@
 import type { TIssue } from "@plane/types";
 import { describe, expect, it, vi } from "vitest";
+import type { TCustomFieldGroupKey } from "@/components/issues/issue-layouts/custom-field-grouping";
 
 import type { TCustomFieldGroupOperationDependencies } from "./custom-field-group-operations";
 import { createCustomFieldGroupOperations } from "./custom-field-group-operations";
@@ -44,6 +45,7 @@ const dependencyFixture = (
   fetchIssues: vi.fn(async () => undefined),
   groupBy: "customproperty_select-field",
   projectId: "project-1",
+  reportReconciliationError: vi.fn(),
   sourceModuleId: "module-1",
   updateIssue: vi.fn(async () => undefined),
   updateIssueLocalState: vi.fn(),
@@ -54,7 +56,6 @@ const dependencyFixture = (
 });
 
 const missingContextCases = [
-  ["group", { groupBy: "priority" }],
   ["workspace", { workspaceSlug: undefined }],
   ["project", { projectId: undefined }],
 ] satisfies [string, Partial<TCustomFieldGroupOperationDependencies>][];
@@ -65,7 +66,7 @@ describe("createCustomFieldGroupOperations", () => {
     const operations = createCustomFieldGroupOperations(dependencies);
     const issue = issueFixture();
 
-    await operations.persistDrop(issue, "option-b", 200);
+    await operations.persistDrop(issue, "customproperty_select-field", "option-b", 200);
 
     expect(dependencies.updateIssueLocalState).toHaveBeenCalledTimes(1);
     expect(dependencies.updateIssueLocalState).toHaveBeenCalledWith(
@@ -89,7 +90,7 @@ describe("createCustomFieldGroupOperations", () => {
     const operations = createCustomFieldGroupOperations(dependencies);
     const issue = issueFixture();
 
-    await operations.persistDrop(issue, "None");
+    await operations.persistDrop(issue, "modulecustomproperty_member-field", "None");
 
     expect(dependencies.updateModuleIssueValues).toHaveBeenCalledWith(
       "workspace-1",
@@ -108,6 +109,35 @@ describe("createCustomFieldGroupOperations", () => {
     );
   });
 
+  it("uses the drop key instead of a stale captured group when persisting and projecting", async () => {
+    const dependencies = dependencyFixture({ groupBy: "customproperty_stale-field" });
+    const operations = createCustomFieldGroupOperations(dependencies);
+    const issue = issueFixture({ field_values: { "stale-field": "stale-option" } });
+
+    await operations.persistDrop(issue, "modulecustomproperty_member-field", "member-2");
+
+    expect(dependencies.updateModuleIssueValues).toHaveBeenCalledWith(
+      "workspace-1",
+      "project-1",
+      "module-1",
+      issue.id,
+      { field_values: { "member-field": "member-2" } }
+    );
+    expect(dependencies.updateProjectIssueValues).not.toHaveBeenCalled();
+    expect(dependencies.updateIssueLocalState).toHaveBeenCalledWith(
+      issue.id,
+      expect.objectContaining({
+        "modulecustomproperty_member-field": "member-2",
+        field_values: { "stale-field": "stale-option" },
+        module_field_values: { "module-1": { "member-field": "member-2" } },
+      })
+    );
+    expect(dependencies.updateIssueLocalState).not.toHaveBeenCalledWith(
+      issue.id,
+      expect.objectContaining({ "customproperty_stale-field": expect.anything() })
+    );
+  });
+
   it("restores the complete pre-drop issue when every persistence request fails", async () => {
     const fieldError = new Error("field request failed");
     const dependencies = dependencyFixture({
@@ -121,7 +151,9 @@ describe("createCustomFieldGroupOperations", () => {
     const operations = createCustomFieldGroupOperations(dependencies);
     const issue = issueFixture();
 
-    await expect(operations.persistDrop(issue, "option-b", 200)).rejects.toBe(fieldError);
+    await expect(operations.persistDrop(issue, "customproperty_select-field", "option-b", 200)).rejects.toBe(
+      fieldError
+    );
 
     expect(dependencies.updateIssueLocalState).toHaveBeenCalledTimes(2);
     expect(dependencies.updateIssueLocalState).toHaveBeenNthCalledWith(2, issue.id, issue);
@@ -137,7 +169,9 @@ describe("createCustomFieldGroupOperations", () => {
     });
     const operations = createCustomFieldGroupOperations(dependencies);
 
-    await expect(operations.persistDrop(issueFixture(), "option-b", 200)).rejects.toBe(sortError);
+    await expect(operations.persistDrop(issueFixture(), "customproperty_select-field", "option-b", 200)).rejects.toBe(
+      sortError
+    );
 
     expect(dependencies.fetchIssues).toHaveBeenCalledWith("mutation", { canGroup: true, perPageCount: 50 }, "view-1");
     expect(dependencies.updateIssueLocalState).toHaveBeenCalledTimes(1);
@@ -151,8 +185,10 @@ describe("createCustomFieldGroupOperations", () => {
     const operations = createCustomFieldGroupOperations(dependencies);
     const issue = issueFixture();
 
-    expect(operations.applyOptimisticValue(issue, "member-2")).toBe(issue);
-    await expect(operations.persistDrop(issue, "member-2")).rejects.toThrow("module context");
+    expect(operations.applyOptimisticValue(issue, "modulecustomproperty_member-field", "member-2")).toBe(issue);
+    await expect(operations.persistDrop(issue, "modulecustomproperty_member-field", "member-2")).rejects.toThrow(
+      "module context"
+    );
 
     expect(dependencies.updateIssueLocalState).not.toHaveBeenCalled();
     expect(dependencies.updateModuleIssueValues).not.toHaveBeenCalled();
@@ -166,12 +202,25 @@ describe("createCustomFieldGroupOperations", () => {
       const operations = createCustomFieldGroupOperations(dependencies);
       const issue = issueFixture();
 
-      expect(operations.applyOptimisticValue(issue, "option-b")).toBe(issue);
-      await expect(operations.persistDrop(issue, "option-b")).rejects.toThrow("context");
+      expect(operations.applyOptimisticValue(issue, "customproperty_select-field", "option-b")).toBe(issue);
+      await expect(operations.persistDrop(issue, "customproperty_select-field", "option-b")).rejects.toThrow("context");
 
       expect(dependencies.updateIssueLocalState).not.toHaveBeenCalled();
       expect(dependencies.updateModuleIssueValues).not.toHaveBeenCalled();
       expect(dependencies.updateProjectIssueValues).not.toHaveBeenCalled();
     }
   );
+
+  it("rejects an invalid passed custom key before optimistic mutation", async () => {
+    const dependencies = dependencyFixture();
+    const operations = createCustomFieldGroupOperations(dependencies);
+    const issue = issueFixture();
+    const invalidGroupKey: TCustomFieldGroupKey = "customproperty_";
+
+    expect(operations.applyOptimisticValue(issue, invalidGroupKey, "option-b")).toBe(issue);
+    await expect(operations.persistDrop(issue, invalidGroupKey, "option-b")).rejects.toThrow("group context");
+
+    expect(dependencies.updateIssueLocalState).not.toHaveBeenCalled();
+    expect(dependencies.updateProjectIssueValues).not.toHaveBeenCalled();
+  });
 });

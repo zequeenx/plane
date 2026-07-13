@@ -200,11 +200,13 @@ export const getCustomFieldGroupColumns = ({
 
 export const executeCustomFieldGroupDrop = async ({
   onPartialFailure,
+  onReconciliationError,
   onRollback,
   persistFieldValue,
   persistSortOrder,
 }: {
   onPartialFailure: () => Promise<void>;
+  onReconciliationError: (error: unknown) => void;
   onRollback: () => Promise<void> | void;
   persistFieldValue: () => Promise<unknown>;
   persistSortOrder?: () => Promise<unknown>;
@@ -215,8 +217,16 @@ export const executeCustomFieldGroupDrop = async ({
   if (!rejected) return;
 
   const fulfilledCount = results.filter((result) => result.status === "fulfilled").length;
-  if (fulfilledCount > 0) await onPartialFailure();
-  else await onRollback();
+  try {
+    if (fulfilledCount > 0) await onPartialFailure();
+    else await onRollback();
+  } catch (reconciliationError) {
+    try {
+      onReconciliationError(reconciliationError);
+    } catch {
+      // Reporting must not replace the persistence error consumed by the drag handler.
+    }
+  }
 
   throw rejected.reason;
 };

@@ -81,7 +81,7 @@ export const useGroupIssuesDragNDrop = (
         throw new Error("Custom field group drop data is unavailable");
 
       const sortOrder = typeof data.sort_order === "number" ? data.sort_order : undefined;
-      await customFieldGroupOperations.persistDrop(issue, customGroupValue ?? "None", sortOrder);
+      await customFieldGroupOperations.persistDrop(issue, customGroupKey, customGroupValue ?? "None", sortOrder);
       return;
     }
 

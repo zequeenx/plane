@@ -314,29 +314,38 @@ describe("getCustomFieldGroupColumns", () => {
 describe("executeCustomFieldGroupDrop", () => {
   it("persists the field value and optional sort order without reconciliation when both succeed", async () => {
     const onPartialFailure = vi.fn<() => Promise<void>>().mockResolvedValue();
+    const onReconciliationError = vi.fn<(error: unknown) => void>();
     const onRollback = vi.fn<() => void>();
     const persistFieldValue = vi.fn<() => Promise<void>>().mockResolvedValue();
     const persistSortOrder = vi.fn<() => Promise<void>>().mockResolvedValue();
 
     await expect(
-      executeCustomFieldGroupDrop({ onPartialFailure, onRollback, persistFieldValue, persistSortOrder })
+      executeCustomFieldGroupDrop({
+        onPartialFailure,
+        onReconciliationError,
+        onRollback,
+        persistFieldValue,
+        persistSortOrder,
+      })
     ).resolves.toBeUndefined();
 
     expect(persistFieldValue).toHaveBeenCalledTimes(1);
     expect(persistSortOrder).toHaveBeenCalledTimes(1);
     expect(onPartialFailure).not.toHaveBeenCalled();
+    expect(onReconciliationError).not.toHaveBeenCalled();
     expect(onRollback).not.toHaveBeenCalled();
   });
 
   it("rolls back and rejects the original error when the only persistence request fails", async () => {
     const fieldError = new Error("field request failed");
     const onPartialFailure = vi.fn<() => Promise<void>>().mockResolvedValue();
+    const onReconciliationError = vi.fn<(error: unknown) => void>();
     const onRollback = vi.fn<() => void>();
     const persistFieldValue = vi.fn<() => Promise<void>>().mockRejectedValue(fieldError);
 
-    await expect(executeCustomFieldGroupDrop({ onPartialFailure, onRollback, persistFieldValue })).rejects.toBe(
-      fieldError
-    );
+    await expect(
+      executeCustomFieldGroupDrop({ onPartialFailure, onReconciliationError, onRollback, persistFieldValue })
+    ).rejects.toBe(fieldError);
 
     expect(persistFieldValue).toHaveBeenCalledTimes(1);
     expect(onRollback).toHaveBeenCalledTimes(1);
@@ -347,12 +356,19 @@ describe("executeCustomFieldGroupDrop", () => {
     const fieldError = new Error("field request failed");
     const sortError = new Error("sort request failed");
     const onPartialFailure = vi.fn<() => Promise<void>>().mockResolvedValue();
+    const onReconciliationError = vi.fn<(error: unknown) => void>();
     const onRollback = vi.fn<() => void>();
     const persistFieldValue = vi.fn<() => Promise<void>>().mockRejectedValue(fieldError);
     const persistSortOrder = vi.fn<() => Promise<void>>().mockRejectedValue(sortError);
 
     await expect(
-      executeCustomFieldGroupDrop({ onPartialFailure, onRollback, persistFieldValue, persistSortOrder })
+      executeCustomFieldGroupDrop({
+        onPartialFailure,
+        onReconciliationError,
+        onRollback,
+        persistFieldValue,
+        persistSortOrder,
+      })
     ).rejects.toBe(fieldError);
 
     expect(persistFieldValue).toHaveBeenCalledTimes(1);
@@ -364,12 +380,19 @@ describe("executeCustomFieldGroupDrop", () => {
   it("refetches instead of rolling back when only sort persistence fails", async () => {
     const sortError = new Error("sort request failed");
     const onPartialFailure = vi.fn<() => Promise<void>>().mockResolvedValue();
+    const onReconciliationError = vi.fn<(error: unknown) => void>();
     const onRollback = vi.fn<() => void>();
     const persistFieldValue = vi.fn<() => Promise<void>>().mockResolvedValue();
     const persistSortOrder = vi.fn<() => Promise<void>>().mockRejectedValue(sortError);
 
     await expect(
-      executeCustomFieldGroupDrop({ onPartialFailure, onRollback, persistFieldValue, persistSortOrder })
+      executeCustomFieldGroupDrop({
+        onPartialFailure,
+        onReconciliationError,
+        onRollback,
+        persistFieldValue,
+        persistSortOrder,
+      })
     ).rejects.toBe(sortError);
 
     expect(onPartialFailure).toHaveBeenCalledTimes(1);
@@ -379,16 +402,65 @@ describe("executeCustomFieldGroupDrop", () => {
   it("refetches instead of rolling back when only field persistence fails", async () => {
     const fieldError = new Error("field request failed");
     const onPartialFailure = vi.fn<() => Promise<void>>().mockResolvedValue();
+    const onReconciliationError = vi.fn<(error: unknown) => void>();
     const onRollback = vi.fn<() => void>();
     const persistFieldValue = vi.fn<() => Promise<void>>().mockRejectedValue(fieldError);
     const persistSortOrder = vi.fn<() => Promise<void>>().mockResolvedValue();
 
     await expect(
-      executeCustomFieldGroupDrop({ onPartialFailure, onRollback, persistFieldValue, persistSortOrder })
+      executeCustomFieldGroupDrop({
+        onPartialFailure,
+        onReconciliationError,
+        onRollback,
+        persistFieldValue,
+        persistSortOrder,
+      })
     ).rejects.toBe(fieldError);
 
     expect(onPartialFailure).toHaveBeenCalledTimes(1);
     expect(onRollback).not.toHaveBeenCalled();
+  });
+
+  it("preserves the persistence error when rollback fails and reports the rollback error", async () => {
+    const fieldError = new Error("field request failed");
+    const rollbackError = new Error("rollback failed");
+    const onPartialFailure = vi.fn<() => Promise<void>>().mockResolvedValue();
+    const onReconciliationError = vi.fn<(error: unknown) => void>();
+    const onRollback = vi.fn<() => Promise<void>>().mockRejectedValue(rollbackError);
+    const persistFieldValue = vi.fn<() => Promise<void>>().mockRejectedValue(fieldError);
+
+    await expect(
+      executeCustomFieldGroupDrop({
+        onPartialFailure,
+        onReconciliationError,
+        onRollback,
+        persistFieldValue,
+      })
+    ).rejects.toBe(fieldError);
+
+    expect(onReconciliationError).toHaveBeenCalledWith(rollbackError);
+  });
+
+  it("preserves the persistence error when partial-failure refetch fails and reports the refetch error", async () => {
+    const sortError = new Error("sort request failed");
+    const refetchError = new Error("refetch failed");
+    const onPartialFailure = vi.fn<() => Promise<void>>().mockRejectedValue(refetchError);
+    const onReconciliationError = vi.fn<(error: unknown) => void>();
+    const onRollback = vi.fn<() => void>();
+    const persistFieldValue = vi.fn<() => Promise<void>>().mockResolvedValue();
+    const persistSortOrder = vi.fn<() => Promise<void>>().mockRejectedValue(sortError);
+
+    await expect(
+      executeCustomFieldGroupDrop({
+        onPartialFailure,
+        onReconciliationError,
+        onRollback,
+        persistFieldValue,
+        persistSortOrder,
+      })
+    ).rejects.toBe(sortError);
+
+    expect(onReconciliationError).toHaveBeenCalledWith(refetchError);
   });
 });
 

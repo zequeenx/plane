@@ -17,6 +17,10 @@ import type { TOperations } from "@/hooks/custom-field-group-operations";
 
 export type { TOperations } from "@/hooks/custom-field-group-operations";
 
+const reportCustomFieldGroupReconciliationError = (error: unknown) => {
+  console.error("Failed to reconcile custom field group drop", error);
+};
+
 export const useCustomFieldGroupOperations = ({
   fetchIssues,
   groupBy,
@@ -47,6 +51,7 @@ export const useCustomFieldGroupOperations = ({
         fetchIssues,
         groupBy,
         projectId,
+        reportReconciliationError: reportCustomFieldGroupReconciliationError,
         sourceModuleId,
         updateIssue,
         updateIssueLocalState,

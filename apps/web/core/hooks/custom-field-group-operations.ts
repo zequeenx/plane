@@ -10,6 +10,7 @@ import type {
   TIssueGroupByOptions,
   TModuleIssueFieldValuesUpdatePayload,
 } from "@plane/types";
+import type { TCustomFieldGroupKey } from "@/components/issues/issue-layouts/custom-field-grouping";
 import {
   applyCustomFieldGroupValue,
   executeCustomFieldGroupDrop,
@@ -20,8 +21,8 @@ import {
 import type { IssueActions } from "@/hooks/use-issues-actions";
 
 export type TOperations = {
-  applyOptimisticValue: (issue: TIssue, groupId: string) => TIssue;
-  persistDrop: (issue: TIssue, groupId: string, sortOrder?: number) => Promise<void>;
+  applyOptimisticValue: (issue: TIssue, groupKey: TCustomFieldGroupKey, groupId: string) => TIssue;
+  persistDrop: (issue: TIssue, groupKey: TCustomFieldGroupKey, groupId: string, sortOrder?: number) => Promise<void>;
   refetchCurrentGrouping: () => Promise<void>;
 };
 
@@ -45,6 +46,7 @@ export type TCustomFieldGroupOperationDependencies = {
   fetchIssues: IssueActions["fetchIssues"];
   groupBy: TIssueGroupByOptions | undefined;
   projectId?: string;
+  reportReconciliationError: (error: unknown) => void;
   sourceModuleId?: string | null;
   updateIssue: IssueActions["updateIssue"];
   updateIssueLocalState?: (issueId: string, data: Partial<TIssue>) => void;
@@ -59,8 +61,8 @@ const getUnavailableContextError = (context: "group" | "module" | "project" | "s
 export const createCustomFieldGroupOperations = ({
   currentViewId,
   fetchIssues,
-  groupBy,
   projectId,
+  reportReconciliationError,
   sourceModuleId,
   updateIssue,
   updateIssueLocalState,
@@ -68,32 +70,30 @@ export const createCustomFieldGroupOperations = ({
   updateProjectIssueValues,
   workspaceSlug,
 }: TCustomFieldGroupOperationDependencies): TOperations => {
-  const customGroup = parseCustomFieldGroupKey(groupBy);
-  const customGroupKey = isCustomFieldGroupKey(groupBy) ? groupBy : undefined;
-
-  const hasRequiredContext =
-    !!customGroup &&
-    !!customGroupKey &&
-    !!workspaceSlug &&
-    !!projectId &&
-    !!updateIssueLocalState &&
-    (customGroup.scope === "project" || !!sourceModuleId);
-
-  const applyOptimisticValue = (issue: TIssue, groupId: string): TIssue => {
-    if (!hasRequiredContext || !customGroupKey) return issue;
-    return applyCustomFieldGroupValue(issue, customGroupKey, groupId, sourceModuleId);
+  const applyOptimisticValue = (issue: TIssue, groupKey: TCustomFieldGroupKey, groupId: string): TIssue => {
+    const customGroup = parseCustomFieldGroupKey(groupKey);
+    const hasRequiredContext =
+      !!customGroup &&
+      isCustomFieldGroupKey(groupKey) &&
+      !!workspaceSlug &&
+      !!projectId &&
+      !!updateIssueLocalState &&
+      (customGroup.scope === "project" || !!sourceModuleId);
+    if (!hasRequiredContext) return issue;
+    return applyCustomFieldGroupValue(issue, groupKey, groupId, sourceModuleId);
   };
 
   const refetchCurrentGrouping = async () => {
     await fetchIssues("mutation", { canGroup: true, perPageCount: 50 }, currentViewId);
   };
 
-  const persistDrop = async (issue: TIssue, groupId: string, sortOrder?: number) => {
-    if (!customGroup || !customGroupKey) throw getUnavailableContextError("group");
+  const persistDrop = async (issue: TIssue, groupKey: TCustomFieldGroupKey, groupId: string, sortOrder?: number) => {
+    const customGroup = parseCustomFieldGroupKey(groupKey);
+    if (!customGroup || !isCustomFieldGroupKey(groupKey)) throw getUnavailableContextError("group");
     if (!workspaceSlug || !projectId || !updateIssueLocalState) throw getUnavailableContextError("project");
 
     const issueBeforeDrop = { ...issue };
-    const nextIssue = applyCustomFieldGroupValue(issue, customGroupKey, groupId, sourceModuleId);
+    const nextIssue = applyCustomFieldGroupValue(issue, groupKey, groupId, sourceModuleId);
     const normalizedValue = normalizeCustomFieldGroupId(groupId);
     const fieldValuePayload = { field_values: { [customGroup.fieldId]: normalizedValue } };
     let persistFieldValue: () => Promise<unknown>;
@@ -115,6 +115,7 @@ export const createCustomFieldGroupOperations = ({
 
     await executeCustomFieldGroupDrop({
       onPartialFailure: refetchCurrentGrouping,
+      onReconciliationError: reportReconciliationError,
       onRollback: () => updateIssueLocalState(issue.id, issueBeforeDrop),
       persistFieldValue,
       persistSortOrder,
