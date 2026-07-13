@@ -1,6 +1,7 @@
 import type { TIssue, TModuleIssueField, TProjectIssueField } from "@plane/types";
 import { EProjectIssueFieldType } from "@plane/types";
 import { describe, expect, expectTypeOf, it, vi } from "vitest";
+import { IssuePostCreateError } from "@/lib/issue-create";
 
 import type { TIssueApiPayload } from "./custom-field-grouping";
 
@@ -580,6 +581,30 @@ describe("executeCustomFieldGroupDrop", () => {
 });
 
 describe("executeCustomFieldGroupQuickCreate", () => {
+  it("reconciles a store-level post-create attachment failure without attempting the field write", async () => {
+    const issue = issueFixture({ id: "created-issue" });
+    const attachmentError = new Error("attachment failed");
+    const postCreateError = new IssuePostCreateError(issue, attachmentError);
+    const onPartialFailure = vi.fn<() => Promise<void>>().mockResolvedValue();
+    const persistModuleFieldValue = vi.fn();
+
+    await expect(
+      executeCustomFieldGroupQuickCreate({
+        createIssue: async () => {
+          throw postCreateError;
+        },
+        groupId: "member-1",
+        groupKey: "modulecustomproperty_member-field",
+        onPartialFailure,
+        onReconciliationError: vi.fn(),
+        persistModuleFieldValue,
+      })
+    ).rejects.toBe(postCreateError);
+
+    expect(onPartialFailure).toHaveBeenCalledTimes(1);
+    expect(persistModuleFieldValue).not.toHaveBeenCalled();
+  });
+
   it("persists a populated module group only after create and attachment complete", async () => {
     const calls: string[] = [];
     const issue = issueFixture();
@@ -701,10 +726,12 @@ describe("executeCustomFieldGroupQuickCreate", () => {
 
     await expect(result).rejects.toMatchObject({
       cause: fieldError,
+      createdIssue: issue,
       message: "Work item was created, but its grouping field could not be set.",
       name: "CustomFieldGroupPartialCreateError",
     });
     await expect(result).rejects.toBeInstanceOf(CustomFieldGroupPartialCreateError);
+    await expect(result).rejects.toBeInstanceOf(IssuePostCreateError);
     expect(onPartialFailure).toHaveBeenCalledTimes(1);
   });
 

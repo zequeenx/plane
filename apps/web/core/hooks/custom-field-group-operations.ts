@@ -11,6 +11,7 @@ import {
   CustomFieldGroupPartialCreateError,
   executeCustomFieldGroupDrop,
   executeCustomFieldGroupQuickCreate,
+  getCustomFieldGroupValue,
   isCustomFieldGroupKey,
   normalizeCustomFieldGroupId,
   parseCustomFieldGroupKey,
@@ -19,7 +20,12 @@ import type { IssueActions } from "@/hooks/use-issues-actions";
 
 export type TOperations = {
   applyOptimisticValue: (issue: TIssue, groupKey: TCustomFieldGroupKey, groupId: string) => TIssue;
-  handleCreatedIssue: (issue: TIssue, groupKey: TCustomFieldGroupKey, groupId: string) => Promise<void>;
+  handleCreatedIssue: (
+    issue: TIssue,
+    groupKey: TCustomFieldGroupKey,
+    groupId: string,
+    requiredSourceModuleId?: string | null
+  ) => Promise<void>;
   persistDrop: (
     issueId: string,
     groupKey: TCustomFieldGroupKey,
@@ -125,22 +131,48 @@ export const createCustomFieldGroupOperations = ({
   const persistCreatedModuleFieldValue = async (
     issue: TIssue,
     groupKey: TCustomFieldGroupKey,
-    value: string
+    groupId: string,
+    operationSourceModuleId = sourceModuleId
   ): Promise<void> => {
     const customGroup = parseCustomFieldGroupKey(groupKey);
     const createdIssueProjectId = issue.project_id ?? projectId;
     if (!customGroup || customGroup.scope !== "module") throw getUnavailableContextError("group");
     if (!workspaceSlug || !createdIssueProjectId) throw getUnavailableContextError("project");
-    if (!sourceModuleId) throw getUnavailableContextError("module");
-    await updateModuleIssueValues(workspaceSlug, createdIssueProjectId, sourceModuleId, issue.id, {
-      field_values: { [customGroup.fieldId]: value },
-    });
+    if (!operationSourceModuleId) throw getUnavailableContextError("module");
+
+    const activeIssue = getIssueById(issue.id);
+    const canReconcileLocally = !!activeIssue && !!updateIssueLocalState;
+    const activeGroupId = activeIssue
+      ? (getCustomFieldGroupValue(activeIssue, groupKey, operationSourceModuleId) ?? "None")
+      : "None";
+    if (activeIssue && updateIssueLocalState) {
+      updateIssueLocalState(
+        issue.id,
+        applyCustomFieldGroupValue(activeIssue, groupKey, groupId, operationSourceModuleId)
+      );
+    }
+
+    try {
+      await updateModuleIssueValues(workspaceSlug, createdIssueProjectId, operationSourceModuleId, issue.id, {
+        field_values: { [customGroup.fieldId]: normalizeCustomFieldGroupId(groupId) },
+      });
+    } catch (error) {
+      if (activeIssue && updateIssueLocalState) {
+        updateIssueLocalState(
+          issue.id,
+          applyCustomFieldGroupValue(activeIssue, groupKey, activeGroupId, operationSourceModuleId)
+        );
+      }
+      throw error;
+    }
+    if (!canReconcileLocally) await refetchCurrentGrouping();
   };
 
   const persistCreatedModuleField = async (
     issue: TIssue,
     groupKey: TCustomFieldGroupKey,
-    groupId: string
+    groupId: string,
+    operationSourceModuleId?: string | null
   ): Promise<TIssue | undefined> =>
     await executeCustomFieldGroupQuickCreate({
       createIssue: async () => issue,
@@ -148,12 +180,18 @@ export const createCustomFieldGroupOperations = ({
       groupKey,
       onPartialFailure: refetchCurrentGrouping,
       onReconciliationError: reportReconciliationError,
-      persistModuleFieldValue: (createdIssue, value) => persistCreatedModuleFieldValue(createdIssue, groupKey, value),
+      persistModuleFieldValue: (createdIssue) =>
+        persistCreatedModuleFieldValue(createdIssue, groupKey, groupId, operationSourceModuleId ?? sourceModuleId),
     });
 
-  const handleCreatedIssue = async (issue: TIssue, groupKey: TCustomFieldGroupKey, groupId: string): Promise<void> => {
+  const handleCreatedIssue = async (
+    issue: TIssue,
+    groupKey: TCustomFieldGroupKey,
+    groupId: string,
+    requiredSourceModuleId?: string | null
+  ): Promise<void> => {
     try {
-      await persistCreatedModuleField(issue, groupKey, groupId);
+      await persistCreatedModuleField(issue, groupKey, groupId, requiredSourceModuleId);
     } catch (error) {
       if (error instanceof CustomFieldGroupPartialCreateError) reportPartialCreateError?.(error);
       throw error;

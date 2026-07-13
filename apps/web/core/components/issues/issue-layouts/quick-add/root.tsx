@@ -16,6 +16,7 @@ import { PlusIcon } from "@plane/propel/icons";
 import { setPromiseToast } from "@plane/propel/toast";
 import type { IProject, TIssue, EIssueLayoutTypes } from "@plane/types";
 import { cn, createIssuePayload } from "@plane/utils";
+import { getIssueCreateErrorMessage } from "@/lib/issue-create";
 // plane web imports
 import { QuickAddIssueFormRoot } from "@/plane-web/components/issues/quick-add";
 // local imports
@@ -126,7 +127,12 @@ export const QuickAddIssueRoot = observer(function QuickAddIssueRoot(props: TQui
         },
         error: {
           title: t("common.error.label"),
-          message: (err) => err?.message || t("common.error.message"),
+          message: (error) =>
+            getIssueCreateErrorMessage(
+              error,
+              `${t("issue_created_successfully")}. ${t("project_settings.fields.toasts.updated.error.message")}`,
+              t("common.error.message")
+            ),
         },
       });
 

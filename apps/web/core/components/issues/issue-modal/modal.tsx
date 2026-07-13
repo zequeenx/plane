@@ -9,6 +9,7 @@ import { observer } from "mobx-react";
 import { useParams } from "next/navigation";
 // plane imports
 import type { EIssuesStoreType, TIssue } from "@plane/types";
+import type { TGroupedIssueCreateContext } from "./issue-create-context";
 // plane web imports
 import { IssueModalProvider } from "@/plane-web/components/issues/issue-modal/provider";
 import { CreateUpdateIssueModalBase } from "./base";
@@ -19,6 +20,7 @@ export interface IssuesModalProps {
   onClose: () => void;
   beforeFormSubmit?: () => Promise<void>;
   beforeCreateSuccess?: (res: TIssue) => Promise<void>;
+  groupedIssueCreateContext?: TGroupedIssueCreateContext;
   onSubmit?: (res: TIssue) => Promise<void>;
   withDraftIssueWrapper?: boolean;
   storeType?: EIssuesStoreType;

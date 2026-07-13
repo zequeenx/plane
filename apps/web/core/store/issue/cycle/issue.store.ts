@@ -21,6 +21,7 @@ import type {
 import { getDistributionPathsPostUpdate } from "@plane/utils";
 //local
 import { storage } from "@/lib/local-storage";
+import { IssuePostCreateError } from "@/lib/issue-create";
 import type { IBaseIssuesStore } from "../helpers/base-issues.store";
 import { BaseIssuesStore } from "../helpers/base-issues.store";
 //
@@ -290,7 +291,11 @@ export class CycleIssues extends BaseIssuesStore implements ICycleIssues {
    */
   override createIssue = async (workspaceSlug: string, projectId: string, data: Partial<TIssue>, cycleId: string) => {
     const response = await super.createIssue(workspaceSlug, projectId, data, cycleId, false);
-    await this.addIssueToCycle(workspaceSlug, projectId, cycleId, [response.id], false);
+    try {
+      await this.addIssueToCycle(workspaceSlug, projectId, cycleId, [response.id], false);
+    } catch (cause) {
+      throw new IssuePostCreateError(response, cause);
+    }
     return response;
   };
 
@@ -409,20 +414,27 @@ export class CycleIssues extends BaseIssuesStore implements ICycleIssues {
     // add temporary issue to store list
     this.addIssue(data);
 
-    // call overridden create issue
-    const response = await this.createIssue(workspaceSlug, projectId, data, cycleId);
-
-    // remove temp Issue from store list
-    runInAction(() => {
-      this.removeIssueFromList(data.id);
-      this.rootIssueStore.issues.removeIssue(data.id);
-    });
+    let response: TIssue;
+    try {
+      // call overridden create issue
+      response = await this.createIssue(workspaceSlug, projectId, data, cycleId);
+    } finally {
+      // remove temp Issue from store list
+      runInAction(() => {
+        this.removeIssueFromList(data.id);
+        this.rootIssueStore.issues.removeIssue(data.id);
+      });
+    }
 
     const currentModuleIds =
       data.module_ids && data.module_ids.length > 0 ? data.module_ids.filter((moduleId) => moduleId != "None") : [];
 
     if (currentModuleIds.length > 0) {
-      await this.changeModulesInIssue(workspaceSlug, projectId, response.id, currentModuleIds, []);
+      try {
+        await this.changeModulesInIssue(workspaceSlug, projectId, response.id, currentModuleIds, []);
+      } catch (cause) {
+        throw new IssuePostCreateError(response, cause);
+      }
     }
 
     return response;

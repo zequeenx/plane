@@ -37,6 +37,7 @@ import {
   stripCustomFieldGroupAnnotations,
 } from "@/components/issues/issue-layouts/custom-field-grouping";
 import { resolveCustomFieldGroupSourceModuleId } from "@/hooks/custom-field-grouping-utils";
+import { IssuePostCreateError } from "@/lib/issue-create";
 // services
 import { CycleService } from "@/services/cycle.service";
 import { IssueArchiveService, IssueService } from "@/services/issue";
@@ -560,11 +561,15 @@ export abstract class BaseIssuesStore implements IBaseIssuesStore {
       stripCustomFieldGroupAnnotations(data)
     );
 
-    // add Issue to Store
-    this.addIssue(response, shouldUpdateList);
+    try {
+      // add Issue to Store
+      this.addIssue(response, shouldUpdateList);
 
-    // If shouldUpdateList is true, call fetchParentStats
-    shouldUpdateList && (await this.fetchParentStats(workspaceSlug, projectId));
+      // If shouldUpdateList is true, call fetchParentStats
+      if (shouldUpdateList) await this.fetchParentStats(workspaceSlug, projectId);
+    } catch (cause) {
+      throw new IssuePostCreateError(response, cause);
+    }
 
     return response;
   }
@@ -681,25 +686,37 @@ export abstract class BaseIssuesStore implements IBaseIssuesStore {
   async issueQuickAdd(workspaceSlug: string, projectId: string, data: TIssue) {
     // Add issue to store with a temporary Id
     this.addIssue(data);
-    // call Create issue method
-    const response = await this.createIssue(workspaceSlug, projectId, data);
-    runInAction(() => {
-      this.removeIssueFromList(data.id);
-      this.rootIssueStore.issues.removeIssue(data.id);
-    });
-    const currentCycleId = data.cycle_id !== "" && data.cycle_id === "None" ? undefined : data.cycle_id;
-    const currentModuleIds =
-      data.module_ids && data.module_ids.length > 0 ? data.module_ids.filter((moduleId) => moduleId != "None") : [];
-    const promiseRequests = [];
-    if (currentCycleId) {
-      promiseRequests.push(this.addCycleToIssue(workspaceSlug, projectId, currentCycleId, response.id));
+
+    let response: TIssue;
+    try {
+      response = await this.createIssue(workspaceSlug, projectId, data);
+    } finally {
+      runInAction(() => {
+        this.removeIssueFromList(data.id);
+        this.rootIssueStore.issues.removeIssue(data.id);
+      });
     }
-    if (currentModuleIds.length > 0) {
-      promiseRequests.push(this.changeModulesInIssue(workspaceSlug, projectId, response.id, currentModuleIds, []));
+
+    try {
+      const currentCycleId = data.cycle_id !== "" && data.cycle_id === "None" ? undefined : data.cycle_id;
+      const currentModuleIds =
+        data.module_ids && data.module_ids.length > 0 ? data.module_ids.filter((moduleId) => moduleId != "None") : [];
+      const promiseRequests = [];
+      if (currentCycleId) {
+        promiseRequests.push(this.addCycleToIssue(workspaceSlug, projectId, currentCycleId, response.id));
+      }
+      if (currentModuleIds.length > 0) {
+        promiseRequests.push(this.changeModulesInIssue(workspaceSlug, projectId, response.id, currentModuleIds, []));
+      }
+      const attachmentResults = await Promise.allSettled(promiseRequests);
+      const rejectedAttachment = attachmentResults.find(
+        (result): result is PromiseRejectedResult => result.status === "rejected"
+      );
+      if (rejectedAttachment) throw rejectedAttachment.reason;
+    } catch (cause) {
+      throw new IssuePostCreateError(response, cause);
     }
-    if (promiseRequests && promiseRequests.length > 0) {
-      await Promise.all(promiseRequests);
-    }
+
     return response;
   }
 

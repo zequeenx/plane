@@ -1,31 +1,42 @@
+import { isIssuePostCreateError } from "@/lib/issue-create";
+
 type TIssueCreateLifecycleOptions<TIssue> = {
-  beforeSuccess?: (issue: TIssue) => Promise<void> | void;
-  create: () => Promise<TIssue>;
+  createIssue: () => Promise<TIssue>;
+  finalizeCreatedIssue?: (issue: TIssue) => Promise<void> | void;
   onCoreFailure: (error: unknown) => Promise<void> | void;
-  onFinalizationFailure: (issue: TIssue, error: unknown) => Promise<void> | void;
+  onPostCreateFailure: (issue: TIssue, error: unknown) => Promise<void> | void;
   onSuccess: (issue: TIssue) => Promise<void> | void;
 };
 
 export const executeIssueCreateLifecycle = async <TIssue>({
-  beforeSuccess,
-  create,
+  createIssue,
+  finalizeCreatedIssue,
   onCoreFailure,
-  onFinalizationFailure,
+  onPostCreateFailure,
   onSuccess,
 }: TIssueCreateLifecycleOptions<TIssue>): Promise<TIssue> => {
   let issue: TIssue;
   try {
-    issue = await create();
+    issue = await createIssue();
   } catch (error) {
+    if (isIssuePostCreateError(error)) {
+      const createdIssue = error.createdIssue as TIssue;
+      try {
+        await onPostCreateFailure(createdIssue, error);
+      } catch {
+        // Cleanup must not replace the post-create error consumed by the create form.
+      }
+      throw error;
+    }
     await onCoreFailure(error);
     throw error;
   }
 
   try {
-    await beforeSuccess?.(issue);
+    await finalizeCreatedIssue?.(issue);
   } catch (error) {
     try {
-      await onFinalizationFailure(issue, error);
+      await onPostCreateFailure(issue, error);
     } catch {
       // Cleanup must not replace the finalization error consumed by the create form.
     }

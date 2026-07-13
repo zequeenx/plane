@@ -8,6 +8,7 @@ import type {
   TProjectIssueField,
 } from "@plane/types";
 import { EProjectIssueFieldType } from "@plane/types";
+import { isIssuePostCreateError, IssuePostCreateError } from "@/lib/issue-create";
 
 export const CUSTOM_PROPERTY_PREFIX = "customproperty_";
 export const MODULE_CUSTOM_PROPERTY_PREFIX = "modulecustomproperty_";
@@ -273,9 +274,10 @@ export const executeCustomFieldGroupDrop = async ({
   throw rejected.reason;
 };
 
-export class CustomFieldGroupPartialCreateError extends Error {
-  constructor(cause: unknown) {
-    super("Work item was created, but its grouping field could not be set.", { cause });
+export class CustomFieldGroupPartialCreateError extends IssuePostCreateError<TIssue> {
+  constructor(createdIssue: TIssue, cause: unknown) {
+    super(createdIssue, cause);
+    this.message = "Work item was created, but its grouping field could not be set.";
     this.name = "CustomFieldGroupPartialCreateError";
   }
 }
@@ -295,16 +297,7 @@ export const executeCustomFieldGroupQuickCreate = async ({
   onReconciliationError: (error: unknown) => void;
   persistModuleFieldValue: (issue: TIssue, value: string) => Promise<unknown>;
 }): Promise<TIssue | undefined> => {
-  const issue = await createIssue();
-  if (!issue) return undefined;
-
-  const parsed = parseCustomFieldGroupKey(groupKey);
-  const value = normalizeCustomFieldGroupId(groupId);
-  if (parsed?.scope !== "module" || value === null) return issue;
-
-  try {
-    await persistModuleFieldValue(issue, value);
-  } catch (cause) {
+  const reconcilePartialCreate = async () => {
     try {
       await onPartialFailure();
     } catch (reconciliationError) {
@@ -314,7 +307,26 @@ export const executeCustomFieldGroupQuickCreate = async ({
         // Reporting must not replace the persistence error consumed by the create surface.
       }
     }
-    throw new CustomFieldGroupPartialCreateError(cause);
+  };
+
+  let issue: TIssue | undefined;
+  try {
+    issue = await createIssue();
+  } catch (error) {
+    if (isIssuePostCreateError(error)) await reconcilePartialCreate();
+    throw error;
+  }
+  if (!issue) return undefined;
+
+  const parsed = parseCustomFieldGroupKey(groupKey);
+  const value = normalizeCustomFieldGroupId(groupId);
+  if (parsed?.scope !== "module" || value === null) return issue;
+
+  try {
+    await persistModuleFieldValue(issue, value);
+  } catch (cause) {
+    await reconcilePartialCreate();
+    throw new CustomFieldGroupPartialCreateError(issue, cause);
   }
 
   return issue;

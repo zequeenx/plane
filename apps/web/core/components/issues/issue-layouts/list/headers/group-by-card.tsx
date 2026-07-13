@@ -19,8 +19,10 @@ import { cn } from "@plane/utils";
 import { ExistingIssuesListModal } from "@/components/core/modals/existing-issues-list-modal";
 import { MultipleSelectGroupAction } from "@/components/core/multiple-select";
 import { CreateUpdateIssueModal } from "@/components/issues/issue-modal/modal";
+import { getGroupedIssueCreateModalProps } from "@/components/issues/issue-modal/issue-create-context";
 import { isCustomFieldGroupKey } from "@/components/issues/issue-layouts/custom-field-grouping";
 // constants
+import { useCustomFieldGroupContext } from "@/hooks/use-custom-field-group-context";
 import { useIssueStoreType } from "@/hooks/use-issue-layout-store";
 import type { TCustomFieldGroupCreationOperations } from "@/hooks/use-custom-field-group-operations";
 import type { TSelectionHelper } from "@/hooks/use-multiple-select";
@@ -67,14 +69,20 @@ export const HeaderGroupByCard = observer(function HeaderGroupByCard(props: IHea
   // router
   const { workspaceSlug, projectId, moduleId, cycleId } = useParams();
   const storeType = useIssueStoreType();
+  const { projectId: groupedProjectId, sourceModuleId } = useCustomFieldGroupContext();
   // derived values
   const renderExistingIssueModal = moduleId || cycleId;
   const existingIssuesListModalPayload = moduleId ? { module: moduleId.toString() } : { cycle: true };
   const isGroupSelectionEmpty = selectionHelpers.isGroupSelected(groupID) === "empty";
   // auth
   const canSelectIssues = canEditProperties(projectId?.toString()) && !selectionHelpers.isSelectionDisabled;
+  const groupedIssueCreateModalProps = getGroupedIssueCreateModalProps(groupBy, groupedProjectId, sourceModuleId);
+  const requiredSourceModuleId =
+    groupedIssueCreateModalProps.groupedIssueCreateContext?.scope === "module"
+      ? groupedIssueCreateModalProps.groupedIssueCreateContext.requiredModuleId
+      : undefined;
   const handleCreatedIssue = isCustomFieldGroupKey(groupBy)
-    ? (issue: TIssue) => customFieldGroupOperations.handleCreatedIssue(issue, groupBy, groupID)
+    ? (issue: TIssue) => customFieldGroupOperations.handleCreatedIssue(issue, groupBy, groupID, requiredSourceModuleId)
     : undefined;
 
   const handleAddIssuesToView = async (data: ISearchIssueResponse[]) => {
@@ -176,6 +184,7 @@ export const HeaderGroupByCard = observer(function HeaderGroupByCard(props: IHea
             data={issuePayload}
             beforeCreateSuccess={handleCreatedIssue}
             storeType={storeType}
+            {...groupedIssueCreateModalProps}
           />
         )}
 

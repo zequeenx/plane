@@ -28,11 +28,13 @@ import { FileService } from "@/services/file.service";
 const fileService = new FileService();
 // local imports
 import { CreateIssueToastActionItems } from "../create-issue-toast-action-items";
+import { CustomFieldGroupPartialCreateError } from "../issue-layouts/custom-field-grouping";
 import { useModuleFieldValueDeletionConfirmation } from "../module-fields/remove-confirmation";
 import { DraftIssueLayout } from "./draft-issue-layout";
 import { IssueFormRoot } from "./form";
 import type { IssueFormProps } from "./form";
 import { executeIssueCreateLifecycle } from "./issue-create-lifecycle";
+import { prepareGroupedIssueCreatePayload } from "./issue-create-context";
 import type { IssuesModalProps } from "./modal";
 
 export const CreateUpdateIssueModalBase = observer(function CreateUpdateIssueModalBase(props: IssuesModalProps) {
@@ -42,6 +44,7 @@ export const CreateUpdateIssueModalBase = observer(function CreateUpdateIssueMod
     onClose,
     beforeFormSubmit,
     beforeCreateSuccess,
+    groupedIssueCreateContext,
     onSubmit,
     withDraftIssueWrapper = true,
     storeType: issueStoreFromProps,
@@ -82,7 +85,7 @@ export const CreateUpdateIssueModalBase = observer(function CreateUpdateIssueMod
   const { getProjectByIdentifier } = useProject();
   const { confirmModuleRemoval, confirmationModal } = useModuleFieldValueDeletionConfirmation();
   // current store details
-  const { createIssue, updateIssue } = useIssuesActions(storeType);
+  const { createIssue, fetchIssues, updateIssue } = useIssuesActions(storeType);
   // derived values
   const routerProjectIdentifier = workItem?.toString().split("-")[0];
   const projectIdFromRouter = getProjectByIdentifier(routerProjectIdentifier)?.id;
@@ -165,30 +168,36 @@ export const CreateUpdateIssueModalBase = observer(function CreateUpdateIssueMod
     payload: Partial<TIssue>,
     is_draft_issue: boolean = false
   ): Promise<TIssue | undefined> => {
-    const payloadProjectId = payload.project_id;
-    if (!workspaceSlug || !payloadProjectId) return;
+    if (!workspaceSlug || (!payload.project_id && !groupedIssueCreateContext)) return;
+
+    let submittedPayload = payload;
 
     return await executeIssueCreateLifecycle({
-      beforeSuccess: is_draft_issue ? undefined : beforeCreateSuccess,
-      create: async () => {
+      createIssue: async () => {
+        submittedPayload = groupedIssueCreateContext
+          ? prepareGroupedIssueCreatePayload(payload, groupedIssueCreateContext)
+          : payload;
+        const payloadProjectId = submittedPayload.project_id;
+        if (!payloadProjectId) throw new Error("Issue project context is unavailable");
+
         let response: TIssue | undefined;
         // if draft issue, use draft issue store to create issue
         if (is_draft_issue) {
-          response = (await draftIssues.createIssue(workspaceSlug.toString(), payload)) as TIssue;
+          response = (await draftIssues.createIssue(workspaceSlug.toString(), submittedPayload)) as TIssue;
         }
-        // if cycle id in payload does not match the cycleId in url
-        // or if the moduleIds in Payload does not match the moduleId in url
-        // use the project issue store to create issues
-        else if (
-          (payload.cycle_id !== cycleId && storeType === EIssuesStoreType.CYCLE) ||
-          (!payload.module_ids?.includes(moduleId?.toString()) && storeType === EIssuesStoreType.MODULE)
-        ) {
-          response = await projectIssues.createIssue(workspaceSlug.toString(), payloadProjectId, payload);
+        // Cycle and module stores attach the issue as part of create. Use the project store here so attachment remains
+        // inside the post-create phase below.
+        else if (storeType === EIssuesStoreType.CYCLE || storeType === EIssuesStoreType.MODULE) {
+          response = await projectIssues.createIssue(workspaceSlug.toString(), payloadProjectId, submittedPayload);
         } // else just use the existing store type's create method
         else if (createIssue) {
-          response = await createIssue(payloadProjectId, payload);
+          response = await createIssue(payloadProjectId, submittedPayload);
         }
 
+        if (!response) throw new Error("Issue creation returned no work item");
+        return response;
+      },
+      finalizeCreatedIssue: async (response) => {
         // update uploaded assets' status
         if (uploadedAssetIds.length > 0) {
           await fileService.updateBulkProjectAssetsUploadStatus(
@@ -202,23 +211,19 @@ export const CreateUpdateIssueModalBase = observer(function CreateUpdateIssueMod
           setUploadedAssetIds([]);
         }
 
-        if (!response) throw new Error();
-
         // check if we should add issue to cycle/module
         if (!is_draft_issue) {
-          if (
-            payload.cycle_id &&
-            payload.cycle_id !== "" &&
-            (payload.cycle_id !== cycleId || storeType !== EIssuesStoreType.CYCLE)
-          ) {
-            await addIssueToCycle(response, payload.cycle_id);
+          if (submittedPayload.cycle_id && submittedPayload.cycle_id !== "" && submittedPayload.cycle_id !== "None") {
+            await addIssueToCycle(response, submittedPayload.cycle_id);
           }
           if (
-            payload.module_ids &&
-            payload.module_ids.length > 0 &&
-            (!payload.module_ids.includes(moduleId?.toString()) || storeType !== EIssuesStoreType.MODULE)
+            submittedPayload.module_ids &&
+            submittedPayload.module_ids.some((submittedModuleId) => submittedModuleId !== "None")
           ) {
-            await addIssueToModule(response, payload.module_ids);
+            await addIssueToModule(
+              response,
+              submittedPayload.module_ids.filter((submittedModuleId) => submittedModuleId !== "None")
+            );
           }
         }
 
@@ -239,8 +244,7 @@ export const CreateUpdateIssueModalBase = observer(function CreateUpdateIssueMod
             parentId: response.id,
           });
         }
-
-        return response;
+        if (!is_draft_issue) await beforeCreateSuccess?.(response);
       },
       onCoreFailure: (error) => {
         const createError = error as { error?: string };
@@ -250,7 +254,21 @@ export const CreateUpdateIssueModalBase = observer(function CreateUpdateIssueMod
           message: createError.error ?? t(is_draft_issue ? "draft_creation_failed" : "issue_creation_failed"),
         });
       },
-      onFinalizationFailure: () => {
+      onPostCreateFailure: async (_response, error) => {
+        if (!(error instanceof CustomFieldGroupPartialCreateError)) {
+          try {
+            await fetchIssues("mutation", { canGroup: true, perPageCount: 50 });
+          } catch (reconciliationError) {
+            console.error("Failed to reconcile partially created work item", reconciliationError);
+          }
+          setToast({
+            type: TOAST_TYPE.ERROR,
+            title: t("common.error"),
+            message: `${t(is_draft_issue ? "draft_created" : "issue_created_successfully")}. ${t(
+              "project_settings.fields.toasts.updated.error.message"
+            )}`,
+          });
+        }
         setDescription("<p></p>");
         setChangesMade(null);
         handleClose();
@@ -428,7 +446,7 @@ export const CreateUpdateIssueModalBase = observer(function CreateUpdateIssueMod
     primaryButtonText: primaryButtonText,
     isDuplicateModalOpen: isDuplicateModalOpen,
     handleDuplicateIssueModal: handleDuplicateIssueModal,
-    isProjectSelectionDisabled: isProjectSelectionDisabled,
+    isProjectSelectionDisabled: isProjectSelectionDisabled || !!groupedIssueCreateContext,
   };
 
   return (

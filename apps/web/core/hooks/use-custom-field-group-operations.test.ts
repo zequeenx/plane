@@ -209,6 +209,27 @@ describe("createCustomFieldGroupOperations", () => {
     );
   });
 
+  it("uses the modal's enforced source module for its post-create field write", async () => {
+    const dependencies = dependencyFixture({ sourceModuleId: "stale-module" });
+    const operations = createCustomFieldGroupOperations(dependencies);
+    const createdIssue = issueFixture({ id: "created-issue", module_field_values: undefined });
+
+    await operations.handleCreatedIssue(
+      createdIssue,
+      "modulecustomproperty_member-field",
+      "member-2",
+      "required-module"
+    );
+
+    expect(dependencies.updateModuleIssueValues).toHaveBeenCalledWith(
+      "workspace-1",
+      "project-1",
+      "required-module",
+      "created-issue",
+      { field_values: { "member-field": "member-2" } }
+    );
+  });
+
   it("does not post-write project or empty module groups after modal creation", async () => {
     const dependencies = dependencyFixture();
     const operations = createCustomFieldGroupOperations(dependencies);
