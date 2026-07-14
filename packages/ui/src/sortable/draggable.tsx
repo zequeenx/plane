@@ -4,8 +4,6 @@
  * See the LICENSE file for details.
  */
 
-// @ts-expect-error Due to live server dependencies
-import { combine } from "@atlaskit/pragmatic-drag-and-drop/dist/cjs/entry-point/combine.js";
 import {
   draggable,
   dropTargetForElements,
@@ -17,9 +15,10 @@ import {
   // @ts-expect-error Due to live server dependencies
 } from "@atlaskit/pragmatic-drag-and-drop-hitbox/dist/cjs/closest-edge.js";
 import { isEqual } from "lodash-es";
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { DropIndicator } from "../drop-indicator";
 import { cn } from "../utils";
+import { createDraggableRegistrationController } from "./draggable-registration";
 import type { TSortableRenderHelpers } from "./sortable";
 import {
   getSortableEdges,
@@ -37,58 +36,68 @@ type Props = {
 
 function Draggable({ children, data, className, orientation = "vertical" }: Props) {
   const ref = useRef<HTMLDivElement>(null);
+  const dataRef = useRef<Record<string, unknown>>(data as Record<string, unknown>);
   const dragHandleRef = useRef<HTMLButtonElement | null>(null);
-  const dragHandleCallbackRef = useRef<React.RefCallback<HTMLButtonElement>>((element) => {
-    dragHandleRef.current = element;
-  });
   const [dragging, setDragging] = useState<boolean>(false);
   const [isDraggedOver, setIsDraggedOver] = useState(false);
   const [closestEdge, setClosestEdge] = useState<TSortableEdge | null>(null);
+  const [registrationController] = useState(() =>
+    createDraggableRegistrationController({
+      getData: () => dataRef.current,
+      getElement: () => ref.current,
+      getHandle: () => dragHandleRef.current,
+      onDragStart: () => setDragging(true),
+      onDrop: () => setDragging(false),
+      register: (registrationOptions) => draggable(registrationOptions),
+    })
+  );
+
+  const dragHandleCallbackRef = useRef<React.RefCallback<HTMLButtonElement>>((element) => {
+    dragHandleRef.current = element;
+    registrationController.sync();
+  });
+
+  useLayoutEffect(() => {
+    dataRef.current = data as Record<string, unknown>;
+  }, [data]);
+
+  useLayoutEffect(() => registrationController.mount(), [registrationController]);
 
   useEffect(() => {
     const el = ref.current;
     const draggableData = data as Record<string, unknown>;
 
     if (el) {
-      return combine(
-        draggable({
-          element: el,
-          dragHandle: dragHandleRef.current ?? undefined,
-          onDragStart: () => setDragging(true),
-          onDrop: () => setDragging(false),
-          getInitialData: () => draggableData,
-        }),
-        dropTargetForElements({
-          element: el,
-          // @ts-expect-error Due to live server dependencies
-          onDragEnter: (args) => {
-            setIsDraggedOver(true);
-            setClosestEdge(extractClosestEdge(args.self.data));
-          },
-          // @ts-expect-error Due to live server dependencies
-          onDrag: ({ self }) => setClosestEdge(extractClosestEdge(self.data)),
-          onDragLeave: () => {
-            setIsDraggedOver(false);
-            setClosestEdge(null);
-          },
-          onDrop: () => {
-            setIsDraggedOver(false);
-            setClosestEdge(null);
-          },
-          // @ts-expect-error Due to live server dependencies
-          canDrop: ({ source }) =>
-            typeof draggableData.__uuid__ === "string" &&
-            isSortablePayloadForId(source.data, draggableData.__uuid__) &&
-            !isEqual(source.data, draggableData),
-          // @ts-expect-error Due to live server dependencies
-          getData: ({ input, element }) =>
-            attachClosestEdge(draggableData, {
-              input,
-              element,
-              allowedEdges: getSortableEdges(orientation),
-            }),
-        })
-      );
+      return dropTargetForElements({
+        element: el,
+        // @ts-expect-error Due to live server dependencies
+        onDragEnter: (args) => {
+          setIsDraggedOver(true);
+          setClosestEdge(extractClosestEdge(args.self.data));
+        },
+        // @ts-expect-error Due to live server dependencies
+        onDrag: ({ self }) => setClosestEdge(extractClosestEdge(self.data)),
+        onDragLeave: () => {
+          setIsDraggedOver(false);
+          setClosestEdge(null);
+        },
+        onDrop: () => {
+          setIsDraggedOver(false);
+          setClosestEdge(null);
+        },
+        // @ts-expect-error Due to live server dependencies
+        canDrop: ({ source }) =>
+          typeof draggableData.__uuid__ === "string" &&
+          isSortablePayloadForId(source.data, draggableData.__uuid__) &&
+          !isEqual(source.data, draggableData),
+        // @ts-expect-error Due to live server dependencies
+        getData: ({ input, element }) =>
+          attachClosestEdge(draggableData, {
+            input,
+            element,
+            allowedEdges: getSortableEdges(orientation),
+          }),
+      });
     }
   }, [data, orientation]);
 
