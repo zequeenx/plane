@@ -29,6 +29,16 @@ describe("getComputedDisplayFilters", () => {
     );
   });
 
+  it("preserves an empty spreadsheet column order", () => {
+    expect(
+      getComputedDisplayFilters({
+        spreadsheet: {
+          column_order: [],
+        },
+      }).spreadsheet
+    ).toEqual({ column_order: [] });
+  });
+
   it("drops malformed spreadsheet column order", () => {
     const displayFilters = {
       spreadsheet: {
