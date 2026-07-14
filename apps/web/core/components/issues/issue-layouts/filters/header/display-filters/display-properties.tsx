@@ -8,19 +8,31 @@ import React, { useEffect } from "react";
 import { observer } from "mobx-react";
 import { useParams } from "next/navigation";
 // plane constants
-import { ISSUE_DISPLAY_PROPERTIES } from "@plane/constants";
+import { ISSUE_DISPLAY_PROPERTIES, SPREADSHEET_PROPERTY_LIST } from "@plane/constants";
 // plane i18n
 import { useTranslation } from "@plane/i18n";
 // types
-import type { IIssueDisplayProperties } from "@plane/types";
+import { EIssueLayoutTypes, type IIssueDisplayFilterOptions, type IIssueDisplayProperties } from "@plane/types";
+// plane ui
+import { Sortable } from "@plane/ui";
+// plane utils
+import { moveSpreadsheetColumn, resolveSpreadsheetColumnOrder } from "@plane/utils";
 // components
 import { useModuleIssueFields } from "@/hooks/store/use-module-issue-fields";
 import { useProjectIssueFields } from "@/hooks/store/use-project-issue-fields";
+import { DisplayPropertyChip } from "./display-property-chip";
 import { FilterHeader } from "../helpers/filter-header";
 
+type TDisplayPropertyOption = {
+  key: keyof IIssueDisplayProperties;
+  label: string;
+};
+
 type Props = {
+  displayFilters?: IIssueDisplayFilterOptions;
   displayProperties: IIssueDisplayProperties;
   displayPropertiesToRender: (keyof IIssueDisplayProperties)[];
+  handleDisplayFiltersUpdate?: (updatedDisplayFilter: Partial<IIssueDisplayFilterOptions>) => void;
   handleUpdate: (updatedDisplayProperties: Partial<IIssueDisplayProperties>) => void;
   cycleViewDisabled?: boolean;
   moduleViewDisabled?: boolean;
@@ -124,6 +136,62 @@ export const FilterDisplayProperties = observer(function FilterDisplayProperties
         }))
       : [];
 
+  const allDisplayProperties: TDisplayPropertyOption[] = [
+    ...filteredDisplayProperties.map((property) => ({
+      key: property.key,
+      label: t(property.titleTranslationKey),
+    })),
+    ...customDisplayProperties.map((property) => ({ key: property.key, label: property.title })),
+    ...moduleCustomDisplayProperties.map((property) => ({ key: property.key, label: property.title })),
+  ];
+  const fixedIdProperty = allDisplayProperties.find((property) => property.key === "key");
+  const nonIdDisplayProperties = allDisplayProperties.filter((property) => property.key !== "key");
+  const isSpreadsheetLayout = props.displayFilters?.layout === EIssueLayoutTypes.SPREADSHEET;
+  const optionByKey = new Map(allDisplayProperties.map((property) => [property.key, property]));
+  const availableOrder = [
+    ...SPREADSHEET_PROPERTY_LIST.filter((property) => optionByKey.has(property)),
+    ...customDisplayProperties.map((property) => property.key),
+    ...moduleCustomDisplayProperties.map((property) => property.key),
+  ];
+  const resolvedOrder = isSpreadsheetLayout
+    ? resolveSpreadsheetColumnOrder(props.displayFilters?.spreadsheet?.column_order, availableOrder)
+    : [];
+  const orderedProperties = resolvedOrder.flatMap((property) => {
+    const option = optionByKey.get(property);
+    return option ? [option] : [];
+  });
+
+  const handleColumnOrderChange = (columnOrder: (keyof IIssueDisplayProperties)[]) => {
+    if (!isSpreadsheetLayout) return;
+
+    props.handleDisplayFiltersUpdate?.({
+      spreadsheet: {
+        ...props.displayFilters?.spreadsheet,
+        column_order: columnOrder,
+      },
+    });
+  };
+  const handleOrderChange = (properties: TDisplayPropertyOption[]) =>
+    handleColumnOrderChange(properties.map((property) => property.key));
+  const handleKeyboardMove = (property: keyof IIssueDisplayProperties, offset: -1 | 1) =>
+    handleColumnOrderChange(moveSpreadsheetColumn(resolvedOrder, property, offset));
+
+  const renderPropertyChip = (
+    property: TDisplayPropertyOption,
+    dragHandleRef?: React.RefCallback<HTMLButtonElement>
+  ) => (
+    <DisplayPropertyChip
+      key={property.key}
+      dragHandleRef={dragHandleRef}
+      isEnabled={!!displayProperties[property.key]}
+      isSortable={isSpreadsheetLayout && property.key !== "key"}
+      label={property.label}
+      onMove={(offset) => handleKeyboardMove(property.key, offset)}
+      onToggle={() => handleUpdate({ [property.key]: !displayProperties[property.key] })}
+      reorderLabel={t("common.drag_to_rearrange")}
+    />
+  );
+
   return (
     <>
       <FilterHeader
@@ -133,60 +201,20 @@ export const FilterDisplayProperties = observer(function FilterDisplayProperties
       />
       {previewEnabled && (
         <div className="mt-1 flex flex-wrap items-center gap-2">
-          {filteredDisplayProperties.map((displayProperty) => (
-            <button
-              key={displayProperty.key}
-              type="button"
-              className={`rounded-sm border px-2 py-0.5 text-11 transition-all ${
-                displayProperties?.[displayProperty.key]
-                  ? "border-accent-strong bg-accent-primary text-on-color"
-                  : "border-subtle hover:bg-layer-1"
-              }`}
-              onClick={() =>
-                handleUpdate({
-                  [displayProperty.key]: !displayProperties?.[displayProperty.key],
-                })
-              }
-            >
-              {t(displayProperty.titleTranslationKey)}
-            </button>
-          ))}
-          {customDisplayProperties.map((displayProperty) => (
-            <button
-              key={displayProperty.key}
-              type="button"
-              className={`rounded-sm border px-2 py-0.5 text-11 transition-all ${
-                displayProperties?.[displayProperty.key]
-                  ? "border-accent-strong bg-accent-primary text-on-color"
-                  : "border-subtle hover:bg-layer-1"
-              }`}
-              onClick={() =>
-                handleUpdate({
-                  [displayProperty.key]: !displayProperties?.[displayProperty.key],
-                })
-              }
-            >
-              {displayProperty.title}
-            </button>
-          ))}
-          {moduleCustomDisplayProperties.map((displayProperty) => (
-            <button
-              key={displayProperty.key}
-              type="button"
-              className={`rounded-sm border px-2 py-0.5 text-11 transition-all ${
-                displayProperties?.[displayProperty.key]
-                  ? "border-accent-strong bg-accent-primary text-on-color"
-                  : "border-subtle hover:bg-layer-1"
-              }`}
-              onClick={() =>
-                handleUpdate({
-                  [displayProperty.key]: !displayProperties?.[displayProperty.key],
-                })
-              }
-            >
-              {displayProperty.title}
-            </button>
-          ))}
+          {fixedIdProperty && renderPropertyChip(fixedIdProperty)}
+          {isSpreadsheetLayout ? (
+            <Sortable
+              data={orderedProperties}
+              id="table-display-properties"
+              orientation="horizontal"
+              keyExtractor={(property) => property.key}
+              onChange={handleOrderChange}
+              containerClassName="relative"
+              render={(property, _index, { dragHandleRef }) => renderPropertyChip(property, dragHandleRef)}
+            />
+          ) : (
+            nonIdDisplayProperties.map((property) => renderPropertyChip(property))
+          )}
         </div>
       )}
     </>
