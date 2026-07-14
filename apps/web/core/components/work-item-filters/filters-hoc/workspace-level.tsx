@@ -151,7 +151,6 @@ export const WorkspaceLevelWorkItemFiltersHOC = observer(function WorkspaceLevel
             title: "Success!",
             message: "Your view has been updated successfully.",
           });
-          return undefined;
         })
         .catch(() => {
           setToast({
