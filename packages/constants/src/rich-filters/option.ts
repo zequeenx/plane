@@ -30,6 +30,7 @@ export type TClearFilterOptions = {
  */
 export type TSaveViewOptions<E extends TExternalFilter> = {
   label?: string;
+  hasAdditionalChanges?: boolean;
   onViewSave: (expression: E) => void | Promise<void>;
   isDisabled?: boolean;
 };

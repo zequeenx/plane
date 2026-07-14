@@ -138,8 +138,12 @@ export class FilterInstanceHelper<
       return;
     }
 
-    // If filter has active filters, make it visible
-    if (this._filterInstance.hasActiveFilters) {
+    // If a filter or view action is active, make it visible
+    if (
+      this._filterInstance.hasActiveFilters ||
+      this._filterInstance.canSaveView ||
+      this._filterInstance.canUpdateView
+    ) {
       this.isVisible = true;
       return;
     }

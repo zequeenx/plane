@@ -12,6 +12,7 @@ import { EUserPermissionsLevel } from "@plane/constants";
 import { setToast, TOAST_TYPE } from "@plane/propel/toast";
 import type { IProjectView, TWorkItemFilterExpression } from "@plane/types";
 import { EUserProjectRoles, EViewAccess } from "@plane/types";
+import { hasExplicitSpreadsheetColumnOrder, hasSpreadsheetColumnOrderChanged } from "@plane/utils";
 // components
 import { removeNillKeys } from "@/components/issues/issue-layouts/utils";
 import { CreateUpdateProjectViewModal } from "@/components/views/modal";
@@ -104,6 +105,11 @@ export const ProjectLevelWorkItemFiltersHOC = observer(function ProjectLevelWork
   );
   const createViewLabel = useMemo(() => props.saveViewOptions?.label, [props.saveViewOptions?.label]);
   const updateViewLabel = useMemo(() => props.updateViewOptions?.label, [props.updateViewOptions?.label]);
+  const currentSpreadsheetColumnOrder = initialWorkItemFilters?.displayFilters?.spreadsheet?.column_order;
+  const savedSpreadsheetColumnOrder = viewDetails?.display_filters?.spreadsheet?.column_order;
+  const hasSaveViewAdditionalChanges = viewDetails
+    ? hasSpreadsheetColumnOrderChanged(currentSpreadsheetColumnOrder, savedSpreadsheetColumnOrder)
+    : hasExplicitSpreadsheetColumnOrder(initialWorkItemFilters?.displayFilters);
   const hasAdditionalChanges = useMemo(
     () =>
       !isEqual(initialWorkItemFilters?.displayFilters, viewDetails?.display_filters) ||
@@ -183,9 +189,10 @@ export const ProjectLevelWorkItemFiltersHOC = observer(function ProjectLevelWork
     () => ({
       label: createViewLabel,
       isDisabled: !canCreateView,
+      hasAdditionalChanges: hasSaveViewAdditionalChanges,
       onViewSave: handleViewSave,
     }),
-    [createViewLabel, canCreateView, handleViewSave]
+    [createViewLabel, canCreateView, hasSaveViewAdditionalChanges, handleViewSave]
   );
 
   const updateViewOptions = useMemo(

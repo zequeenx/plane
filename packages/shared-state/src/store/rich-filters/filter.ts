@@ -296,7 +296,11 @@ export class FilterInstance<P extends TFilterProperty, E extends TExternalFilter
    * @returns True if the filter instance can be saved, false otherwise.
    */
   get canSaveView(): IFilterInstance<P, E>["canSaveView"] {
-    return this.hasActiveFilters && !!this.saveViewOptions && !this.saveViewOptions.isDisabled;
+    return (
+      (this.hasActiveFilters || !!this.saveViewOptions?.hasAdditionalChanges) &&
+      !!this.saveViewOptions &&
+      !this.saveViewOptions.isDisabled
+    );
   }
 
   /**
@@ -544,6 +548,9 @@ export class FilterInstance<P extends TFilterProperty, E extends TExternalFilter
       ...this.expressionOptions,
       ...newOptions,
     };
+    if (!this.isVisible && (this.canSaveView || this.canUpdateView)) {
+      this.helper.toggleVisibility(true);
+    }
   });
 
   // ------------ private helpers ------------
