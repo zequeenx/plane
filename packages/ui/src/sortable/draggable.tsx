@@ -57,8 +57,16 @@ function Draggable({ children, data, className, orientation = "vertical" }: Prop
             setIsDraggedOver(true);
             setClosestEdge(extractClosestEdge(args.self.data));
           },
-          onDragLeave: () => setIsDraggedOver(false),
-          onDrop: () => setIsDraggedOver(false),
+          // @ts-expect-error Due to live server dependencies
+          onDrag: ({ self }) => setClosestEdge(extractClosestEdge(self.data)),
+          onDragLeave: () => {
+            setIsDraggedOver(false);
+            setClosestEdge(null);
+          },
+          onDrop: () => {
+            setIsDraggedOver(false);
+            setClosestEdge(null);
+          },
           // @ts-expect-error Due to live server dependencies
           canDrop: ({ source }) =>
             !isEqual(source.data, draggableData) && source.data.__uuid__ === draggableData.__uuid__,
