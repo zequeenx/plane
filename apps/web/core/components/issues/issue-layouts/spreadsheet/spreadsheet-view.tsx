@@ -8,7 +8,7 @@ import React, { useEffect, useMemo, useRef } from "react";
 import { observer } from "mobx-react";
 import { useParams } from "next/navigation";
 // plane constants
-import { SPREADSHEET_SELECT_GROUP, SPREADSHEET_PROPERTY_LIST } from "@plane/constants";
+import { SPREADSHEET_SELECT_GROUP } from "@plane/constants";
 // types
 import type { TIssue, IIssueDisplayFilterOptions, IIssueDisplayProperties } from "@plane/types";
 import { EIssueLayoutTypes } from "@plane/types";
@@ -25,6 +25,7 @@ import { IssueBulkOperationsRoot } from "@/plane-web/components/issues/bulk-oper
 import type { TRenderQuickActions } from "../list/list-view-types";
 import { SpreadsheetAddIssueButton } from "../quick-add/button/spreadsheet";
 import { QuickAddIssueRoot } from "../quick-add/root";
+import { getAvailableSpreadsheetColumns, getVisibleSpreadsheetColumns } from "./column-order";
 import { SpreadsheetTable } from "./spreadsheet-table";
 
 type Props = {
@@ -110,42 +111,29 @@ export const SpreadsheetView = observer(function SpreadsheetView(props: Props) {
   ]);
 
   const spreadsheetColumnsList = useMemo(() => {
-    const systemColumns = isWorkspaceLevel
-      ? SPREADSHEET_PROPERTY_LIST
-      : SPREADSHEET_PROPERTY_LIST.filter((property) => {
-          if (property === "cycle" && !currentProjectDetails?.cycle_view) return false;
-          if (property === "modules" && !currentProjectDetails?.module_view) return false;
-          return true;
-        });
+    const availableColumns = getAvailableSpreadsheetColumns({
+      cycleViewEnabled: isWorkspaceLevel || !!currentProjectDetails?.cycle_view,
+      estimateEnabled: isEstimateEnabled,
+      moduleViewEnabled: isWorkspaceLevel || !!currentProjectDetails?.module_view,
+      projectFieldIds: projectIssueFields?.map((field) => field.id) ?? [],
+      moduleFieldIds: moduleIssueFields?.map((field) => field.id) ?? [],
+      workspaceLevel: isWorkspaceLevel,
+    });
 
-    const customColumns = isProjectScopedView
-      ? projectIssueFields?.reduce<(keyof IIssueDisplayProperties)[]>((acc, field) => {
-          const property = `customproperty_${field.id}` as keyof IIssueDisplayProperties;
-          if (displayProperties[property]) acc.push(property);
-
-          return acc;
-        }, [])
-      : undefined;
-    const moduleCustomColumns =
-      isProjectScopedView && sourceModuleId
-        ? moduleIssueFields?.reduce<(keyof IIssueDisplayProperties)[]>((acc, field) => {
-            const property = `modulecustomproperty_${field.id}` as keyof IIssueDisplayProperties;
-            if (displayProperties[property]) acc.push(property);
-
-            return acc;
-          }, [])
-        : undefined;
-
-    return [...systemColumns, ...(customColumns ?? []), ...(moduleCustomColumns ?? [])];
+    return getVisibleSpreadsheetColumns({
+      availableColumns,
+      displayProperties,
+      savedOrder: displayFilters.spreadsheet?.column_order,
+    });
   }, [
     currentProjectDetails?.cycle_view,
     currentProjectDetails?.module_view,
+    displayFilters.spreadsheet?.column_order,
     displayProperties,
+    isEstimateEnabled,
     isWorkspaceLevel,
-    isProjectScopedView,
     moduleIssueFields,
     projectIssueFields,
-    sourceModuleId,
   ]);
 
   if (!issueIds || issueIds.length === 0) return <></>;
