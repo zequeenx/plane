@@ -16,7 +16,15 @@ type TDisplayPropertyChipElement = React.ReactElement<
   typeof DisplayPropertyChip
 >;
 
-type TButtonElement = React.ReactElement<React.ButtonHTMLAttributes<HTMLButtonElement>, "button">;
+type TButtonElement = React.ReactElement<
+  React.ButtonHTMLAttributes<HTMLButtonElement> & React.RefAttributes<HTMLButtonElement>,
+  "button"
+>;
+
+type THandleWrapperElement = React.ReactElement<
+  React.HTMLAttributes<HTMLSpanElement> & React.RefAttributes<HTMLSpanElement> & { children: TButtonElement },
+  "span"
+>;
 
 type TSortableProps = {
   data: TDisplayPropertyOption[];
@@ -126,16 +134,22 @@ const findSortableChip = (label: string) => {
   return chip;
 };
 
+const getElementRef = <T,>(element: React.ReactElement | undefined) =>
+  (element as (React.ReactElement & { ref: React.Ref<T> | null }) | undefined)?.ref;
+
 const getChipControls = (chip: TDisplayPropertyChipElement) => {
   const tree = DisplayPropertyChip(chip.props);
   const children = React.Children.toArray(tree.props.children).filter(React.isValidElement) as React.ReactElement[];
   const labelButton = children.at(-1) as TButtonElement;
   const tooltip = chip.props.isSortable ? children[0] : undefined;
-  const handleButton = tooltip
-    ? ((tooltip as React.ReactElement<{ children: TButtonElement }>).props.children as TButtonElement)
+  const handleWrapper = tooltip
+    ? ((tooltip as React.ReactElement<{ children: THandleWrapperElement }>).props.children as THandleWrapperElement)
+    : undefined;
+  const handleButton = handleWrapper
+    ? (React.Children.only(handleWrapper.props.children) as TButtonElement)
     : undefined;
 
-  return { handleButton, labelButton, tree };
+  return { handleButton, handleWrapper, labelButton, tree };
 };
 
 describe("FilterDisplayProperties", () => {
@@ -168,6 +182,17 @@ describe("FilterDisplayProperties", () => {
     expect(priorityControls.handleButton?.props["aria-label"]).toBe("common.drag_to_rearrange: common.priority");
     expect(markup).toContain('data-tooltip-content="common.drag_to_rearrange"');
     expect(markup.match(/lucide-grip-vertical/g)).toHaveLength(2);
+  });
+
+  it("keeps the sortable handle ref below the Tooltip wrapper", () => {
+    renderProperties("spreadsheet");
+    const chip = findSortableChip("common.state");
+    const { handleButton, handleWrapper } = getChipControls(chip);
+
+    expect(handleWrapper?.type).toBe("span");
+    expect(getElementRef<HTMLSpanElement>(handleWrapper)).toBeNull();
+    expect(handleButton?.type).toBe("button");
+    expect(getElementRef<HTMLButtonElement>(handleButton)).toBe(chip.props.dragHandleRef);
   });
 
   it("does not render a handle for ID or any List-layout chip", () => {

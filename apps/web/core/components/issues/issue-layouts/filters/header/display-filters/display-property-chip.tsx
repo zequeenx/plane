@@ -38,16 +38,18 @@ export function DisplayPropertyChip(props: Props) {
     >
       {isSortable && (
         <Tooltip tooltipContent={reorderLabel}>
-          <button
-            ref={dragHandleRef}
-            type="button"
-            aria-label={`${reorderLabel}: ${label}`}
-            aria-keyshortcuts="ArrowLeft ArrowRight"
-            className="grid size-5 shrink-0 cursor-grab place-items-center active:cursor-grabbing"
-            onKeyDown={handleKeyDown}
-          >
-            <GripVertical className="size-3" />
-          </button>
+          <span className="inline-flex size-5 shrink-0">
+            <button
+              ref={dragHandleRef}
+              type="button"
+              aria-label={`${reorderLabel}: ${label}`}
+              aria-keyshortcuts="ArrowLeft ArrowRight"
+              className="grid size-5 shrink-0 cursor-grab place-items-center active:cursor-grabbing"
+              onKeyDown={handleKeyDown}
+            >
+              <GripVertical className="size-3" />
+            </button>
+          </span>
         </Tooltip>
       )}
       <button type="button" className="min-w-0 truncate px-2 py-0.5" title={label} onClick={onToggle}>
