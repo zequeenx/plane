@@ -79,6 +79,47 @@ class TestProjectViewAPI(TestProjectViewBase):
         assert IssueView.objects.get(id=response.json()["id"]).access == 0
 
     @pytest.mark.django_db
+    def test_create_and_update_project_view_preserves_spreadsheet_column_order(
+        self, session_client, workspace, create_user
+    ):
+        project = self.create_project(workspace, create_user)
+        custom_field_id = str(uuid.uuid4())
+        initial_column_order = ["state", custom_field_id, "priority"]
+        payload = self.payload()
+        payload["display_filters"] = {
+            "layout": "spreadsheet",
+            "group_by": None,
+            "order_by": "-created_at",
+            "spreadsheet": {"column_order": initial_column_order},
+        }
+
+        create_response = session_client.post(
+            self.get_project_view_url(workspace.slug, project.id), payload, format="json"
+        )
+
+        assert create_response.status_code == status.HTTP_201_CREATED
+        assert create_response.json()["display_filters"]["spreadsheet"]["column_order"] == initial_column_order
+        project_view = IssueView.objects.get(id=create_response.json()["id"])
+        assert project_view.display_filters["spreadsheet"]["column_order"] == initial_column_order
+
+        updated_column_order = [custom_field_id, "priority", "state"]
+        updated_display_filters = {
+            **payload["display_filters"],
+            "spreadsheet": {"column_order": updated_column_order},
+        }
+
+        update_response = session_client.patch(
+            self.get_project_view_url(workspace.slug, project.id, project_view.id),
+            {"display_filters": updated_display_filters},
+            format="json",
+        )
+
+        assert update_response.status_code == status.HTTP_200_OK
+        assert update_response.json()["display_filters"]["spreadsheet"]["column_order"] == updated_column_order
+        project_view.refresh_from_db()
+        assert project_view.display_filters["spreadsheet"]["column_order"] == updated_column_order
+
+    @pytest.mark.django_db
     def test_member_can_list_and_retrieve_another_users_public_view(self, session_client, workspace, create_user):
         project = self.create_project(workspace, create_user)
         public_view = self.create_view(workspace, project, create_user, access=1, name="Public")
