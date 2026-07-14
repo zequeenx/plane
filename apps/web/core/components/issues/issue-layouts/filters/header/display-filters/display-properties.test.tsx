@@ -3,6 +3,7 @@ import type { IIssueDisplayFilterOptions, IIssueDisplayProperties } from "@plane
 import { renderToStaticMarkup } from "react-dom/server";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+import { DisplayPropertyChip } from "./display-property-chip";
 import { FilterDisplayProperties } from "./display-properties";
 
 type TDisplayPropertyOption = {
@@ -10,14 +11,12 @@ type TDisplayPropertyOption = {
   label: string;
 };
 
-type TDisplayPropertyChipProps = {
-  dragHandleRef?: React.RefCallback<HTMLButtonElement>;
-  isEnabled: boolean;
-  isSortable: boolean;
-  label: string;
-  onMove: (offset: -1 | 1) => void;
-  onToggle: () => void;
-};
+type TDisplayPropertyChipElement = React.ReactElement<
+  React.ComponentProps<typeof DisplayPropertyChip>,
+  typeof DisplayPropertyChip
+>;
+
+type TButtonElement = React.ReactElement<React.ButtonHTMLAttributes<HTMLButtonElement>, "button">;
 
 type TSortableProps = {
   data: TDisplayPropertyOption[];
@@ -33,7 +32,6 @@ type TSortableProps = {
 };
 
 const mocks = vi.hoisted(() => ({
-  chipProps: [] as TDisplayPropertyChipProps[],
   moduleFields: undefined as { id: string; name: string }[] | undefined,
   params: {
     moduleId: undefined as string | undefined,
@@ -41,6 +39,7 @@ const mocks = vi.hoisted(() => ({
     workspaceSlug: undefined as string | undefined,
   },
   projectFields: undefined as { id: string; name: string }[] | undefined,
+  sortableChipElements: [] as TDisplayPropertyChipElement[],
   sortableProps: [] as TSortableProps[],
 }));
 
@@ -56,18 +55,29 @@ vi.mock("@plane/i18n", () => ({
   useTranslation: () => ({ t: (key: string) => key }),
 }));
 
-vi.mock("@plane/ui", () => ({
-  Sortable: (props: TSortableProps) => {
-    mocks.sortableProps.push(props);
-    return (
-      <>
-        {props.data.map((item, index) => (
-          <React.Fragment key={item.key}>{props.render(item, index, { dragHandleRef: vi.fn() })}</React.Fragment>
-        ))}
-      </>
-    );
-  },
-}));
+vi.mock("@plane/ui", async (importOriginal) => {
+  const original = await importOriginal<typeof import("@plane/ui")>();
+
+  return {
+    ...original,
+    Sortable: (props: TSortableProps) => {
+      mocks.sortableProps.push(props);
+      return (
+        <>
+          {props.data.map((item, index) => {
+            const element = props.render(item, index, { dragHandleRef: vi.fn() });
+            if (React.isValidElement(element)) mocks.sortableChipElements.push(element as TDisplayPropertyChipElement);
+
+            return <React.Fragment key={item.key}>{element}</React.Fragment>;
+          })}
+        </>
+      );
+    },
+    Tooltip: ({ children, tooltipContent }: { children: React.ReactElement; tooltipContent: React.ReactNode }) => (
+      <span data-tooltip-content={tooltipContent}>{children}</span>
+    ),
+  };
+});
 
 vi.mock("@/hooks/store/use-module-issue-fields", () => ({
   useModuleIssueFields: () => ({
@@ -89,13 +99,6 @@ vi.mock("../helpers/filter-header", () => ({
   FilterHeader: () => null,
 }));
 
-vi.mock("./display-property-chip", () => ({
-  DisplayPropertyChip: (props: TDisplayPropertyChipProps) => {
-    mocks.chipProps.push(props);
-    return <span>{props.label}</span>;
-  },
-}));
-
 const renderProperties = (
   layout: IIssueDisplayFilterOptions["layout"],
   overrides: Partial<React.ComponentProps<typeof FilterDisplayProperties>> = {}
@@ -103,7 +106,7 @@ const renderProperties = (
   const handleDisplayFiltersUpdate = vi.fn();
   const handleUpdate = vi.fn();
 
-  renderToStaticMarkup(
+  const markup = renderToStaticMarkup(
     <FilterDisplayProperties
       displayFilters={{ layout }}
       displayProperties={{ key: true, priority: false, state: true }}
@@ -114,40 +117,67 @@ const renderProperties = (
     />
   );
 
-  return { handleDisplayFiltersUpdate, handleUpdate };
+  return { handleDisplayFiltersUpdate, handleUpdate, markup };
+};
+
+const findSortableChip = (label: string) => {
+  const chip = mocks.sortableChipElements.find((element) => element.props.label === label);
+  if (!chip) throw new Error(`Expected sortable chip with label: ${label}`);
+  return chip;
+};
+
+const getChipControls = (chip: TDisplayPropertyChipElement) => {
+  const tree = DisplayPropertyChip(chip.props);
+  const children = React.Children.toArray(tree.props.children).filter(React.isValidElement) as React.ReactElement[];
+  const labelButton = children.at(-1) as TButtonElement;
+  const tooltip = chip.props.isSortable ? children[0] : undefined;
+  const handleButton = tooltip
+    ? ((tooltip as React.ReactElement<{ children: TButtonElement }>).props.children as TButtonElement)
+    : undefined;
+
+  return { handleButton, labelButton, tree };
 };
 
 describe("FilterDisplayProperties", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mocks.chipProps.length = 0;
+    mocks.sortableChipElements.length = 0;
     mocks.sortableProps.length = 0;
     mocks.params = { moduleId: undefined, projectId: undefined, workspaceSlug: undefined };
     mocks.projectFields = undefined;
     mocks.moduleFields = undefined;
   });
 
-  it("renders sortable Spreadsheet handles for enabled and disabled fields while keeping ID fixed", () => {
-    renderProperties("spreadsheet");
+  it("renders selected and unselected Spreadsheet chips with separate handle and label controls", () => {
+    const { markup } = renderProperties("spreadsheet");
+    const stateControls = getChipControls(findSortableChip("common.state"));
+    const priorityControls = getChipControls(findSortableChip("common.priority"));
 
     expect(mocks.sortableProps).toHaveLength(1);
     expect(mocks.sortableProps[0]).toMatchObject({
       id: "table-display-properties",
       orientation: "horizontal",
     });
-    expect(mocks.chipProps.map(({ isEnabled, isSortable, label }) => ({ isEnabled, isSortable, label }))).toEqual([
-      { isEnabled: true, isSortable: false, label: "issue.display.properties.id" },
-      { isEnabled: true, isSortable: true, label: "common.state" },
-      { isEnabled: false, isSortable: true, label: "common.priority" },
-    ]);
+    expect(stateControls.tree.props.className).toContain("border-accent-strong bg-accent-primary text-on-color");
+    expect(priorityControls.tree.props.className).toContain("border-subtle hover:bg-layer-1");
+    expect(stateControls.handleButton?.type).toBe("button");
+    expect(stateControls.labelButton.type).toBe("button");
+    expect(stateControls.handleButton).not.toBe(stateControls.labelButton);
+    expect(stateControls.handleButton?.props["aria-label"]).toBe("common.drag_to_rearrange: common.state");
+    expect(priorityControls.handleButton?.props["aria-label"]).toBe("common.drag_to_rearrange: common.priority");
+    expect(markup).toContain('data-tooltip-content="common.drag_to_rearrange"');
+    expect(markup.match(/lucide-grip-vertical/g)).toHaveLength(2);
   });
 
-  it("does not render sortable handles outside Spreadsheet layout", () => {
-    renderProperties("list");
+  it("does not render a handle for ID or any List-layout chip", () => {
+    const spreadsheetMarkup = renderProperties("spreadsheet").markup;
+    const listMarkup = renderProperties("list").markup;
 
-    expect(mocks.sortableProps).toHaveLength(0);
-    expect(mocks.chipProps).toHaveLength(3);
-    expect(mocks.chipProps.every((props) => !props.isSortable && props.dragHandleRef === undefined)).toBe(true);
+    expect(spreadsheetMarkup).toContain("issue.display.properties.id");
+    expect(spreadsheetMarkup).not.toContain("common.drag_to_rearrange: issue.display.properties.id");
+    expect(listMarkup).not.toContain("common.drag_to_rearrange:");
+    expect(listMarkup).not.toContain("lucide-grip-vertical");
+    expect(listMarkup.match(/<button/g)).toHaveLength(3);
   });
 
   it("resolves system, project, and module fields into one Spreadsheet order after fixed ID", () => {
@@ -155,7 +185,7 @@ describe("FilterDisplayProperties", () => {
     mocks.projectFields = [{ id: "customer-tier", name: "Customer tier" }];
     mocks.moduleFields = [{ id: "effort", name: "Effort" }];
 
-    renderProperties("spreadsheet", {
+    const { markup } = renderProperties("spreadsheet", {
       displayFilters: {
         layout: "spreadsheet",
         spreadsheet: {
@@ -165,14 +195,6 @@ describe("FilterDisplayProperties", () => {
       displayPropertiesToRender: ["key", "state", "created_on", "updated_on"],
     });
 
-    expect(mocks.chipProps.map(({ label }) => label)).toEqual([
-      "issue.display.properties.id",
-      "Effort",
-      "common.updated_on",
-      "Customer tier",
-      "common.state",
-      "common.created_on",
-    ]);
     expect(mocks.sortableProps[0].data.map(({ key }) => key)).toEqual([
       "modulecustomproperty_effort",
       "updated_on",
@@ -180,6 +202,7 @@ describe("FilterDisplayProperties", () => {
       "state",
       "created_on",
     ]);
+    expect(markup.indexOf("issue.display.properties.id")).toBeLessThan(markup.indexOf("Effort"));
   });
 
   it("emits the complete Spreadsheet order after a drop, including unchecked fields", () => {
@@ -193,29 +216,63 @@ describe("FilterDisplayProperties", () => {
     });
   });
 
-  it("toggles a chip through only the display-properties update handler", () => {
+  it("uses only the label button to toggle display-property visibility", () => {
     const { handleDisplayFiltersUpdate, handleUpdate } = renderProperties("spreadsheet");
-    const priorityChip = mocks.chipProps.find(({ label }) => label === "common.priority");
+    const { handleButton, labelButton } = getChipControls(findSortableChip("common.priority"));
 
-    priorityChip?.onToggle();
+    labelButton.props.onClick?.({} as React.MouseEvent<HTMLButtonElement>);
 
     expect(handleUpdate).toHaveBeenCalledWith({ priority: true });
     expect(handleDisplayFiltersUpdate).not.toHaveBeenCalled();
+
+    handleUpdate.mockClear();
+    handleButton?.props.onClick?.({} as React.MouseEvent<HTMLButtonElement>);
+
+    expect(handleButton?.props.onClick).toBeUndefined();
+    expect(handleUpdate).not.toHaveBeenCalled();
+    expect(handleDisplayFiltersUpdate).not.toHaveBeenCalled();
   });
 
-  it("emits complete orders for keyboard moves and preserves the order at a boundary", () => {
+  it("moves complete orders only for actual handle arrow keys and preserves boundaries", () => {
     const { handleDisplayFiltersUpdate } = renderProperties("spreadsheet");
-    const stateChip = mocks.chipProps.find(({ label }) => label === "common.state");
-    const priorityChip = mocks.chipProps.find(({ label }) => label === "common.priority");
+    const stateHandle = getChipControls(findSortableChip("common.state")).handleButton;
+    const priorityHandle = getChipControls(findSortableChip("common.priority")).handleButton;
+    const unrelatedPreventDefault = vi.fn();
+    const leftPreventDefault = vi.fn();
+    const rightPreventDefault = vi.fn();
+    const boundaryPreventDefault = vi.fn();
 
-    priorityChip?.onMove(-1);
-    stateChip?.onMove(-1);
+    priorityHandle?.props.onKeyDown?.({
+      key: "Enter",
+      preventDefault: unrelatedPreventDefault,
+    } as unknown as React.KeyboardEvent<HTMLButtonElement>);
+    priorityHandle?.props.onKeyDown?.({
+      key: "ArrowLeft",
+      preventDefault: leftPreventDefault,
+    } as unknown as React.KeyboardEvent<HTMLButtonElement>);
+    stateHandle?.props.onKeyDown?.({
+      key: "ArrowRight",
+      preventDefault: rightPreventDefault,
+    } as unknown as React.KeyboardEvent<HTMLButtonElement>);
+    stateHandle?.props.onKeyDown?.({
+      key: "ArrowLeft",
+      preventDefault: boundaryPreventDefault,
+    } as unknown as React.KeyboardEvent<HTMLButtonElement>);
+
+    expect(unrelatedPreventDefault).not.toHaveBeenCalled();
+    expect(leftPreventDefault).toHaveBeenCalledOnce();
+    expect(rightPreventDefault).toHaveBeenCalledOnce();
+    expect(boundaryPreventDefault).toHaveBeenCalledOnce();
 
     expect(handleDisplayFiltersUpdate).toHaveBeenNthCalledWith(1, {
       spreadsheet: { column_order: ["priority", "state"] },
     });
     expect(handleDisplayFiltersUpdate).toHaveBeenNthCalledWith(2, {
+      spreadsheet: { column_order: ["priority", "state"] },
+    });
+    expect(handleDisplayFiltersUpdate).toHaveBeenNthCalledWith(3, {
       spreadsheet: { column_order: ["state", "priority"] },
     });
+    expect(handleDisplayFiltersUpdate).toHaveBeenCalledTimes(3);
   });
 });
