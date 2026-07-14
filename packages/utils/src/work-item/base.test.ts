@@ -6,9 +6,39 @@
 
 import { describe, expect, it } from "vitest";
 
-import type { IIssueDisplayProperties } from "@plane/types";
+import type { IIssueDisplayFilterOptions, IIssueDisplayProperties } from "@plane/types";
 
-import { getComputedDisplayProperties } from "./base";
+import { getComputedDisplayFilters, getComputedDisplayProperties } from "./base";
+
+describe("getComputedDisplayFilters", () => {
+  it("preserves spreadsheet column order", () => {
+    const displayFilters: IIssueDisplayFilterOptions = {
+      layout: "spreadsheet",
+      spreadsheet: {
+        column_order: ["priority", "customproperty_customer-tier", "assignee"],
+      },
+    };
+
+    expect(getComputedDisplayFilters(displayFilters)).toEqual(
+      expect.objectContaining({
+        layout: "spreadsheet",
+        spreadsheet: {
+          column_order: ["priority", "customproperty_customer-tier", "assignee"],
+        },
+      })
+    );
+  });
+
+  it("drops malformed spreadsheet column order", () => {
+    const displayFilters = {
+      spreadsheet: {
+        column_order: "priority",
+      },
+    } as unknown as IIssueDisplayFilterOptions;
+
+    expect(getComputedDisplayFilters(displayFilters)).not.toHaveProperty("spreadsheet");
+  });
+});
 
 describe("getComputedDisplayProperties", () => {
   it("preserves persisted custom display property keys and drops unknown keys", () => {

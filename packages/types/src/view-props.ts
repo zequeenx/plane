@@ -173,6 +173,9 @@ export interface IIssueDisplayFilterOptions {
   layout?: any; // TODO: Need to fix this and set it to enum EIssueLayoutTypes
   order_by?: TIssueOrderByOptions;
   show_empty_groups?: boolean;
+  spreadsheet?: {
+    column_order?: (keyof IIssueDisplayProperties)[];
+  };
   sub_issue?: boolean;
 }
 export type IIssueDisplayProperties = Partial<Record<TCustomPropertyKey | TModuleCustomPropertyKey, boolean>> & {

@@ -275,6 +275,12 @@ export const getComputedDisplayFilters = (
   defaultValues?: IIssueDisplayFilterOptions
 ): IIssueDisplayFilterOptions => {
   const filters = !isEmpty(displayFilters) ? displayFilters : defaultValues;
+  const spreadsheetColumnOrder = Array.isArray(filters?.spreadsheet?.column_order)
+    ? filters.spreadsheet.column_order.filter(
+        (property): property is keyof IIssueDisplayProperties => typeof property === "string"
+      )
+    : undefined;
+
   return {
     calendar: {
       show_weekends: filters?.calendar?.show_weekends || false,
@@ -286,6 +292,7 @@ export const getComputedDisplayFilters = (
     sub_group_by: filters?.sub_group_by || null,
     sub_issue: filters?.sub_issue || false,
     show_empty_groups: filters?.show_empty_groups || false,
+    ...(spreadsheetColumnOrder !== undefined && { spreadsheet: { column_order: spreadsheetColumnOrder } }),
   };
 };
 
