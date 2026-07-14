@@ -164,6 +164,7 @@ describe("FilterDisplayProperties", () => {
     expect(stateControls.labelButton.type).toBe("button");
     expect(stateControls.handleButton).not.toBe(stateControls.labelButton);
     expect(stateControls.handleButton?.props["aria-label"]).toBe("common.drag_to_rearrange: common.state");
+    expect(stateControls.handleButton?.props["aria-keyshortcuts"]).toBe("ArrowLeft ArrowRight");
     expect(priorityControls.handleButton?.props["aria-label"]).toBe("common.drag_to_rearrange: common.priority");
     expect(markup).toContain('data-tooltip-content="common.drag_to_rearrange"');
     expect(markup.match(/lucide-grip-vertical/g)).toHaveLength(2);
@@ -178,6 +179,75 @@ describe("FilterDisplayProperties", () => {
     expect(listMarkup).not.toContain("common.drag_to_rearrange:");
     expect(listMarkup).not.toContain("lucide-grip-vertical");
     expect(listMarkup.match(/<button/g)).toHaveLength(3);
+  });
+
+  it("keeps Spreadsheet timestamp descriptors out of non-Spreadsheet layouts", () => {
+    const overrides = {
+      displayPropertiesToRender: ["created_on", "updated_on"] as (keyof IIssueDisplayProperties)[],
+    };
+
+    const spreadsheetMarkup = renderProperties("spreadsheet", overrides).markup;
+    const listMarkup = renderProperties("list", overrides).markup;
+    const kanbanMarkup = renderProperties("kanban", overrides).markup;
+
+    expect(spreadsheetMarkup).toContain("common.created_on");
+    expect(spreadsheetMarkup).toContain("common.updated_on");
+    expect(listMarkup).not.toContain("common.created_on");
+    expect(listMarkup).not.toContain("common.updated_on");
+    expect(kanbanMarkup).not.toContain("common.created_on");
+    expect(kanbanMarkup).not.toContain("common.updated_on");
+  });
+
+  it("waits for applicable custom metadata before enabling Spreadsheet reordering", () => {
+    mocks.params = { moduleId: "module-1", projectId: "project-1", workspaceSlug: "workspace-1" };
+    const overrides = {
+      displayFilters: {
+        layout: "spreadsheet",
+        spreadsheet: {
+          column_order: ["modulecustomproperty_effort", "customproperty_customer-tier", "state"],
+        },
+      } satisfies IIssueDisplayFilterOptions,
+      displayPropertiesToRender: ["key", "state"] as (keyof IIssueDisplayProperties)[],
+    };
+
+    const loadingRender = renderProperties("spreadsheet", overrides);
+
+    expect(mocks.sortableProps).toHaveLength(0);
+    expect(loadingRender.markup).toContain("common.state");
+    expect(loadingRender.markup).not.toContain("common.drag_to_rearrange:");
+    expect(loadingRender.handleDisplayFiltersUpdate).not.toHaveBeenCalled();
+
+    mocks.projectFields = [{ id: "customer-tier", name: "Customer tier" }];
+    mocks.moduleFields = [{ id: "effort", name: "Effort" }];
+    mocks.sortableChipElements.length = 0;
+    mocks.sortableProps.length = 0;
+
+    const loadedRender = renderProperties("spreadsheet", overrides);
+
+    expect(mocks.sortableProps).toHaveLength(1);
+    expect(mocks.sortableProps[0].data.map(({ key }) => key)).toEqual([
+      "modulecustomproperty_effort",
+      "customproperty_customer-tier",
+      "state",
+    ]);
+    expect(loadedRender.markup).toContain("common.drag_to_rearrange: Effort");
+    expect(loadedRender.markup).toContain("common.drag_to_rearrange: Customer tier");
+  });
+
+  it("constrains long custom labels while preserving their full accessible text", () => {
+    const longLabel = "Customer segment requiring an exceptionally long display property name";
+    mocks.params = { moduleId: undefined, projectId: "project-1", workspaceSlug: "workspace-1" };
+    mocks.projectFields = [{ id: "customer-segment", name: longLabel }];
+
+    renderProperties("spreadsheet");
+
+    const { handleButton, labelButton, tree } = getChipControls(findSortableChip(longLabel));
+    expect(tree.props.className).toContain("max-w-full");
+    expect(tree.props.className).toContain("min-w-0");
+    expect(handleButton?.props.className).toContain("shrink-0");
+    expect(labelButton.props.className).toContain("min-w-0");
+    expect(labelButton.props.className).toContain("truncate");
+    expect(labelButton.props.title).toBe(longLabel);
   });
 
   it("resolves system, project, and module fields into one Spreadsheet order after fixed ID", () => {

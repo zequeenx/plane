@@ -31,7 +31,7 @@ export function DisplayPropertyChip(props: Props) {
 
   return (
     <div
-      className={cn("flex items-center rounded-sm border text-11 transition-all", {
+      className={cn("flex max-w-full min-w-0 items-center rounded-sm border text-11 transition-all", {
         "border-accent-strong bg-accent-primary text-on-color": isEnabled,
         "border-subtle hover:bg-layer-1": !isEnabled,
       })}
@@ -42,14 +42,15 @@ export function DisplayPropertyChip(props: Props) {
             ref={dragHandleRef}
             type="button"
             aria-label={`${reorderLabel}: ${label}`}
-            className="grid size-5 cursor-grab place-items-center active:cursor-grabbing"
+            aria-keyshortcuts="ArrowLeft ArrowRight"
+            className="grid size-5 shrink-0 cursor-grab place-items-center active:cursor-grabbing"
             onKeyDown={handleKeyDown}
           >
             <GripVertical className="size-3" />
           </button>
         </Tooltip>
       )}
-      <button type="button" className="px-2 py-0.5" onClick={onToggle}>
+      <button type="button" className="min-w-0 truncate px-2 py-0.5" title={label} onClick={onToggle}>
         {label}
       </button>
     </div>

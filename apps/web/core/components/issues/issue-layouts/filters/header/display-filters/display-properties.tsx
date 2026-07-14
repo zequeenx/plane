@@ -28,6 +28,11 @@ type TDisplayPropertyOption = {
   label: string;
 };
 
+const SPREADSHEET_ONLY_DISPLAY_PROPERTIES: typeof ISSUE_DISPLAY_PROPERTIES = [
+  { key: "created_on", titleTranslationKey: "common.created_on" },
+  { key: "updated_on", titleTranslationKey: "common.updated_on" },
+];
+
 type Props = {
   displayFilters?: IIssueDisplayFilterOptions;
   displayProperties: IIssueDisplayProperties;
@@ -63,6 +68,10 @@ export const FilterDisplayProperties = observer(function FilterDisplayProperties
   const isProjectScopedView = !!workspaceSlug && !!currentProjectId;
   const fields = isProjectScopedView ? getFieldsByProjectId(currentProjectId) : undefined;
   const moduleFields = currentSourceModuleId ? getFieldsByModuleId(currentSourceModuleId) : undefined;
+  const isSpreadsheetLayout = props.displayFilters?.layout === EIssueLayoutTypes.SPREADSHEET;
+  const areCustomDisplayPropertiesReady =
+    (!isProjectScopedView || fields !== undefined) && (!currentSourceModuleId || moduleFields !== undefined);
+  const isColumnOrderingEnabled = isSpreadsheetLayout && areCustomDisplayPropertiesReady;
 
   useEffect(() => {
     if (!isProjectScopedView) return;
@@ -92,36 +101,36 @@ export const FilterDisplayProperties = observer(function FilterDisplayProperties
 
   // Filter out "cycle" and "module" keys if cycleViewDisabled or moduleViewDisabled is true
   // Also filter out display properties that should not be rendered
-  const filteredDisplayProperties = ISSUE_DISPLAY_PROPERTIES.reduce<typeof ISSUE_DISPLAY_PROPERTIES>(
-    (acc, property) => {
-      if (!displayPropertiesToRender.includes(property.key)) return acc;
+  const systemDisplayProperties: typeof ISSUE_DISPLAY_PROPERTIES = isSpreadsheetLayout
+    ? [...ISSUE_DISPLAY_PROPERTIES, ...SPREADSHEET_ONLY_DISPLAY_PROPERTIES]
+    : ISSUE_DISPLAY_PROPERTIES;
+  const filteredDisplayProperties = systemDisplayProperties.reduce<typeof ISSUE_DISPLAY_PROPERTIES>((acc, property) => {
+    if (!displayPropertiesToRender.includes(property.key)) return acc;
 
-      let shouldRender = true;
+    let shouldRender = true;
 
-      switch (property.key) {
-        case "cycle":
-          shouldRender = !cycleViewDisabled;
-          break;
-        case "modules":
-          shouldRender = !moduleViewDisabled;
-          break;
-      }
+    switch (property.key) {
+      case "cycle":
+        shouldRender = !cycleViewDisabled;
+        break;
+      case "modules":
+        shouldRender = !moduleViewDisabled;
+        break;
+    }
 
-      if (!shouldRender) return acc;
+    if (!shouldRender) return acc;
 
-      if (isEpic && property.key === "sub_issue_count") {
-        acc.push({
-          key: property.key,
-          titleTranslationKey: "issue.display.properties.work_item_count",
-        });
-        return acc;
-      }
-
-      acc.push(property);
+    if (isEpic && property.key === "sub_issue_count") {
+      acc.push({
+        key: property.key,
+        titleTranslationKey: "issue.display.properties.work_item_count",
+      });
       return acc;
-    },
-    []
-  );
+    }
+
+    acc.push(property);
+    return acc;
+  }, []);
 
   const customDisplayProperties =
     fields?.map((field) => ({
@@ -146,14 +155,13 @@ export const FilterDisplayProperties = observer(function FilterDisplayProperties
   ];
   const fixedIdProperty = allDisplayProperties.find((property) => property.key === "key");
   const nonIdDisplayProperties = allDisplayProperties.filter((property) => property.key !== "key");
-  const isSpreadsheetLayout = props.displayFilters?.layout === EIssueLayoutTypes.SPREADSHEET;
   const optionByKey = new Map(allDisplayProperties.map((property) => [property.key, property]));
   const availableOrder = [
     ...SPREADSHEET_PROPERTY_LIST.filter((property) => optionByKey.has(property)),
     ...customDisplayProperties.map((property) => property.key),
     ...moduleCustomDisplayProperties.map((property) => property.key),
   ];
-  const resolvedOrder = isSpreadsheetLayout
+  const resolvedOrder = isColumnOrderingEnabled
     ? resolveSpreadsheetColumnOrder(props.displayFilters?.spreadsheet?.column_order, availableOrder)
     : [];
   const orderedProperties = resolvedOrder.flatMap((property) => {
@@ -162,7 +170,7 @@ export const FilterDisplayProperties = observer(function FilterDisplayProperties
   });
 
   const handleColumnOrderChange = (columnOrder: (keyof IIssueDisplayProperties)[]) => {
-    if (!isSpreadsheetLayout) return;
+    if (!isColumnOrderingEnabled) return;
 
     props.handleDisplayFiltersUpdate?.({
       spreadsheet: {
@@ -184,7 +192,7 @@ export const FilterDisplayProperties = observer(function FilterDisplayProperties
       key={property.key}
       dragHandleRef={dragHandleRef}
       isEnabled={!!displayProperties[property.key]}
-      isSortable={isSpreadsheetLayout && property.key !== "key"}
+      isSortable={isColumnOrderingEnabled && property.key !== "key"}
       label={property.label}
       onMove={(offset) => handleKeyboardMove(property.key, offset)}
       onToggle={() => handleUpdate({ [property.key]: !displayProperties[property.key] })}
@@ -202,7 +210,7 @@ export const FilterDisplayProperties = observer(function FilterDisplayProperties
       {previewEnabled && (
         <div className="mt-1 flex flex-wrap items-center gap-2">
           {fixedIdProperty && renderPropertyChip(fixedIdProperty)}
-          {isSpreadsheetLayout ? (
+          {isColumnOrderingEnabled ? (
             <Sortable
               data={orderedProperties}
               id="table-display-properties"

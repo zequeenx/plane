@@ -210,8 +210,6 @@ export const ISSUE_DISPLAY_PROPERTIES: {
     key: "estimate",
     titleTranslationKey: "common.estimate",
   },
-  { key: "created_on", titleTranslationKey: "common.created_on" },
-  { key: "updated_on", titleTranslationKey: "common.updated_on" },
   { key: "modules", titleTranslationKey: "common.module" },
   { key: "cycle", titleTranslationKey: "common.cycle" },
 ];
