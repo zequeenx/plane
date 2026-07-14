@@ -17,7 +17,7 @@ import {
   // @ts-expect-error Due to live server dependencies
 } from "@atlaskit/pragmatic-drag-and-drop-hitbox/dist/cjs/closest-edge.js";
 import { isEqual } from "lodash-es";
-import React, { useCallback, useEffect, useRef, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { DropIndicator } from "../drop-indicator";
 import { cn } from "../utils";
 import type { TSortableRenderHelpers } from "./sortable";
@@ -37,11 +37,13 @@ type Props = {
 
 function Draggable({ children, data, className, orientation = "vertical" }: Props) {
   const ref = useRef<HTMLDivElement>(null);
-  const [dragHandle, setDragHandle] = useState<HTMLButtonElement | null>(null);
+  const dragHandleRef = useRef<HTMLButtonElement | null>(null);
+  const dragHandleCallbackRef = useRef<React.RefCallback<HTMLButtonElement>>((element) => {
+    dragHandleRef.current = element;
+  });
   const [dragging, setDragging] = useState<boolean>(false);
   const [isDraggedOver, setIsDraggedOver] = useState(false);
   const [closestEdge, setClosestEdge] = useState<TSortableEdge | null>(null);
-  const dragHandleRef = useCallback<React.RefCallback<HTMLButtonElement>>((element) => setDragHandle(element), []);
 
   useEffect(() => {
     const el = ref.current;
@@ -51,7 +53,7 @@ function Draggable({ children, data, className, orientation = "vertical" }: Prop
       return combine(
         draggable({
           element: el,
-          dragHandle: dragHandle ?? undefined,
+          dragHandle: dragHandleRef.current ?? undefined,
           onDragStart: () => setDragging(true),
           onDrop: () => setDragging(false),
           getInitialData: () => draggableData,
@@ -88,7 +90,7 @@ function Draggable({ children, data, className, orientation = "vertical" }: Prop
         })
       );
     }
-  }, [data, dragHandle, orientation]);
+  }, [data, orientation]);
 
   const beforeEdge = orientation === "horizontal" ? "left" : "top";
   const afterEdge = orientation === "horizontal" ? "right" : "bottom";
@@ -101,7 +103,7 @@ function Draggable({ children, data, className, orientation = "vertical" }: Prop
         orientation={indicatorOrientation}
         classNames={cn(orientation === "horizontal" && "absolute top-0 bottom-0 left-[-1px]")}
       />
-      {typeof children === "function" ? children({ dragHandleRef }) : children}
+      {typeof children === "function" ? children({ dragHandleRef: dragHandleCallbackRef.current }) : children}
       <DropIndicator
         isVisible={isDraggedOver && closestEdge === afterEdge}
         orientation={indicatorOrientation}
