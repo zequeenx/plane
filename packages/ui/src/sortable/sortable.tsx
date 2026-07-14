@@ -6,83 +6,61 @@
 
 // @ts-expect-error Due to live server dependencies
 import { monitorForElements } from "@atlaskit/pragmatic-drag-and-drop/dist/cjs/entry-point/element/adapter.js";
+import {
+  extractClosestEdge,
+  // @ts-expect-error Due to live server dependencies
+} from "@atlaskit/pragmatic-drag-and-drop-hitbox/dist/cjs/closest-edge.js";
 import React, { Fragment, useEffect, useMemo } from "react";
 import { Draggable } from "./draggable";
+import { moveSortableItem, type TSortableOrientation } from "./sortable-utils";
 
 type TEnhancedData<T> = T & { __uuid__?: string };
 
+export type TSortableRenderHelpers = {
+  dragHandleRef: React.MutableRefObject<HTMLButtonElement | null>;
+};
+
 type Props<T> = {
   data: TEnhancedData<T>[];
-  render: (item: T, index: number) => React.ReactNode;
+  render: (item: T, index: number, helpers: TSortableRenderHelpers) => React.ReactNode;
   onChange: (data: T[], movedItem?: T) => void;
   keyExtractor: (item: T, index: number) => string;
   containerClassName?: string;
   id?: string;
+  orientation?: TSortableOrientation;
 };
 
-const moveItem = <T,>(
-  data: TEnhancedData<T>[],
-  source: TEnhancedData<T>,
-  destination: TEnhancedData<T> & Record<symbol, string>,
-  keyExtractor: (item: T, index: number) => string
-): {
-  newData: T[];
-  movedItem: T | undefined;
-} => {
-  const sourceIndex = data.findIndex((item, index) => keyExtractor(item, index) === keyExtractor(source, 0));
-  if (sourceIndex === -1) return { newData: data, movedItem: undefined };
-
-  const destinationIndex = data.findIndex((item, index) => keyExtractor(item, index) === keyExtractor(destination, 0));
-
-  if (destinationIndex === -1) return { newData: data, movedItem: undefined };
-
-  const symbolKey = Reflect.ownKeys(destination).find((key) => key.toString() === "Symbol(closestEdge)");
-  const position = symbolKey ? destination[symbolKey as symbol] : "bottom"; // Add 'as symbol' to cast symbolKey to symbol
-
-  // Calculate final position before removing source item
-  const finalIndex = position === "bottom" ? destinationIndex + 1 : destinationIndex;
-
-  // Adjust for the fact that we're removing the source item first
-  // If source is before destination, removing it shifts everything back by 1
-  const adjustedDestinationIndex = finalIndex > sourceIndex ? finalIndex - 1 : finalIndex;
-
-  const newData = [...data];
-  const [movedItem] = newData.splice(sourceIndex, 1);
-
-  // Insert at the calculated position (bounds check is implicit in splice)
-  newData.splice(adjustedDestinationIndex, 0, movedItem);
-
-  const { __uuid__: movedItemId, ...movedItemData } = movedItem;
-  return {
-    newData: newData.map((item) => {
-      const { __uuid__: uuid, ...rest } = item;
-      return rest as T;
-    }),
-    movedItem: movedItemData as T,
-  };
-};
-
-export function Sortable<T>({ data, render, onChange, keyExtractor, containerClassName, id }: Props<T>) {
+export function Sortable<T>({
+  data,
+  render,
+  onChange,
+  keyExtractor,
+  containerClassName,
+  id,
+  orientation = "vertical",
+}: Props<T>) {
   useEffect(() => {
     const unsubscribe = monitorForElements({
       // @ts-expect-error Due to live server dependencies
       onDrop({ source, location }) {
         const destination = location?.current?.dropTargets[0];
         if (!destination) return;
-        const { newData, movedItem } = moveItem(
+
+        const edge = extractClosestEdge(destination.data);
+        if (!edge) return;
+
+        const { data: nextData, movedItem } = moveSortableItem(
           data,
-          source.data as TEnhancedData<T>,
-          destination.data as TEnhancedData<T> & { closestEdge: string },
+          source.data as T,
+          destination.data as T,
+          edge,
           keyExtractor
         );
-        onChange(newData, movedItem);
+        onChange(nextData, movedItem);
       },
     });
 
-    // Clean up the subscription on unmount
-    return () => {
-      if (unsubscribe) unsubscribe();
-    };
+    return unsubscribe;
   }, [data, keyExtractor, onChange]);
 
   const enhancedData = useMemo(() => {
@@ -94,11 +72,13 @@ export function Sortable<T>({ data, render, onChange, keyExtractor, containerCla
     <>
       {data.map((item, index) => (
         <Draggable
+          // oxlint-disable-next-line react/no-array-index-key -- keyExtractor returns the consumer's stable item key.
           key={keyExtractor(enhancedData[index], index)}
           data={enhancedData[index]}
           className={containerClassName}
+          orientation={orientation}
         >
-          <Fragment>{render(item, index)}</Fragment>
+          {(helpers) => <Fragment>{render(item, index, helpers)}</Fragment>}
         </Draggable>
       ))}
     </>

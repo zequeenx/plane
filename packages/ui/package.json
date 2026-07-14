@@ -18,6 +18,7 @@
     "dev": "tsdown --watch --no-clean",
     "storybook": "storybook dev -p 6006",
     "build-storybook": "storybook build",
+    "test": "vitest run",
     "postcss": "postcss styles/globals.css -o styles/output.css --watch",
     "check:lint": "oxlint --max-warnings=66 .",
     "check:types": "tsc --noEmit",
@@ -69,7 +70,8 @@
     "postcss-nested": "catalog:",
     "storybook": "catalog:",
     "tsdown": "catalog:",
-    "typescript": "catalog:"
+    "typescript": "catalog:",
+    "vitest": "catalog:"
   },
   "peerDependencies": {
     "react": "catalog:",

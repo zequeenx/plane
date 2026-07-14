@@ -5,6 +5,7 @@
  */
 
 import type { Meta, StoryObj } from "@storybook/react";
+import { GripVertical } from "lucide-react";
 import React from "react";
 import { Sortable } from "./sortable";
 
@@ -36,3 +37,40 @@ export default meta;
 type Story = StoryObj<typeof meta>;
 
 export const Default: Story = {};
+
+export const HorizontalWrapping: Story = {
+  render: function HorizontalWrappingStory() {
+    const [items, setItems] = React.useState([
+      { id: "state", name: "State" },
+      { id: "priority", name: "Priority" },
+      { id: "assignee", name: "Assignee" },
+      { id: "customer-tier", name: "Customer tier" },
+    ]);
+
+    return (
+      <div className="flex w-72 flex-wrap gap-2">
+        <Sortable
+          data={items}
+          id="horizontal-wrapping"
+          orientation="horizontal"
+          keyExtractor={(item) => item.id}
+          onChange={setItems}
+          containerClassName="relative"
+          render={(item, _index, { dragHandleRef }) => (
+            <div className="flex items-center rounded-sm border border-subtle px-2 py-1 text-11">
+              <button
+                ref={dragHandleRef}
+                type="button"
+                aria-label={`Reorder ${item.name}`}
+                className="cursor-grab text-placeholder active:cursor-grabbing"
+              >
+                <GripVertical className="size-3.5" />
+              </button>
+              <span className="ml-1">{item.name}</span>
+            </div>
+          )}
+        />
+      </div>
+    );
+  },
+};
