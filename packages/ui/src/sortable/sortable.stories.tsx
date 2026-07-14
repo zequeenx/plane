@@ -63,6 +63,22 @@ export const HorizontalWrapping: Story = {
                 type="button"
                 aria-label={`Reorder ${item.name}`}
                 className="cursor-grab text-placeholder active:cursor-grabbing"
+                onKeyDown={(event) => {
+                  if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") return;
+
+                  const offset = event.key === "ArrowLeft" ? -1 : 1;
+                  event.preventDefault();
+                  setItems((currentItems) => {
+                    const currentIndex = currentItems.findIndex(({ id }) => id === item.id);
+                    const nextIndex = Math.max(0, Math.min(currentItems.length - 1, currentIndex + offset));
+                    if (currentIndex < 0 || currentIndex === nextIndex) return currentItems;
+
+                    const nextItems = [...currentItems];
+                    const [movedItem] = nextItems.splice(currentIndex, 1);
+                    nextItems.splice(nextIndex, 0, movedItem);
+                    return nextItems;
+                  });
+                }}
               >
                 <GripVertical className="size-3.5" />
               </button>

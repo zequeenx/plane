@@ -17,11 +17,16 @@ import {
   // @ts-expect-error Due to live server dependencies
 } from "@atlaskit/pragmatic-drag-and-drop-hitbox/dist/cjs/closest-edge.js";
 import { isEqual } from "lodash-es";
-import React, { useEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import { DropIndicator } from "../drop-indicator";
 import { cn } from "../utils";
 import type { TSortableRenderHelpers } from "./sortable";
-import { getSortableEdges, type TSortableEdge, type TSortableOrientation } from "./sortable-utils";
+import {
+  getSortableEdges,
+  isSortablePayloadForId,
+  type TSortableEdge,
+  type TSortableOrientation,
+} from "./sortable-utils";
 
 type Props = {
   children: React.ReactNode | ((helpers: TSortableRenderHelpers) => React.ReactNode);
@@ -32,10 +37,11 @@ type Props = {
 
 function Draggable({ children, data, className, orientation = "vertical" }: Props) {
   const ref = useRef<HTMLDivElement>(null);
-  const dragHandleRef = useRef<HTMLButtonElement>(null);
+  const [dragHandle, setDragHandle] = useState<HTMLButtonElement | null>(null);
   const [dragging, setDragging] = useState<boolean>(false);
   const [isDraggedOver, setIsDraggedOver] = useState(false);
   const [closestEdge, setClosestEdge] = useState<TSortableEdge | null>(null);
+  const dragHandleRef = useCallback<React.RefCallback<HTMLButtonElement>>((element) => setDragHandle(element), []);
 
   useEffect(() => {
     const el = ref.current;
@@ -45,7 +51,7 @@ function Draggable({ children, data, className, orientation = "vertical" }: Prop
       return combine(
         draggable({
           element: el,
-          dragHandle: dragHandleRef.current ?? undefined,
+          dragHandle: dragHandle ?? undefined,
           onDragStart: () => setDragging(true),
           onDrop: () => setDragging(false),
           getInitialData: () => draggableData,
@@ -69,7 +75,9 @@ function Draggable({ children, data, className, orientation = "vertical" }: Prop
           },
           // @ts-expect-error Due to live server dependencies
           canDrop: ({ source }) =>
-            !isEqual(source.data, draggableData) && source.data.__uuid__ === draggableData.__uuid__,
+            typeof draggableData.__uuid__ === "string" &&
+            isSortablePayloadForId(source.data, draggableData.__uuid__) &&
+            !isEqual(source.data, draggableData),
           // @ts-expect-error Due to live server dependencies
           getData: ({ input, element }) =>
             attachClosestEdge(draggableData, {
@@ -80,7 +88,7 @@ function Draggable({ children, data, className, orientation = "vertical" }: Prop
         })
       );
     }
-  }, [data, orientation]);
+  }, [data, dragHandle, orientation]);
 
   const beforeEdge = orientation === "horizontal" ? "left" : "top";
   const afterEdge = orientation === "horizontal" ? "right" : "bottom";

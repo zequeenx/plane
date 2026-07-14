@@ -12,16 +12,22 @@ import {
 } from "@atlaskit/pragmatic-drag-and-drop-hitbox/dist/cjs/closest-edge.js";
 import React, { Fragment, useEffect, useMemo } from "react";
 import { Draggable } from "./draggable";
-import { moveSortableItem, type TSortableOrientation } from "./sortable-utils";
+import {
+  createSortablePayload,
+  isSortablePayloadForId,
+  resolveSortableDrop,
+  type TSortableOrientation,
+  type TSortablePayload,
+} from "./sortable-utils";
 
-type TEnhancedData<T> = T & { __uuid__?: string };
+type TEnhancedData<T> = T & TSortablePayload;
 
 export type TSortableRenderHelpers = {
-  dragHandleRef: React.MutableRefObject<HTMLButtonElement | null>;
+  dragHandleRef: React.RefCallback<HTMLButtonElement>;
 };
 
 type Props<T> = {
-  data: TEnhancedData<T>[];
+  data: T[];
   render: (item: T, index: number, helpers: TSortableRenderHelpers) => React.ReactNode;
   onChange: (data: T[], movedItem?: T) => void;
   keyExtractor: (item: T, index: number) => string;
@@ -39,8 +45,12 @@ export function Sortable<T>({
   id,
   orientation = "vertical",
 }: Props<T>) {
+  const sortableId = useMemo(() => id ?? Math.random().toString(36).substring(7), [id]);
+
   useEffect(() => {
     const unsubscribe = monitorForElements({
+      // @ts-expect-error Due to live server dependencies
+      canMonitor: ({ source }) => isSortablePayloadForId(source.data, sortableId),
       // @ts-expect-error Due to live server dependencies
       onDrop({ source, location }) {
         const destination = location?.current?.dropTargets[0];
@@ -49,36 +59,35 @@ export function Sortable<T>({
         const edge = extractClosestEdge(destination.data);
         if (!edge) return;
 
-        const { data: nextData, movedItem } = moveSortableItem(
-          data,
-          source.data as T,
-          destination.data as T,
-          edge,
-          keyExtractor
-        );
-        onChange(nextData, movedItem);
+        const result = resolveSortableDrop(data, source.data, destination.data, edge, sortableId, keyExtractor);
+        if (!result) return;
+
+        onChange(result.data, result.movedItem);
       },
     });
 
     return unsubscribe;
-  }, [data, keyExtractor, onChange]);
+  }, [data, keyExtractor, onChange, sortableId]);
 
-  const enhancedData = useMemo(() => {
-    const uuid = id ? id : Math.random().toString(36).substring(7);
-    return data.map((item) => ({ ...item, __uuid__: uuid }));
-  }, [data, id]);
+  const enhancedData = useMemo<TEnhancedData<T>[]>(
+    () =>
+      data.map((item, index) => ({
+        ...item,
+        ...createSortablePayload(item, index, sortableId, keyExtractor),
+      })),
+    [data, keyExtractor, sortableId]
+  );
 
   return (
     <>
-      {data.map((item, index) => (
+      {enhancedData.map((enhancedItem, index) => (
         <Draggable
-          // oxlint-disable-next-line react/no-array-index-key -- keyExtractor returns the consumer's stable item key.
-          key={keyExtractor(enhancedData[index], index)}
-          data={enhancedData[index]}
+          key={enhancedItem.__sortableKey__}
+          data={enhancedItem}
           className={containerClassName}
           orientation={orientation}
         >
-          {(helpers) => <Fragment>{render(item, index, helpers)}</Fragment>}
+          {(helpers) => <Fragment>{render(data[index], index, helpers)}</Fragment>}
         </Draggable>
       ))}
     </>
