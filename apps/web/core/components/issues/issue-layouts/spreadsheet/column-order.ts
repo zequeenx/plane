@@ -25,6 +25,11 @@ type TVisibleSpreadsheetColumnsOptions = {
   savedOrder: readonly TSpreadsheetColumn[] | undefined;
 };
 
+export const getIsSpreadsheetEstimateEnabled = (
+  workspaceLevel: boolean,
+  estimate: string | null | undefined
+): boolean => workspaceLevel || estimate != null;
+
 export const getAvailableSpreadsheetColumns = (options: TAvailableSpreadsheetColumnsOptions): TSpreadsheetColumn[] => {
   const systemColumns = SPREADSHEET_PROPERTY_LIST.filter((property) => {
     if (property === "cycle" && !options.cycleViewEnabled) return false;

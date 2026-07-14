@@ -8,7 +8,29 @@ import { describe, expect, it } from "vitest";
 
 import { resolveSpreadsheetColumnOrder } from "@plane/utils";
 
-import { getAvailableSpreadsheetColumns, getVisibleSpreadsheetColumns } from "./column-order";
+import {
+  getAvailableSpreadsheetColumns,
+  getIsSpreadsheetEstimateEnabled,
+  getVisibleSpreadsheetColumns,
+} from "./column-order";
+
+describe("getIsSpreadsheetEstimateEnabled", () => {
+  it("disables estimates at project level while project details are unavailable", () => {
+    expect(getIsSpreadsheetEstimateEnabled(false, undefined)).toBe(false);
+  });
+
+  it("disables estimates at project level when no estimate configuration exists", () => {
+    expect(getIsSpreadsheetEstimateEnabled(false, null)).toBe(false);
+  });
+
+  it("enables estimates at project level when estimate configuration exists", () => {
+    expect(getIsSpreadsheetEstimateEnabled(false, "estimate-id")).toBe(true);
+  });
+
+  it("enables estimates at workspace level without project details", () => {
+    expect(getIsSpreadsheetEstimateEnabled(true, undefined)).toBe(true);
+  });
+});
 
 describe("getAvailableSpreadsheetColumns", () => {
   it("filters disabled capabilities and appends project and module fields", () => {
@@ -161,6 +183,41 @@ describe("getVisibleSpreadsheetColumns", () => {
       "customproperty_new-project-field",
       "modulecustomproperty_new-module-field",
     ]);
+  });
+
+  it("reconciles saved order when custom field metadata arrives later", () => {
+    const savedOrder = ["customproperty_late-project-field", "state"] as const;
+    const displayProperties = {
+      state: true,
+      "customproperty_late-project-field": true,
+      "modulecustomproperty_late-module-field": true,
+    } as const;
+    const sharedOptions = {
+      cycleViewEnabled: false,
+      estimateEnabled: false,
+      moduleViewEnabled: false,
+      workspaceLevel: false,
+    } as const;
+    const loadingColumns = getAvailableSpreadsheetColumns({
+      ...sharedOptions,
+      projectFieldIds: [],
+      moduleFieldIds: [],
+    });
+    const loadedColumns = getAvailableSpreadsheetColumns({
+      ...sharedOptions,
+      projectFieldIds: ["late-project-field"],
+      moduleFieldIds: ["late-module-field"],
+    });
+
+    expect(getVisibleSpreadsheetColumns({ availableColumns: loadingColumns, displayProperties, savedOrder })).toEqual([
+      "state",
+    ]);
+    expect(getVisibleSpreadsheetColumns({ availableColumns: loadedColumns, displayProperties, savedOrder })).toEqual([
+      "customproperty_late-project-field",
+      "state",
+      "modulecustomproperty_late-module-field",
+    ]);
+    expect(savedOrder).toEqual(["customproperty_late-project-field", "state"]);
   });
 
   it("does not mutate saved, available, or visibility inputs", () => {

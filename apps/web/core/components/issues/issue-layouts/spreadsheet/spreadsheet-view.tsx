@@ -25,7 +25,11 @@ import { IssueBulkOperationsRoot } from "@/plane-web/components/issues/bulk-oper
 import type { TRenderQuickActions } from "../list/list-view-types";
 import { SpreadsheetAddIssueButton } from "../quick-add/button/spreadsheet";
 import { QuickAddIssueRoot } from "../quick-add/root";
-import { getAvailableSpreadsheetColumns, getVisibleSpreadsheetColumns } from "./column-order";
+import {
+  getAvailableSpreadsheetColumns,
+  getIsSpreadsheetEstimateEnabled,
+  getVisibleSpreadsheetColumns,
+} from "./column-order";
 import { SpreadsheetTable } from "./spreadsheet-table";
 
 type Props = {
@@ -77,7 +81,7 @@ export const SpreadsheetView = observer(function SpreadsheetView(props: Props) {
   // plane web hooks
   const isBulkOperationsEnabled = useBulkOperationStatus();
 
-  const isEstimateEnabled: boolean = currentProjectDetails?.estimate !== null;
+  const isEstimateEnabled = getIsSpreadsheetEstimateEnabled(isWorkspaceLevel, currentProjectDetails?.estimate);
 
   const currentProjectId = projectId?.toString();
   const isProjectScopedView = !isWorkspaceLevel && !!workspaceSlug && !!currentProjectId;
