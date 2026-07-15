@@ -5,6 +5,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { ProjectViewIssuesHeader } from "@/app/(all)/[workspaceSlug]/(projects)/projects/(detail)/[projectId]/views/(detail)/[viewId]/header";
 
 const mocks = vi.hoisted(() => ({
+  activeLayout: "spreadsheet",
   displayFiltersSelectionProps: undefined as { sourceModuleId?: string | null } | undefined,
 }));
 
@@ -63,7 +64,7 @@ vi.mock("@/hooks/store/use-command-palette", () => ({
 vi.mock("@/hooks/store/use-issues", () => ({
   useIssues: () => ({
     issuesFilter: {
-      issueFilters: { displayFilters: { layout: "spreadsheet" }, displayProperties: {} },
+      issueFilters: { displayFilters: { layout: mocks.activeLayout }, displayProperties: {} },
       updateFilters: vi.fn(),
     },
   }),
@@ -79,7 +80,7 @@ vi.mock("@/hooks/store/use-project-view", () => ({
       is_locked: false,
       logo_props: {},
       name: "Source module view",
-      source_module: "module-source-1",
+      source_module: "module-1",
     }),
     projectViewIds: ["view-1"],
   }),
@@ -92,12 +93,21 @@ vi.mock("@/plane-web/components/breadcrumbs/common", () => ({ CommonProjectBread
 
 describe("ProjectViewIssuesHeader", () => {
   beforeEach(() => {
+    mocks.activeLayout = "spreadsheet";
     mocks.displayFiltersSelectionProps = undefined;
   });
 
-  it("passes the view source module to display properties", () => {
+  it("passes the view source module to Spreadsheet display properties", () => {
     renderToStaticMarkup(<ProjectViewIssuesHeader />);
 
-    expect(mocks.displayFiltersSelectionProps?.sourceModuleId).toBe("module-source-1");
+    expect(mocks.displayFiltersSelectionProps?.sourceModuleId).toBe("module-1");
+  });
+
+  it.each(["list", "kanban"])("does not pass the view source module to %s display properties", (layout) => {
+    mocks.activeLayout = layout;
+
+    renderToStaticMarkup(<ProjectViewIssuesHeader />);
+
+    expect(mocks.displayFiltersSelectionProps?.sourceModuleId).toBeUndefined();
   });
 });
