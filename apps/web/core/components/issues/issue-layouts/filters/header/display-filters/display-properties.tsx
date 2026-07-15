@@ -16,7 +16,7 @@ import { EIssueLayoutTypes, type IIssueDisplayFilterOptions, type IIssueDisplayP
 // plane ui
 import { Sortable } from "@plane/ui";
 // plane utils
-import { moveSpreadsheetColumn, resolveSpreadsheetColumnOrder } from "@plane/utils";
+import { hasSpreadsheetColumnOrderChanged, moveSpreadsheetColumn, resolveSpreadsheetColumnOrder } from "@plane/utils";
 // components
 import { useModuleIssueFields } from "@/hooks/store/use-module-issue-fields";
 import { useProject } from "@/hooks/store/use-project";
@@ -194,8 +194,12 @@ export const FilterDisplayProperties = observer(function FilterDisplayProperties
   };
   const handleOrderChange = (properties: TDisplayPropertyOption[]) =>
     handleColumnOrderChange(properties.map((property) => property.key));
-  const handleKeyboardMove = (property: keyof IIssueDisplayProperties, offset: -1 | 1) =>
-    handleColumnOrderChange(moveSpreadsheetColumn(resolvedOrder, property, offset));
+  const handleKeyboardMove = (property: keyof IIssueDisplayProperties, offset: -1 | 1) => {
+    const movedOrder = moveSpreadsheetColumn(resolvedOrder, property, offset);
+    if (!hasSpreadsheetColumnOrderChanged(movedOrder, resolvedOrder)) return;
+
+    handleColumnOrderChange(movedOrder);
+  };
 
   const renderPropertyChip = (
     property: TDisplayPropertyOption,

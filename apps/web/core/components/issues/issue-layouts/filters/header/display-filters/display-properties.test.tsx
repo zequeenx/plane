@@ -396,7 +396,8 @@ describe("FilterDisplayProperties", () => {
     const unrelatedPreventDefault = vi.fn();
     const leftPreventDefault = vi.fn();
     const rightPreventDefault = vi.fn();
-    const boundaryPreventDefault = vi.fn();
+    const leftBoundaryPreventDefault = vi.fn();
+    const rightBoundaryPreventDefault = vi.fn();
 
     priorityHandle?.props.onKeyDown?.({
       key: "Enter",
@@ -412,13 +413,18 @@ describe("FilterDisplayProperties", () => {
     } as unknown as React.KeyboardEvent<HTMLButtonElement>);
     stateHandle?.props.onKeyDown?.({
       key: "ArrowLeft",
-      preventDefault: boundaryPreventDefault,
+      preventDefault: leftBoundaryPreventDefault,
+    } as unknown as React.KeyboardEvent<HTMLButtonElement>);
+    priorityHandle?.props.onKeyDown?.({
+      key: "ArrowRight",
+      preventDefault: rightBoundaryPreventDefault,
     } as unknown as React.KeyboardEvent<HTMLButtonElement>);
 
     expect(unrelatedPreventDefault).not.toHaveBeenCalled();
     expect(leftPreventDefault).toHaveBeenCalledOnce();
     expect(rightPreventDefault).toHaveBeenCalledOnce();
-    expect(boundaryPreventDefault).toHaveBeenCalledOnce();
+    expect(leftBoundaryPreventDefault).toHaveBeenCalledOnce();
+    expect(rightBoundaryPreventDefault).toHaveBeenCalledOnce();
 
     expect(handleDisplayFiltersUpdate).toHaveBeenNthCalledWith(1, {
       spreadsheet: { column_order: ["priority", "state"] },
@@ -426,9 +432,6 @@ describe("FilterDisplayProperties", () => {
     expect(handleDisplayFiltersUpdate).toHaveBeenNthCalledWith(2, {
       spreadsheet: { column_order: ["priority", "state"] },
     });
-    expect(handleDisplayFiltersUpdate).toHaveBeenNthCalledWith(3, {
-      spreadsheet: { column_order: ["state", "priority"] },
-    });
-    expect(handleDisplayFiltersUpdate).toHaveBeenCalledTimes(3);
+    expect(handleDisplayFiltersUpdate).toHaveBeenCalledTimes(2);
   });
 });
