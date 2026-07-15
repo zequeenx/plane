@@ -192,6 +192,7 @@ export const ProjectViewIssuesHeader = observer(function ProjectViewIssuesHeader
                 handleDisplayPropertiesUpdate={handleDisplayProperties}
                 cycleViewDisabled={!currentProjectDetails?.cycle_view}
                 moduleViewDisabled={!currentProjectDetails?.module_view}
+                sourceModuleId={viewDetails.source_module}
               />
             </FiltersDropdown>
           )}

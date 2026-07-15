@@ -8,7 +8,7 @@ import React, { useEffect } from "react";
 import { observer } from "mobx-react";
 import { useParams } from "next/navigation";
 // plane constants
-import { ISSUE_DISPLAY_PROPERTIES, SPREADSHEET_PROPERTY_LIST } from "@plane/constants";
+import { ISSUE_DISPLAY_PROPERTIES } from "@plane/constants";
 // plane i18n
 import { useTranslation } from "@plane/i18n";
 // types
@@ -19,7 +19,9 @@ import { Sortable } from "@plane/ui";
 import { moveSpreadsheetColumn, resolveSpreadsheetColumnOrder } from "@plane/utils";
 // components
 import { useModuleIssueFields } from "@/hooks/store/use-module-issue-fields";
+import { useProject } from "@/hooks/store/use-project";
 import { useProjectIssueFields } from "@/hooks/store/use-project-issue-fields";
+import { getAvailableSpreadsheetColumns, getIsSpreadsheetEstimateEnabled } from "../../../spreadsheet/column-order";
 import { DisplayPropertyChip } from "./display-property-chip";
 import { FilterHeader } from "../helpers/filter-header";
 
@@ -58,6 +60,7 @@ export const FilterDisplayProperties = observer(function FilterDisplayProperties
   // hooks
   const { t } = useTranslation();
   const { workspaceSlug, projectId, moduleId } = useParams();
+  const { currentProjectDetails } = useProject();
   const { fieldsLoader: moduleFieldsLoader, getFields: getModuleFields, getFieldsByModuleId } = useModuleIssueFields();
   const { fieldsLoader, getFields, getFieldsByProjectId } = useProjectIssueFields();
   // states
@@ -66,12 +69,15 @@ export const FilterDisplayProperties = observer(function FilterDisplayProperties
   const currentProjectId = projectId?.toString();
   const currentSourceModuleId = sourceModuleId ?? moduleId?.toString();
   const isProjectScopedView = !!workspaceSlug && !!currentProjectId;
+  const isWorkspaceLevel = !isProjectScopedView;
   const fields = isProjectScopedView ? getFieldsByProjectId(currentProjectId) : undefined;
   const moduleFields = currentSourceModuleId ? getFieldsByModuleId(currentSourceModuleId) : undefined;
   const isSpreadsheetLayout = props.displayFilters?.layout === EIssueLayoutTypes.SPREADSHEET;
+  const isEstimateEnabled = getIsSpreadsheetEstimateEnabled(isWorkspaceLevel, currentProjectDetails?.estimate);
   const areCustomDisplayPropertiesReady =
     (!isProjectScopedView || fields !== undefined) && (!currentSourceModuleId || moduleFields !== undefined);
-  const isColumnOrderingEnabled = isSpreadsheetLayout && areCustomDisplayPropertiesReady;
+  const areProjectCapabilitiesReady = !isProjectScopedView || currentProjectDetails !== undefined;
+  const isColumnOrderingEnabled = isSpreadsheetLayout && areCustomDisplayPropertiesReady && areProjectCapabilitiesReady;
 
   useEffect(() => {
     if (!isProjectScopedView) return;
@@ -104,8 +110,9 @@ export const FilterDisplayProperties = observer(function FilterDisplayProperties
   const systemDisplayProperties: typeof ISSUE_DISPLAY_PROPERTIES = isSpreadsheetLayout
     ? [...ISSUE_DISPLAY_PROPERTIES, ...SPREADSHEET_ONLY_DISPLAY_PROPERTIES]
     : ISSUE_DISPLAY_PROPERTIES;
+  const displayPropertiesToRenderSet = new Set(displayPropertiesToRender);
   const filteredDisplayProperties = systemDisplayProperties.reduce<typeof ISSUE_DISPLAY_PROPERTIES>((acc, property) => {
-    if (!displayPropertiesToRender.includes(property.key)) return acc;
+    if (!displayPropertiesToRenderSet.has(property.key)) return acc;
 
     let shouldRender = true;
 
@@ -115,6 +122,9 @@ export const FilterDisplayProperties = observer(function FilterDisplayProperties
         break;
       case "modules":
         shouldRender = !moduleViewDisabled;
+        break;
+      case "estimate":
+        shouldRender = !isSpreadsheetLayout || isEstimateEnabled;
         break;
     }
 
@@ -156,11 +166,14 @@ export const FilterDisplayProperties = observer(function FilterDisplayProperties
   const fixedIdProperty = allDisplayProperties.find((property) => property.key === "key");
   const nonIdDisplayProperties = allDisplayProperties.filter((property) => property.key !== "key");
   const optionByKey = new Map(allDisplayProperties.map((property) => [property.key, property]));
-  const availableOrder = [
-    ...SPREADSHEET_PROPERTY_LIST.filter((property) => optionByKey.has(property)),
-    ...customDisplayProperties.map((property) => property.key),
-    ...moduleCustomDisplayProperties.map((property) => property.key),
-  ];
+  const availableOrder = getAvailableSpreadsheetColumns({
+    cycleViewEnabled: isWorkspaceLevel || !!currentProjectDetails?.cycle_view,
+    estimateEnabled: isEstimateEnabled,
+    moduleViewEnabled: isWorkspaceLevel || !!currentProjectDetails?.module_view,
+    projectFieldIds: fields?.map((field) => field.id) ?? [],
+    moduleFieldIds: moduleFields?.map((field) => field.id) ?? [],
+    workspaceLevel: isWorkspaceLevel,
+  }).filter((property) => optionByKey.has(property));
   const resolvedOrder = isColumnOrderingEnabled
     ? resolveSpreadsheetColumnOrder(props.displayFilters?.spreadsheet?.column_order, availableOrder)
     : [];
@@ -213,7 +226,6 @@ export const FilterDisplayProperties = observer(function FilterDisplayProperties
           {isColumnOrderingEnabled ? (
             <Sortable
               data={orderedProperties}
-              id="table-display-properties"
               orientation="horizontal"
               keyExtractor={(property) => property.key}
               onChange={handleOrderChange}

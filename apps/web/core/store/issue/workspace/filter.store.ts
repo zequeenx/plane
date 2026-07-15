@@ -171,13 +171,13 @@ export class WorkspaceIssuesFilter extends IssueFilterHelperStore implements IWo
 
     // Get the view details if the view is not a static view
     if (STATIC_VIEW_TYPES.includes(viewId) === false) {
-      const _filters = await this.issueFilterService.getViewDetails(workspaceSlug, viewId);
-      richFilters = _filters?.rich_filters;
-      displayFilters = this.computedDisplayFilters(_filters?.display_filters, {
+      const remoteFilters = await this.issueFilterService.getViewDetails(workspaceSlug, viewId);
+      richFilters = remoteFilters?.rich_filters;
+      displayFilters = this.computedDisplayFilters(remoteFilters?.display_filters, {
         layout: EIssueLayoutTypes.SPREADSHEET,
         order_by: "-created_at",
       });
-      displayProperties = this.computedDisplayProperties(_filters?.display_properties);
+      displayProperties = this.computedDisplayProperties(remoteFilters?.display_properties);
     }
 
     // override existing order by if ordered by manual sort_order
@@ -258,7 +258,9 @@ export class WorkspaceIssuesFilter extends IssueFilterHelperStore implements IWo
             });
           });
 
-          this.rootIssueStore.workspaceIssues.fetchIssuesWithExistingPagination(workspaceSlug, viewId, "mutation");
+          if (this.getShouldReFetchIssues(updatedDisplayFilters)) {
+            this.rootIssueStore.workspaceIssues.fetchIssuesWithExistingPagination(workspaceSlug, viewId, "mutation");
+          }
 
           if (["all-issues", "assigned", "created", "subscribed"].includes(viewId))
             this.handleIssuesLocalFilters.set(EIssuesStoreType.GLOBAL, type, workspaceSlug, undefined, viewId, {

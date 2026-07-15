@@ -46,6 +46,7 @@ const mocks = vi.hoisted(() => ({
     projectId: undefined as string | undefined,
     workspaceSlug: undefined as string | undefined,
   },
+  projectDetails: undefined as { cycle_view?: boolean; estimate?: string | null; module_view?: boolean } | undefined,
   projectFields: undefined as { id: string; name: string }[] | undefined,
   sortableChipElements: [] as TDisplayPropertyChipElement[],
   sortableProps: [] as TSortableProps[],
@@ -103,6 +104,10 @@ vi.mock("@/hooks/store/use-project-issue-fields", () => ({
   }),
 }));
 
+vi.mock("@/hooks/store/use-project", () => ({
+  useProject: () => ({ currentProjectDetails: mocks.projectDetails }),
+}));
+
 vi.mock("../helpers/filter-header", () => ({
   FilterHeader: () => null,
 }));
@@ -158,6 +163,7 @@ describe("FilterDisplayProperties", () => {
     mocks.sortableChipElements.length = 0;
     mocks.sortableProps.length = 0;
     mocks.params = { moduleId: undefined, projectId: undefined, workspaceSlug: undefined };
+    mocks.projectDetails = undefined;
     mocks.projectFields = undefined;
     mocks.moduleFields = undefined;
   });
@@ -169,9 +175,9 @@ describe("FilterDisplayProperties", () => {
 
     expect(mocks.sortableProps).toHaveLength(1);
     expect(mocks.sortableProps[0]).toMatchObject({
-      id: "table-display-properties",
       orientation: "horizontal",
     });
+    expect(mocks.sortableProps[0].id).toBeUndefined();
     expect(stateControls.tree.props.className).toContain("border-accent-strong bg-accent-primary text-on-color");
     expect(priorityControls.tree.props.className).toContain("border-subtle hover:bg-layer-1");
     expect(stateControls.handleButton?.type).toBe("button");
@@ -223,8 +229,61 @@ describe("FilterDisplayProperties", () => {
     expect(kanbanMarkup).not.toContain("common.updated_on");
   });
 
+  it("excludes estimate from project Spreadsheet ordering when estimates are not configured", () => {
+    mocks.params = { moduleId: undefined, projectId: "project-1", workspaceSlug: "workspace-1" };
+    mocks.projectDetails = { cycle_view: true, estimate: null, module_view: true };
+    mocks.projectFields = [];
+
+    renderProperties("spreadsheet", {
+      displayProperties: { estimate: true, key: true, state: true },
+      displayPropertiesToRender: ["key", "state", "estimate"],
+    });
+
+    expect(mocks.sortableProps[0].data.map(({ key }) => key)).toEqual(["state"]);
+  });
+
+  it("waits for project capability metadata before enabling Spreadsheet reordering", () => {
+    mocks.params = { moduleId: undefined, projectId: "project-1", workspaceSlug: "workspace-1" };
+    mocks.projectDetails = undefined;
+    mocks.projectFields = [];
+
+    renderProperties("spreadsheet", {
+      displayProperties: { estimate: true, key: true, state: true },
+      displayPropertiesToRender: ["key", "state", "estimate"],
+    });
+
+    expect(mocks.sortableProps).toHaveLength(0);
+  });
+
+  it("includes a configured project estimate and applies its saved Spreadsheet order", () => {
+    mocks.params = { moduleId: undefined, projectId: "project-1", workspaceSlug: "workspace-1" };
+    mocks.projectDetails = { cycle_view: true, estimate: "estimate-1", module_view: true };
+    mocks.projectFields = [];
+
+    renderProperties("spreadsheet", {
+      displayFilters: {
+        layout: "spreadsheet",
+        spreadsheet: { column_order: ["estimate"] },
+      },
+      displayProperties: { estimate: true, key: true, state: true },
+      displayPropertiesToRender: ["key", "state", "estimate"],
+    });
+
+    expect(mocks.sortableProps[0].data.map(({ key }) => key)).toEqual(["estimate", "state"]);
+  });
+
+  it("keeps estimate available for workspace Spreadsheet ordering", () => {
+    renderProperties("spreadsheet", {
+      displayProperties: { estimate: true, key: true, state: true },
+      displayPropertiesToRender: ["key", "state", "estimate"],
+    });
+
+    expect(mocks.sortableProps[0].data.map(({ key }) => key)).toContain("estimate");
+  });
+
   it("waits for applicable custom metadata before enabling Spreadsheet reordering", () => {
     mocks.params = { moduleId: "module-1", projectId: "project-1", workspaceSlug: "workspace-1" };
+    mocks.projectDetails = { cycle_view: true, estimate: "estimate-1", module_view: true };
     const overrides = {
       displayFilters: {
         layout: "spreadsheet",
@@ -262,6 +321,7 @@ describe("FilterDisplayProperties", () => {
   it("constrains long custom labels while preserving their full accessible text", () => {
     const longLabel = "Customer segment requiring an exceptionally long display property name";
     mocks.params = { moduleId: undefined, projectId: "project-1", workspaceSlug: "workspace-1" };
+    mocks.projectDetails = { cycle_view: true, estimate: "estimate-1", module_view: true };
     mocks.projectFields = [{ id: "customer-segment", name: longLabel }];
 
     renderProperties("spreadsheet");
@@ -277,6 +337,7 @@ describe("FilterDisplayProperties", () => {
 
   it("resolves system, project, and module fields into one Spreadsheet order after fixed ID", () => {
     mocks.params = { moduleId: "module-1", projectId: "project-1", workspaceSlug: "workspace-1" };
+    mocks.projectDetails = { cycle_view: true, estimate: "estimate-1", module_view: true };
     mocks.projectFields = [{ id: "customer-tier", name: "Customer tier" }];
     mocks.moduleFields = [{ id: "effort", name: "Effort" }];
 
