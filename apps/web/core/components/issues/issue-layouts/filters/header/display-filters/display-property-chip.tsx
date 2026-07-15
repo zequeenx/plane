@@ -11,6 +11,7 @@ import { cn, Tooltip } from "@plane/ui";
 
 type Props = {
   dragHandleRef?: React.RefCallback<HTMLButtonElement>;
+  isDragging?: boolean;
   isEnabled: boolean;
   isSortable: boolean;
   label: string;
@@ -20,7 +21,7 @@ type Props = {
 };
 
 export function DisplayPropertyChip(props: Props) {
-  const { dragHandleRef, isEnabled, isSortable, label, onMove, onToggle, reorderLabel } = props;
+  const { dragHandleRef, isDragging = false, isEnabled, isSortable, label, onMove, onToggle, reorderLabel } = props;
 
   const handleKeyDown = (event: KeyboardEvent<HTMLButtonElement>) => {
     if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") return;
@@ -37,7 +38,7 @@ export function DisplayPropertyChip(props: Props) {
       })}
     >
       {isSortable && (
-        <Tooltip tooltipContent={reorderLabel}>
+        <Tooltip disabled={isDragging} tooltipContent={reorderLabel}>
           <span className="inline-flex size-5 shrink-0">
             <button
               ref={dragHandleRef}

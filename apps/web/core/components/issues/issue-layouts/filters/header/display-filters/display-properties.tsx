@@ -28,6 +28,7 @@ import { FilterHeader } from "../helpers/filter-header";
 type TDisplayPropertyOption = {
   key: keyof IIssueDisplayProperties;
   label: string;
+  isEnabled: boolean;
 };
 
 const SPREADSHEET_ONLY_DISPLAY_PROPERTIES: typeof ISSUE_DISPLAY_PROPERTIES = [
@@ -159,9 +160,18 @@ export const FilterDisplayProperties = observer(function FilterDisplayProperties
     ...filteredDisplayProperties.map((property) => ({
       key: property.key,
       label: t(property.titleTranslationKey),
+      isEnabled: !!displayProperties[property.key],
     })),
-    ...customDisplayProperties.map((property) => ({ key: property.key, label: property.title })),
-    ...moduleCustomDisplayProperties.map((property) => ({ key: property.key, label: property.title })),
+    ...customDisplayProperties.map((property) => ({
+      key: property.key,
+      label: property.title,
+      isEnabled: !!displayProperties[property.key],
+    })),
+    ...moduleCustomDisplayProperties.map((property) => ({
+      key: property.key,
+      label: property.title,
+      isEnabled: !!displayProperties[property.key],
+    })),
   ];
   const fixedIdProperty = allDisplayProperties.find((property) => property.key === "key");
   const nonIdDisplayProperties = allDisplayProperties.filter((property) => property.key !== "key");
@@ -203,16 +213,18 @@ export const FilterDisplayProperties = observer(function FilterDisplayProperties
 
   const renderPropertyChip = (
     property: TDisplayPropertyOption,
-    dragHandleRef?: React.RefCallback<HTMLButtonElement>
+    dragHandleRef?: React.RefCallback<HTMLButtonElement>,
+    isDragging = false
   ) => (
     <DisplayPropertyChip
       key={property.key}
       dragHandleRef={dragHandleRef}
-      isEnabled={!!displayProperties[property.key]}
+      isDragging={isDragging}
+      isEnabled={property.isEnabled}
       isSortable={isColumnOrderingEnabled && property.key !== "key"}
       label={property.label}
       onMove={(offset) => handleKeyboardMove(property.key, offset)}
-      onToggle={() => handleUpdate({ [property.key]: !displayProperties[property.key] })}
+      onToggle={() => handleUpdate({ [property.key]: !property.isEnabled })}
       reorderLabel={t("common.drag_to_rearrange")}
     />
   );
@@ -234,7 +246,9 @@ export const FilterDisplayProperties = observer(function FilterDisplayProperties
               keyExtractor={(property) => property.key}
               onChange={handleOrderChange}
               containerClassName="relative"
-              render={(property, _index, { dragHandleRef }) => renderPropertyChip(property, dragHandleRef)}
+              render={(property, _index, { dragHandleRef, isDragging }) =>
+                renderPropertyChip(property, dragHandleRef, isDragging)
+              }
             />
           ) : (
             nonIdDisplayProperties.map((property) => renderPropertyChip(property))

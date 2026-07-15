@@ -112,7 +112,9 @@ function Draggable({ children, data, className, orientation = "vertical" }: Prop
         orientation={indicatorOrientation}
         classNames={cn(orientation === "horizontal" && "absolute top-0 bottom-0 left-[-1px]")}
       />
-      {typeof children === "function" ? children({ dragHandleRef: dragHandleCallbackRef.current }) : children}
+      {typeof children === "function"
+        ? children({ dragHandleRef: dragHandleCallbackRef.current, isDragging: dragging })
+        : children}
       <DropIndicator
         isVisible={isDraggedOver && closestEdge === afterEdge}
         orientation={indicatorOrientation}

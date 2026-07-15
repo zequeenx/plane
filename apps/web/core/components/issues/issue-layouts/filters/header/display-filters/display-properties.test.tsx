@@ -9,6 +9,12 @@ import { FilterDisplayProperties } from "./display-properties";
 type TDisplayPropertyOption = {
   key: keyof IIssueDisplayProperties;
   label: string;
+  isEnabled: boolean;
+};
+
+type TSortableRenderHelpers = {
+  dragHandleRef: React.RefCallback<HTMLButtonElement>;
+  isDragging: boolean;
 };
 
 type TDisplayPropertyChipElement = React.ReactElement<
@@ -32,14 +38,11 @@ type TSortableProps = {
   keyExtractor: (item: TDisplayPropertyOption, index: number) => string;
   onChange: (data: TDisplayPropertyOption[]) => void;
   orientation?: "horizontal" | "vertical";
-  render: (
-    item: TDisplayPropertyOption,
-    index: number,
-    helpers: { dragHandleRef: React.RefCallback<HTMLButtonElement> }
-  ) => React.ReactNode;
+  render: (item: TDisplayPropertyOption, index: number, helpers: TSortableRenderHelpers) => React.ReactNode;
 };
 
 const mocks = vi.hoisted(() => ({
+  isDragging: false,
   moduleFields: undefined as { id: string; name: string }[] | undefined,
   params: {
     moduleId: undefined as string | undefined,
@@ -74,7 +77,10 @@ vi.mock("@plane/ui", async (importOriginal) => {
       return (
         <>
           {props.data.map((item, index) => {
-            const element = props.render(item, index, { dragHandleRef: vi.fn() });
+            const element = props.render(item, index, {
+              dragHandleRef: vi.fn(),
+              isDragging: mocks.isDragging,
+            });
             if (React.isValidElement(element)) mocks.sortableChipElements.push(element as TDisplayPropertyChipElement);
 
             return <React.Fragment key={item.key}>{element}</React.Fragment>;
@@ -82,8 +88,18 @@ vi.mock("@plane/ui", async (importOriginal) => {
         </>
       );
     },
-    Tooltip: ({ children, tooltipContent }: { children: React.ReactElement; tooltipContent: React.ReactNode }) => (
-      <span data-tooltip-content={tooltipContent}>{children}</span>
+    Tooltip: ({
+      children,
+      disabled,
+      tooltipContent,
+    }: {
+      children: React.ReactElement;
+      disabled?: boolean;
+      tooltipContent: React.ReactNode;
+    }) => (
+      <span data-tooltip-content={tooltipContent} data-tooltip-disabled={disabled ? "true" : "false"}>
+        {children}
+      </span>
     ),
   };
 });
@@ -139,6 +155,9 @@ const findSortableChip = (label: string) => {
   return chip;
 };
 
+const getTooltipDisabledStates = (markup: string) =>
+  Array.from(markup.matchAll(/data-tooltip-disabled="([^"]+)"/g), (match) => match[1]);
+
 const getElementRef = <T,>(element: React.ReactElement | undefined) =>
   (element as (React.ReactElement & { ref: React.Ref<T> | null }) | undefined)?.ref;
 
@@ -160,6 +179,7 @@ const getChipControls = (chip: TDisplayPropertyChipElement) => {
 describe("FilterDisplayProperties", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mocks.isDragging = false;
     mocks.sortableChipElements.length = 0;
     mocks.sortableProps.length = 0;
     mocks.params = { moduleId: undefined, projectId: undefined, workspaceSlug: undefined };
@@ -188,6 +208,41 @@ describe("FilterDisplayProperties", () => {
     expect(priorityControls.handleButton?.props["aria-label"]).toBe("common.drag_to_rearrange: common.priority");
     expect(markup).toContain('data-tooltip-content="common.drag_to_rearrange"');
     expect(markup.match(/lucide-grip-vertical/g)).toHaveLength(2);
+  });
+
+  it("snapshots enabled state in sortable option data", () => {
+    renderProperties("spreadsheet");
+
+    expect(mocks.sortableProps[0].data).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ key: "state", isEnabled: true }),
+        expect.objectContaining({ key: "priority", isEnabled: false }),
+      ])
+    );
+  });
+
+  it("renders sortable chip state from the option snapshot", () => {
+    renderProperties("spreadsheet", {
+      displayProperties: { key: true, state: true },
+      displayPropertiesToRender: ["key", "state"],
+    });
+    const chip = mocks.sortableProps[0].render({ key: "state", label: "common.state", isEnabled: false }, 0, {
+      dragHandleRef: vi.fn(),
+      isDragging: false,
+    }) as TDisplayPropertyChipElement;
+
+    expect(getChipControls(chip).tree.props.className).toContain("border-subtle hover:bg-layer-1");
+  });
+
+  it("disables reorder tooltips only while a chip is dragging", () => {
+    const idleMarkup = renderProperties("spreadsheet").markup;
+
+    expect(new Set(getTooltipDisabledStates(idleMarkup))).toEqual(new Set(["false"]));
+
+    mocks.isDragging = true;
+    const draggingMarkup = renderProperties("spreadsheet").markup;
+
+    expect(new Set(getTooltipDisabledStates(draggingMarkup))).toEqual(new Set(["true"]));
   });
 
   it("keeps the sortable handle ref below the Tooltip wrapper", () => {
@@ -374,17 +429,21 @@ describe("FilterDisplayProperties", () => {
 
   it("uses only the label button to toggle display-property visibility", () => {
     const { handleDisplayFiltersUpdate, handleUpdate } = renderProperties("spreadsheet");
-    const { handleButton, labelButton } = getChipControls(findSortableChip("common.priority"));
+    const stateControls = getChipControls(findSortableChip("common.state"));
+    const priorityControls = getChipControls(findSortableChip("common.priority"));
 
-    labelButton.props.onClick?.({} as React.MouseEvent<HTMLButtonElement>);
+    stateControls.labelButton.props.onClick?.({} as React.MouseEvent<HTMLButtonElement>);
+    priorityControls.labelButton.props.onClick?.({} as React.MouseEvent<HTMLButtonElement>);
 
+    expect(handleUpdate).toHaveBeenCalledWith({ state: false });
     expect(handleUpdate).toHaveBeenCalledWith({ priority: true });
+    expect(handleUpdate).toHaveBeenCalledTimes(2);
     expect(handleDisplayFiltersUpdate).not.toHaveBeenCalled();
 
     handleUpdate.mockClear();
-    handleButton?.props.onClick?.({} as React.MouseEvent<HTMLButtonElement>);
+    priorityControls.handleButton?.props.onClick?.({} as React.MouseEvent<HTMLButtonElement>);
 
-    expect(handleButton?.props.onClick).toBeUndefined();
+    expect(priorityControls.handleButton?.props.onClick).toBeUndefined();
     expect(handleUpdate).not.toHaveBeenCalled();
     expect(handleDisplayFiltersUpdate).not.toHaveBeenCalled();
   });

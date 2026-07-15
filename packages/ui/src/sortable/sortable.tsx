@@ -24,6 +24,7 @@ type TEnhancedData<T> = T & TSortablePayload;
 
 export type TSortableRenderHelpers = {
   dragHandleRef: React.RefCallback<HTMLButtonElement>;
+  isDragging: boolean;
 };
 
 type Props<T> = {
