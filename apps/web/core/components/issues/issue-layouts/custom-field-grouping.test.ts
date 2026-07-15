@@ -9,6 +9,7 @@ import {
   applyCustomFieldGroupValue,
   buildCustomFieldGroupColumns,
   buildCustomFieldGroupOptions,
+  canDragIssueInKanbanGroup,
   CustomFieldGroupPartialCreateError,
   executeCustomFieldGroupDrop,
   executeCustomFieldGroupQuickCreate,
@@ -808,5 +809,52 @@ describe("isIssueGroupDragAllowed", () => {
   it("rejects missing and unsupported groupings", () => {
     expect(isIssueGroupDragAllowed(undefined)).toBe(false);
     expect(isIssueGroupDragAllowed("created_by")).toBe(false);
+  });
+});
+
+describe("canDragIssueInKanbanGroup", () => {
+  it("allows cards in supported static and custom field groups", () => {
+    expect(
+      canDragIssueInKanbanGroup({
+        groupBy: "state",
+        isDragDisabled: false,
+        isDropDisabled: false,
+      })
+    ).toBe(true);
+    expect(
+      canDragIssueInKanbanGroup({
+        groupBy: "customproperty_select-field",
+        isDragDisabled: false,
+        isDropDisabled: false,
+      })
+    ).toBe(true);
+  });
+
+  it("rejects cards when the view or destination group disables dragging", () => {
+    expect(
+      canDragIssueInKanbanGroup({
+        groupBy: "customproperty_select-field",
+        isDragDisabled: true,
+        isDropDisabled: false,
+      })
+    ).toBe(false);
+    expect(
+      canDragIssueInKanbanGroup({
+        groupBy: "modulecustomproperty_member-field",
+        isDragDisabled: false,
+        isDropDisabled: true,
+      })
+    ).toBe(false);
+  });
+
+  it("rejects custom field subgrouping", () => {
+    expect(
+      canDragIssueInKanbanGroup({
+        groupBy: "state",
+        isDragDisabled: false,
+        isDropDisabled: false,
+        subGroupBy: "customproperty_select-field",
+      })
+    ).toBe(false);
   });
 });

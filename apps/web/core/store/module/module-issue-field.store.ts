@@ -22,6 +22,10 @@ import { EProjectIssueFieldType } from "@plane/types";
 // services
 import { ModuleIssueFieldService } from "@/services/module";
 // store
+import {
+  enqueueCustomFieldMutation,
+  reconcileCustomFieldMutationValues,
+} from "@/store/issue/custom-field-mutation-queue";
 import type { CoreRootStore } from "@/store/root.store";
 
 type TModuleFieldValuesResponse = {
@@ -314,41 +318,45 @@ export class ModuleIssueFieldStore implements IModuleIssueFieldStore {
     }
   };
 
-  updateIssueValues = async (
+  updateIssueValues = (
     workspaceSlug: string,
     projectId: string,
     moduleId: string,
     issueId: string,
     data: TModuleIssueFieldValuesUpdatePayload,
     updateLocalState?: TIssueCustomFieldLocalUpdater
-  ) => {
-    const issue = this.rootStore.issue.issues.getIssueById(issueId);
-    const previousFieldValues = Object.fromEntries(
-      Object.keys(data.field_values).map((fieldId) => [
-        fieldId,
-        issue?.module_field_values?.[moduleId]?.[fieldId] ?? null,
-      ])
+  ) =>
+    enqueueCustomFieldMutation(
+      Object.keys(data.field_values).map((fieldId) => `module:${moduleId}:${issueId}:${fieldId}`),
+      async () => {
+        const issue = this.rootStore.issue.issues.getIssueById(issueId);
+        const previousFieldValues = Object.fromEntries(
+          Object.keys(data.field_values).map((fieldId) => [
+            fieldId,
+            issue?.module_field_values?.[moduleId]?.[fieldId] ?? null,
+          ])
+        );
+        updateLocalState?.(issueId, { fieldValues: data.field_values, moduleId, scope: "module" });
+
+        let response: TModuleFieldValuesResponse;
+        try {
+          response = await this.moduleIssueFieldService.updateIssueValues(
+            workspaceSlug,
+            projectId,
+            moduleId,
+            issueId,
+            data
+          );
+        } catch (error) {
+          updateLocalState?.(issueId, { fieldValues: previousFieldValues, moduleId, scope: "module" });
+          throw error;
+        }
+
+        this.updateIssueModuleFieldValues(issueId, moduleId, response, data);
+
+        return response;
+      }
     );
-    updateLocalState?.(issueId, { fieldValues: data.field_values, moduleId, scope: "module" });
-
-    let response: TModuleFieldValuesResponse;
-    try {
-      response = await this.moduleIssueFieldService.updateIssueValues(
-        workspaceSlug,
-        projectId,
-        moduleId,
-        issueId,
-        data
-      );
-    } catch (error) {
-      updateLocalState?.(issueId, { fieldValues: previousFieldValues, moduleId, scope: "module" });
-      throw error;
-    }
-
-    this.updateIssueModuleFieldValues(issueId, moduleId, response, data);
-
-    return response;
-  };
 
   deleteIssueValue = async (
     workspaceSlug: string,
@@ -441,24 +449,22 @@ export class ModuleIssueFieldStore implements IModuleIssueFieldStore {
     const mergedModuleFieldValues: TIssueModuleFieldValues = Object.assign({}, issue?.module_field_values ?? {});
     const responseModuleFieldValues = response.module_field_values[moduleId];
 
-    if (Object.prototype.hasOwnProperty.call(response.module_field_values, moduleId)) {
+    if (submittedData) {
+      const reconciledModuleFieldValues = reconcileCustomFieldMutationValues(
+        mergedModuleFieldValues[moduleId],
+        responseModuleFieldValues,
+        Object.keys(submittedData.field_values)
+      );
+      if (Object.keys(reconciledModuleFieldValues).length > 0)
+        mergedModuleFieldValues[moduleId] = reconciledModuleFieldValues;
+      else delete mergedModuleFieldValues[moduleId];
+    } else if (Object.prototype.hasOwnProperty.call(response.module_field_values, moduleId)) {
       if (responseModuleFieldValues && Object.keys(responseModuleFieldValues).length > 0) {
         mergedModuleFieldValues[moduleId] = responseModuleFieldValues;
       } else {
         delete mergedModuleFieldValues[moduleId];
       }
     }
-
-    Object.entries(submittedData?.field_values ?? {}).forEach(([fieldId, fieldValue]) => {
-      if (fieldValue !== null) return;
-
-      const currentModuleFieldValues = Object.assign({}, mergedModuleFieldValues[moduleId] ?? {});
-      delete currentModuleFieldValues[fieldId];
-
-      if (Object.keys(currentModuleFieldValues).length > 0)
-        mergedModuleFieldValues[moduleId] = currentModuleFieldValues;
-      else delete mergedModuleFieldValues[moduleId];
-    });
 
     this.rootStore.issue.issues.updateIssue(issueId, { module_field_values: mergedModuleFieldValues });
   };

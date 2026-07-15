@@ -21,6 +21,10 @@ import { EProjectIssueFieldType } from "@plane/types";
 // services
 import { ProjectIssueFieldService } from "@/services/project";
 // store
+import {
+  enqueueCustomFieldMutation,
+  reconcileCustomFieldMutationValues,
+} from "@/store/issue/custom-field-mutation-queue";
 import type { ProjectRootStore } from "@/store/project";
 
 export interface IProjectIssueFieldStore {
@@ -271,31 +275,43 @@ export class ProjectIssueFieldStore implements IProjectIssueFieldStore {
     }
   };
 
-  updateIssueValues = async (
+  updateIssueValues = (
     workspaceSlug: string,
     projectId: string,
     issueId: string,
     data: TIssueFieldValuesUpdatePayload,
     updateLocalState?: TIssueCustomFieldLocalUpdater
-  ) => {
-    const issue = this.projectRootStore.rootStore.issue.issues.getIssueById(issueId);
-    const previousFieldValues = Object.fromEntries(
-      Object.keys(data.field_values).map((fieldId) => [fieldId, issue?.field_values?.[fieldId] ?? null])
+  ) =>
+    enqueueCustomFieldMutation(
+      Object.keys(data.field_values).map((fieldId) => `project:${issueId}:${fieldId}`),
+      async () => {
+        const issue = this.projectRootStore.rootStore.issue.issues.getIssueById(issueId);
+        const previousFieldValues = Object.fromEntries(
+          Object.keys(data.field_values).map((fieldId) => [fieldId, issue?.field_values?.[fieldId] ?? null])
+        );
+        updateLocalState?.(issueId, { fieldValues: data.field_values, scope: "project" });
+
+        let response: TIssueFieldValuesUpdatePayload;
+        try {
+          response = await this.projectIssueFieldService.updateIssueValues(workspaceSlug, projectId, issueId, data);
+        } catch (error) {
+          updateLocalState?.(issueId, { fieldValues: previousFieldValues, scope: "project" });
+          throw error;
+        }
+
+        const currentIssue = this.projectRootStore.rootStore.issue.issues.getIssueById(issueId);
+        this.projectRootStore.rootStore.issue.issues.updateIssue(issueId, {
+          ...response,
+          field_values: reconcileCustomFieldMutationValues(
+            currentIssue?.field_values,
+            response.field_values,
+            Object.keys(data.field_values)
+          ),
+        });
+
+        return response;
+      }
     );
-    updateLocalState?.(issueId, { fieldValues: data.field_values, scope: "project" });
-
-    let response: TIssueFieldValuesUpdatePayload;
-    try {
-      response = await this.projectIssueFieldService.updateIssueValues(workspaceSlug, projectId, issueId, data);
-    } catch (error) {
-      updateLocalState?.(issueId, { fieldValues: previousFieldValues, scope: "project" });
-      throw error;
-    }
-
-    this.projectRootStore.rootStore.issue.issues.updateIssue(issueId, response);
-
-    return response;
-  };
 
   private orderFields = (fields: TProjectIssueField[]) => sortBy(fields, [(field) => field.sort_order]);
 

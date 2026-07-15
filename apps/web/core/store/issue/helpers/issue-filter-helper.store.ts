@@ -24,9 +24,10 @@ import type {
   TIssueKanbanFilters,
   TIssueParams,
   TStaticViewTypes,
+  TWorkItemFilterConditionData,
   TWorkItemFilterExpression,
 } from "@plane/types";
-import { EIssueLayoutTypes } from "@plane/types";
+import { EIssueLayoutTypes, LOGICAL_OPERATOR } from "@plane/types";
 // helpers
 import { getComputedDisplayFilters, getComputedDisplayProperties } from "@plane/utils";
 // lib
@@ -47,6 +48,26 @@ export const getServerGroupFilter = (groupBy: string, groupId?: string) => {
 
 const getServerGroupFilterValue = (groupBy: string, groupId: string): string | boolean =>
   isCustomFieldGroupKey(groupBy) && groupId === "None" ? true : groupId;
+
+const appendCustomGroupFilter = (
+  serializedFilters: string | boolean | undefined,
+  condition: TWorkItemFilterConditionData
+): string => {
+  if (typeof serializedFilters !== "string") return JSON.stringify(condition);
+
+  const existingFilters = JSON.parse(serializedFilters) as TWorkItemFilterExpression;
+  if (isEmpty(existingFilters)) return JSON.stringify(condition);
+
+  if (LOGICAL_OPERATOR.AND in existingFilters) {
+    return JSON.stringify({
+      [LOGICAL_OPERATOR.AND]: [...existingFilters[LOGICAL_OPERATOR.AND], condition],
+    });
+  }
+
+  return JSON.stringify({
+    [LOGICAL_OPERATOR.AND]: [existingFilters, condition],
+  });
+};
 
 interface ILocalStoreIssueFilters {
   key: EIssuesStoreType;
@@ -342,7 +363,15 @@ export class IssueFilterHelperStore implements IIssueFilterHelperStore {
 
       if (groupBy) {
         const groupByFilterOption = getServerGroupFilter(groupBy, groupId);
-        paginationParams[groupByFilterOption as TIssueParams] = getServerGroupFilterValue(groupBy, groupId);
+        const groupByFilterValue = getServerGroupFilterValue(groupBy, groupId);
+
+        if (isCustomFieldGroupKey(groupBy)) {
+          paginationParams.filters = appendCustomGroupFilter(paginationParams.filters, {
+            [groupByFilterOption]: groupByFilterValue,
+          } as TWorkItemFilterConditionData);
+        } else {
+          paginationParams[groupByFilterOption as TIssueParams] = groupByFilterValue;
+        }
       }
     }
 
@@ -353,7 +382,15 @@ export class IssueFilterHelperStore implements IIssueFilterHelperStore {
 
       if (subGroupBy) {
         const subGroupByFilterOption = getServerGroupFilter(subGroupBy, subGroupId);
-        paginationParams[subGroupByFilterOption as TIssueParams] = getServerGroupFilterValue(subGroupBy, subGroupId);
+        const subGroupByFilterValue = getServerGroupFilterValue(subGroupBy, subGroupId);
+
+        if (isCustomFieldGroupKey(subGroupBy)) {
+          paginationParams.filters = appendCustomGroupFilter(paginationParams.filters, {
+            [subGroupByFilterOption]: subGroupByFilterValue,
+          } as TWorkItemFilterConditionData);
+        } else {
+          paginationParams[subGroupByFilterOption as TIssueParams] = subGroupByFilterValue;
+        }
       }
     }
 

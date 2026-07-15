@@ -139,6 +139,18 @@ def sanitize_module_query_params(query_params, slug, project_id, user):
     return query_params
 
 
+def single_module_context_id(query_params):
+    module_values = [item for item in query_params.get("module", "").split(",") if item]
+    excluded_values = ["None", "null", "00000000-0000-0000-0000-000000000000"]
+    if len(module_values) != 1 or module_values[0] in excluded_values:
+        return None
+
+    try:
+        return str(uuid.UUID(module_values[0]))
+    except (AttributeError, TypeError, ValueError):
+        return None
+
+
 def visible_module_filter_values(module_values, slug, project_id, user):
     valid_module_ids = []
     for item in module_values:
@@ -189,7 +201,9 @@ def sanitize_module_filter_data(filter_data, slug, project_id, user):
                     ",".join(visible_values) if visible_values else "00000000-0000-0000-0000-000000000000"
                 )
             else:
-                sanitized_filter_data[key] = visible_values if visible_values else ["00000000-0000-0000-0000-000000000000"]
+                sanitized_filter_data[key] = (
+                    visible_values if visible_values else ["00000000-0000-0000-0000-000000000000"]
+                )
         else:
             sanitized_filter_data[key] = sanitize_module_filter_data(value, slug, project_id, user)
 
@@ -612,6 +626,8 @@ class IssueViewSet(BaseViewSet):
         query_params = request.query_params.copy()
 
         query_params = sanitize_module_query_params(query_params, slug, project_id, request.user)
+        source_module_id = single_module_context_id(query_params)
+        self.source_module_id = source_module_id
         filters = issue_filters(query_params, "GET")
         order_by_param = request.GET.get("order_by", "-created_at")
 
@@ -647,8 +663,12 @@ class IssueViewSet(BaseViewSet):
         # Group by
         group_by = request.GET.get("group_by", False)
         sub_group_by = request.GET.get("sub_group_by", False)
-        group_by = resolve_issue_group_by(group_by, slug=slug, project_id=project_id)
-        sub_group_by = resolve_issue_group_by(sub_group_by, slug=slug, project_id=project_id)
+        group_by = resolve_issue_group_by(
+            group_by, slug=slug, project_id=project_id, module_id=source_module_id
+        )
+        sub_group_by = resolve_issue_group_by(
+            sub_group_by, slug=slug, project_id=project_id, module_id=source_module_id
+        )
         group_by = normalize_module_group_by(group_by)
         sub_group_by = normalize_module_group_by(sub_group_by)
 
@@ -659,6 +679,7 @@ class IssueViewSet(BaseViewSet):
             sub_group_by=sub_group_by,
             slug=slug,
             project_id=project_id,
+            module_id=source_module_id,
         )
         issue_queryset = issue_queryset.annotate(module_ids=visible_module_ids_subquery(request.user))
 
@@ -710,6 +731,7 @@ class IssueViewSet(BaseViewSet):
                             project_id=project_id,
                             filters=filters,
                             queryset=filtered_issue_queryset,
+                            module_id=source_module_id,
                         ),
                         sub_group_by_fields=issue_group_values(
                             field=sub_group_by,
@@ -717,6 +739,7 @@ class IssueViewSet(BaseViewSet):
                             project_id=project_id,
                             filters=filters,
                             queryset=filtered_issue_queryset,
+                            module_id=source_module_id,
                         ),
                         group_by_field_name=group_by,
                         sub_group_by_field_name=sub_group_by,
@@ -752,6 +775,7 @@ class IssueViewSet(BaseViewSet):
                         project_id=project_id,
                         filters=filters,
                         queryset=filtered_issue_queryset,
+                        module_id=source_module_id,
                     ),
                     group_by_field_name=group_by,
                     count_filter=Q(

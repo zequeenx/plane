@@ -12,6 +12,7 @@ from plane.db.models import (
     ModuleIssueFieldOption,
     ModuleIssueFieldValue,
     ModuleIssueFieldValueOption,
+    ModuleIssueFieldValueUser,
     Project,
     ProjectMember,
 )
@@ -226,7 +227,7 @@ def test_module_custom_property_grouping(api_client, workspace, project, project
     high = ModuleIssueFieldOption.objects.create(
         workspace=workspace, project=project, module=module, field=field, value="High"
     )
-    create_issue_with_module_value(workspace, project, module, field, option=high)
+    matching_issue = create_issue_with_module_value(workspace, project, module, field, option=high)
     api_client.force_authenticate(project_member)
 
     response = api_client.get(
@@ -235,7 +236,112 @@ def test_module_custom_property_grouping(api_client, workspace, project, project
     )
 
     assert response.status_code == status.HTTP_200_OK
-    assert str(high.id) in str(response.data)
+    assert [str(issue["id"]) for issue in response.data["results"][str(high.id)]["results"]] == [
+        str(matching_issue.id)
+    ]
+
+
+def test_project_issue_list_uses_module_filter_for_single_select_grouping(
+    api_client, workspace, project, project_member
+):
+    module = Module.objects.create(workspace=workspace, project=project, name="Launch")
+    field = ModuleIssueField.objects.create(
+        workspace=workspace,
+        project=project,
+        module=module,
+        name="Risk",
+        field_type=ModuleIssueField.FieldType.SINGLE_SELECT,
+    )
+    high = ModuleIssueFieldOption.objects.create(
+        workspace=workspace, project=project, module=module, field=field, value="High"
+    )
+    matching_issue = create_issue_with_module_value(workspace, project, module, field, option=high)
+    api_client.force_authenticate(project_member)
+
+    response = api_client.get(
+        f"/api/workspaces/{workspace.slug}/projects/{project.id}/issues/",
+        {
+            "group_by": f"modulecustomproperty_{field.id}",
+            "module": str(module.id),
+        },
+    )
+
+    assert response.status_code == status.HTTP_200_OK
+    assert [str(issue["id"]) for issue in response.data["results"][str(high.id)]["results"]] == [
+        str(matching_issue.id)
+    ]
+
+
+def test_project_issue_list_uses_module_filter_for_single_member_grouping(
+    api_client, workspace, project, project_member
+):
+    module = Module.objects.create(workspace=workspace, project=project, name="Launch")
+    field = ModuleIssueField.objects.create(
+        workspace=workspace,
+        project=project,
+        module=module,
+        name="Owner",
+        field_type=ModuleIssueField.FieldType.SINGLE_MEMBER,
+    )
+    issue = Issue.objects.create(workspace=workspace, project=project, name="Owned issue")
+    ModuleIssue.objects.create(workspace=workspace, project=project, module=module, issue=issue)
+    value = ModuleIssueFieldValue.objects.create(
+        workspace=workspace,
+        project=project,
+        module=module,
+        issue=issue,
+        field=field,
+    )
+    ModuleIssueFieldValueUser.objects.create(
+        workspace=workspace,
+        project=project,
+        module=module,
+        value=value,
+        user=project_member,
+    )
+    api_client.force_authenticate(project_member)
+
+    response = api_client.get(
+        f"/api/workspaces/{workspace.slug}/projects/{project.id}/issues/",
+        {
+            "group_by": f"modulecustomproperty_{field.id}",
+            "module": str(module.id),
+        },
+    )
+
+    assert response.status_code == status.HTTP_200_OK
+    assert [str(row["id"]) for row in response.data["results"][str(project_member.id)]["results"]] == [str(issue.id)]
+
+
+def test_project_issue_list_uses_module_filter_for_module_custom_property_filter(
+    api_client, workspace, project, project_member
+):
+    module = Module.objects.create(workspace=workspace, project=project, name="Launch")
+    field = ModuleIssueField.objects.create(
+        workspace=workspace,
+        project=project,
+        module=module,
+        name="Risk",
+        field_type=ModuleIssueField.FieldType.SINGLE_SELECT,
+    )
+    high = ModuleIssueFieldOption.objects.create(
+        workspace=workspace, project=project, module=module, field=field, value="High"
+    )
+    matching_issue = create_issue_with_module_value(workspace, project, module, field, option=high)
+    other_issue = Issue.objects.create(workspace=workspace, project=project, name="Other")
+    ModuleIssue.objects.create(workspace=workspace, project=project, module=module, issue=other_issue)
+    api_client.force_authenticate(project_member)
+
+    response = api_client.get(
+        f"/api/workspaces/{workspace.slug}/projects/{project.id}/issues/",
+        {
+            "filters": json.dumps({f"modulecustomproperty_{field.id}__exact": str(high.id)}),
+            "module": str(module.id),
+        },
+    )
+
+    assert response.status_code == status.HTTP_200_OK
+    assert [str(issue["id"]) for issue in response.data["results"]] == [str(matching_issue.id)]
 
 
 def test_project_view_uses_source_module_context_for_grouping(api_client, workspace, project, project_member):

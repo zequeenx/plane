@@ -58,6 +58,23 @@ export const isIssueGroupDragAllowed = (groupBy: TIssueGroupByOptions | undefine
 export const isStaticIssueSubGroup = (subGroupBy: TIssueGroupByOptions | undefined) =>
   !isCustomFieldGroupKey(subGroupBy);
 
+export const canDragIssueInKanbanGroup = ({
+  groupBy,
+  isDragDisabled,
+  isDropDisabled,
+  subGroupBy,
+}: {
+  groupBy: TIssueGroupByOptions | undefined;
+  isDragDisabled: boolean;
+  isDropDisabled: boolean;
+  subGroupBy?: TIssueGroupByOptions;
+}) =>
+  !isDragDisabled &&
+  !isDropDisabled &&
+  isIssueGroupDragAllowed(groupBy) &&
+  isStaticIssueSubGroup(subGroupBy) &&
+  (subGroupBy ? isIssueGroupDragAllowed(subGroupBy) : true);
+
 export const normalizeCustomFieldGroupId = (groupId: string) => (groupId === "None" ? null : groupId);
 
 export const mergeModuleGroupIds = (moduleIds: string[] | null | undefined, groupId: string): string[] => {

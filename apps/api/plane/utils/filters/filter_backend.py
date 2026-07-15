@@ -378,6 +378,10 @@ class ComplexFilterBackend(filters.BaseFilterBackend):
         if kwargs.get("module_id"):
             return kwargs.get("module_id")
 
+        source_module_id = getattr(view, "source_module_id", None)
+        if source_module_id:
+            return source_module_id
+
         issue_view = getattr(view, "issue_view", None)
         if issue_view and issue_view.source_module_id:
             return issue_view.source_module_id
