@@ -10,7 +10,7 @@ import {
   extractClosestEdge,
   // @ts-expect-error Due to live server dependencies
 } from "@atlaskit/pragmatic-drag-and-drop-hitbox/dist/cjs/closest-edge.js";
-import React, { Fragment, useEffect, useMemo } from "react";
+import React, { Fragment, useEffect, useId, useMemo } from "react";
 import { Draggable } from "./draggable";
 import {
   createSortablePayload,
@@ -45,7 +45,8 @@ export function Sortable<T>({
   id,
   orientation = "vertical",
 }: Props<T>) {
-  const sortableId = useMemo(() => id ?? Math.random().toString(36).substring(7), [id]);
+  const generatedId = useId();
+  const sortableId = id ?? generatedId;
 
   useEffect(() => {
     const unsubscribe = monitorForElements({
