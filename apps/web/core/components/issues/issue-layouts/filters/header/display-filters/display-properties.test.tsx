@@ -42,7 +42,7 @@ type TSortableProps = {
 };
 
 const mocks = vi.hoisted(() => ({
-  isDragging: false,
+  draggingByProperty: {} as Partial<Record<keyof IIssueDisplayProperties, boolean>>,
   moduleFields: undefined as { id: string; name: string }[] | undefined,
   params: {
     moduleId: undefined as string | undefined,
@@ -79,7 +79,7 @@ vi.mock("@plane/ui", async (importOriginal) => {
           {props.data.map((item, index) => {
             const element = props.render(item, index, {
               dragHandleRef: vi.fn(),
-              isDragging: mocks.isDragging,
+              isDragging: !!mocks.draggingByProperty[item.key],
             });
             if (React.isValidElement(element)) mocks.sortableChipElements.push(element as TDisplayPropertyChipElement);
 
@@ -173,13 +173,13 @@ const getChipControls = (chip: TDisplayPropertyChipElement) => {
     ? (React.Children.only(handleWrapper.props.children) as TButtonElement)
     : undefined;
 
-  return { handleButton, handleWrapper, labelButton, tree };
+  return { handleButton, handleWrapper, labelButton, tooltip, tree };
 };
 
 describe("FilterDisplayProperties", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mocks.isDragging = false;
+    mocks.draggingByProperty = {};
     mocks.sortableChipElements.length = 0;
     mocks.sortableProps.length = 0;
     mocks.params = { moduleId: undefined, projectId: undefined, workspaceSlug: undefined };
@@ -234,15 +234,56 @@ describe("FilterDisplayProperties", () => {
     expect(getChipControls(chip).tree.props.className).toContain("border-subtle hover:bg-layer-1");
   });
 
-  it("disables reorder tooltips only while a chip is dragging", () => {
-    const idleMarkup = renderProperties("spreadsheet").markup;
+  it("toggles system, project, and module properties from their captured enabled snapshots", () => {
+    const projectProperty = "customproperty_customer-tier" as keyof IIssueDisplayProperties;
+    const moduleProperty = "modulecustomproperty_effort" as keyof IIssueDisplayProperties;
+    mocks.params = { moduleId: "module-1", projectId: "project-1", workspaceSlug: "workspace-1" };
+    mocks.projectDetails = { cycle_view: true, estimate: "estimate-1", module_view: true };
+    mocks.projectFields = [{ id: "customer-tier", name: "Customer tier" }];
+    mocks.moduleFields = [{ id: "effort", name: "Effort" }];
 
-    expect(new Set(getTooltipDisabledStates(idleMarkup))).toEqual(new Set(["false"]));
+    const { handleUpdate } = renderProperties("spreadsheet", {
+      displayProperties: {
+        key: true,
+        state: true,
+        [projectProperty]: true,
+        [moduleProperty]: false,
+      },
+      displayPropertiesToRender: ["key", "state"],
+    });
+    const sortable = mocks.sortableProps[0];
+    const divergentSnapshots = [
+      { expectedValue: true, isEnabled: false, key: "state" as const },
+      { expectedValue: true, isEnabled: false, key: projectProperty },
+      { expectedValue: false, isEnabled: true, key: moduleProperty },
+    ];
 
-    mocks.isDragging = true;
-    const draggingMarkup = renderProperties("spreadsheet").markup;
+    divergentSnapshots.forEach(({ expectedValue, isEnabled, key }, index) => {
+      const property = sortable.data.find((option) => option.key === key);
+      if (!property) throw new Error(`Expected sortable property: ${key}`);
 
-    expect(new Set(getTooltipDisabledStates(draggingMarkup))).toEqual(new Set(["true"]));
+      const chip = sortable.render({ ...property, isEnabled }, index, {
+        dragHandleRef: vi.fn(),
+        isDragging: false,
+      }) as TDisplayPropertyChipElement;
+      getChipControls(chip).labelButton.props.onClick?.({} as React.MouseEvent<HTMLButtonElement>);
+
+      expect(handleUpdate).toHaveBeenNthCalledWith(index + 1, { [key]: expectedValue });
+    });
+
+    expect(handleUpdate).toHaveBeenCalledTimes(3);
+  });
+
+  it("disables only the actively dragged chip's reorder tooltip", () => {
+    mocks.draggingByProperty = { state: true };
+
+    const { markup } = renderProperties("spreadsheet");
+    const stateTooltip = getChipControls(findSortableChip("common.state")).tooltip;
+    const priorityTooltip = getChipControls(findSortableChip("common.priority")).tooltip;
+
+    expect(stateTooltip?.props.disabled).toBe(true);
+    expect(priorityTooltip?.props.disabled).toBe(false);
+    expect(new Set(getTooltipDisabledStates(markup))).toEqual(new Set(["true", "false"]));
   });
 
   it("keeps the sortable handle ref below the Tooltip wrapper", () => {
