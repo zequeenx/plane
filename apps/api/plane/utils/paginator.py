@@ -6,6 +6,7 @@
 import math
 from collections import defaultdict
 from collections.abc import Sequence
+from uuid import UUID
 
 # Django imports
 from django.db.models import Count, F, Window
@@ -16,6 +17,30 @@ from rest_framework.exceptions import ParseError
 from rest_framework.response import Response
 
 # Module imports
+from plane.utils.order_queryset import ISSUE_GROUP_BY_ALLOWLIST
+
+
+CUSTOM_GROUP_BY_PREFIXES = ("customproperty_", "modulecustomproperty_")
+
+
+def is_allowed_issue_group_by(field_name, queryset):
+    if field_name in ISSUE_GROUP_BY_ALLOWLIST:
+        return True
+    if not isinstance(field_name, str):
+        return False
+
+    for prefix in CUSTOM_GROUP_BY_PREFIXES:
+        if not field_name.startswith(prefix):
+            continue
+        try:
+            UUID(field_name[len(prefix) :])
+        except (AttributeError, TypeError, ValueError):
+            return False
+
+        annotations = getattr(getattr(queryset, "query", None), "annotations", {})
+        return field_name in annotations
+
+    return False
 
 
 class Cursor:
@@ -681,11 +706,23 @@ class BasePaginator:
 
         if not paginator:
             if group_by_field_name:
+                # Validate against the allowlist before the field name reaches
+                # F()/.values()/.order_by()/Window partition_by in the grouped
+                # paginators below — prevents unauthenticated ORM field-name
+                # injection via user-supplied group_by/sub_group_by query params
+                # (GHSA-wwgj-929g-42cm).
+                queryset = paginator_kwargs.get("queryset")
+                if not is_allowed_issue_group_by(group_by_field_name, queryset):
+                    raise ParseError(detail=f"Invalid group_by field: {group_by_field_name}")
+
                 paginator_kwargs["group_by_field_name"] = group_by_field_name
                 paginator_kwargs["group_by_fields"] = group_by_fields
                 paginator_kwargs["count_filter"] = count_filter
 
                 if sub_group_by_field_name:
+                    if not is_allowed_issue_group_by(sub_group_by_field_name, queryset):
+                        raise ParseError(detail=f"Invalid sub_group_by field: {sub_group_by_field_name}")
+
                     paginator_kwargs["sub_group_by_field_name"] = sub_group_by_field_name
                     paginator_kwargs["sub_group_by_fields"] = sub_group_by_fields
 
