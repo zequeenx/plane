@@ -193,6 +193,8 @@ class WorkItemFiltersAdapter extends FilterAdapter<TWorkItemFilterProperty, TWor
       property as (typeof WORK_ITEM_FILTER_PROPERTY_KEYS)[number]
     );
 
+    if (property === "name") return operator === "icontains";
+
     if (isSystemProperty) return SYSTEM_WORK_ITEM_FILTER_OPERATORS.has(operator);
 
     if (isCustomProperty && property.length > CUSTOM_PROPERTY_PREFIX.length)

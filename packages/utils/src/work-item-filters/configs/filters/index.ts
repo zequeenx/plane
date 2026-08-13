@@ -12,4 +12,5 @@ export * from "./module";
 export * from "./priority";
 export * from "./project";
 export * from "./state";
+export * from "./title";
 export * from "./user";

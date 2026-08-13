@@ -11,6 +11,22 @@ import { FILTER_NODE_TYPE, LOGICAL_OPERATOR, type TWorkItemFilterExpression } fr
 import { workItemFiltersAdapter } from "./adapter";
 
 describe("workItemFiltersAdapter", () => {
+  it("preserves title contains filters when converting in both directions", () => {
+    const externalFilter: TWorkItemFilterExpression = {
+      name__icontains: "release notes",
+    };
+
+    const internalFilter = workItemFiltersAdapter.toInternal(externalFilter);
+
+    expect(internalFilter).toMatchObject({
+      type: FILTER_NODE_TYPE.CONDITION,
+      property: "name",
+      operator: "icontains",
+      value: "release notes",
+    });
+    expect(internalFilter ? workItemFiltersAdapter.toExternal(internalFilter) : null).toEqual(externalFilter);
+  });
+
   it("preserves module custom property filters when converting to internal conditions", () => {
     const externalFilter: TWorkItemFilterExpression = {
       modulecustomproperty_field_1__contains: "alpha",

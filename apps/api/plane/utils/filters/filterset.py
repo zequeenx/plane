@@ -125,6 +125,7 @@ class IssueFilterSet(BaseFilterSet):
     # Custom filter methods to handle soft delete exclusion for relations
     customproperty = filters.CharFilter(method="filter_customproperty")
     modulecustomproperty = filters.CharFilter(method="filter_modulecustomproperty")
+    name__icontains = filters.CharFilter(method="filter_name_icontains")
 
     assignee_id = filters.UUIDFilter(method="filter_assignee_id")
     assignee_id__in = UUIDInFilter(method="filter_assignee_id_in", lookup_expr="in")
@@ -172,6 +173,12 @@ class IssueFilterSet(BaseFilterSet):
             "is_draft": ["exact"],
             "priority": ["exact", "in"],
         }
+
+    def filter_name_icontains(self, queryset, name, value):
+        normalized_value = value.strip()
+        if not normalized_value:
+            return Q()
+        return Q(name__icontains=normalized_value)
 
     def filter_is_archived(self, queryset, name, value):
         """

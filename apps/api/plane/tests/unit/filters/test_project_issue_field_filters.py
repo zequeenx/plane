@@ -55,6 +55,73 @@ def _group_result_names(response):
     }
 
 
+def test_title_contains_filter_is_case_insensitive_and_trims_input(
+    api_client, workspace, project, project_member
+):
+    api_client.force_authenticate(project_member)
+    Issue.objects.create(workspace=workspace, project=project, name="Prepare RELEASE Notes", priority="high")
+    Issue.objects.create(workspace=workspace, project=project, name="Prepare launch checklist", priority="high")
+
+    response = api_client.get(
+        _issue_list_url(workspace, project),
+        {"filters": json.dumps({"name__icontains": "  release notes  "})},
+    )
+
+    assert response.status_code == 200
+    assert _issue_names(response) == {"Prepare RELEASE Notes"}
+
+
+def test_title_contains_filter_returns_no_non_matches(api_client, workspace, project, project_member):
+    api_client.force_authenticate(project_member)
+    Issue.objects.create(workspace=workspace, project=project, name="Prepare release notes")
+
+    response = api_client.get(
+        _issue_list_url(workspace, project),
+        {"filters": json.dumps({"name__icontains": "roadmap"})},
+    )
+
+    assert response.status_code == 200
+    assert _issue_names(response) == set()
+
+
+def test_empty_title_contains_filter_does_not_limit_results(api_client, workspace, project, project_member):
+    api_client.force_authenticate(project_member)
+    Issue.objects.create(workspace=workspace, project=project, name="Prepare release notes")
+    Issue.objects.create(workspace=workspace, project=project, name="Prepare launch checklist")
+
+    response = api_client.get(
+        _issue_list_url(workspace, project),
+        {"filters": json.dumps({"name__icontains": "   "})},
+    )
+
+    assert response.status_code == 200
+    assert _issue_names(response) == {"Prepare release notes", "Prepare launch checklist"}
+
+
+def test_title_contains_filter_combines_with_existing_filters(api_client, workspace, project, project_member):
+    api_client.force_authenticate(project_member)
+    Issue.objects.create(workspace=workspace, project=project, name="Release notes", priority="high")
+    Issue.objects.create(workspace=workspace, project=project, name="Release retrospective", priority="low")
+    Issue.objects.create(workspace=workspace, project=project, name="Launch checklist", priority="high")
+
+    response = api_client.get(
+        _issue_list_url(workspace, project),
+        {
+            "filters": json.dumps(
+                {
+                    "and": [
+                        {"name__icontains": "release"},
+                        {"priority__in": ["high"]},
+                    ]
+                }
+            )
+        },
+    )
+
+    assert response.status_code == 200
+    assert _issue_names(response) == {"Release notes"}
+
+
 def test_plain_text_contains_filter_finds_only_matching_issue(api_client, workspace, project, project_member):
     api_client.force_authenticate(project_member)
     field = ProjectIssueField.objects.create(

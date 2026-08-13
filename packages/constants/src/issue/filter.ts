@@ -111,7 +111,7 @@ export type TIssueFiltersToDisplayByPageType = {
 
 export const ISSUE_DISPLAY_FILTERS_BY_PAGE: TIssueFiltersToDisplayByPageType = {
   profile_issues: {
-    filters: ["priority", "state_group", "label_id", "start_date", "target_date"],
+    filters: ["name", "priority", "state_group", "label_id", "start_date", "target_date"],
     layoutOptions: {
       list: {
         display_properties: ISSUE_DISPLAY_PROPERTIES_KEYS,
@@ -141,6 +141,7 @@ export const ISSUE_DISPLAY_FILTERS_BY_PAGE: TIssueFiltersToDisplayByPageType = {
   },
   archived_issues: {
     filters: [
+      "name",
       "priority",
       "state_group",
       "state_id",
@@ -170,6 +171,7 @@ export const ISSUE_DISPLAY_FILTERS_BY_PAGE: TIssueFiltersToDisplayByPageType = {
   },
   my_issues: {
     filters: [
+      "name",
       "priority",
       "state_group",
       "label_id",
@@ -206,6 +208,7 @@ export const ISSUE_DISPLAY_FILTERS_BY_PAGE: TIssueFiltersToDisplayByPageType = {
   },
   issues: {
     filters: [
+      "name",
       "priority",
       "state_group",
       "state_id",
@@ -282,7 +285,7 @@ export const ISSUE_DISPLAY_FILTERS_BY_PAGE: TIssueFiltersToDisplayByPageType = {
     },
   },
   sub_work_items: {
-    filters: ["priority", "state_id", "sub_state_id", "assignee_id", "start_date", "target_date"],
+    filters: ["name", "priority", "state_id", "sub_state_id", "assignee_id", "start_date", "target_date"],
     layoutOptions: {
       list: {
         display_properties: SUB_ISSUES_DISPLAY_PROPERTIES_KEYS,

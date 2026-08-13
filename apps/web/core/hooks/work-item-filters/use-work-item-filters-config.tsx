@@ -55,6 +55,7 @@ import {
   getSubStateFilterConfig,
   getSubscriberFilterConfig,
   getTargetDateFilterConfig,
+  getTitleFilterConfig,
   getUpdatedAtFilterConfig,
   isLoaderReady,
 } from "@plane/utils";
@@ -332,6 +333,17 @@ export const useWorkItemFiltersConfig = (props: TUseWorkItemFiltersConfigProps):
     (key: TWorkItemFilterProperty) =>
       allowedFilters.length === 0 || filtersToShow.has(MODULE_CUSTOM_PROPERTY_FILTER_PREFIX) || filtersToShow.has(key),
     [allowedFilters.length, filtersToShow]
+  );
+
+  // title filter config
+  const titleFilterConfig = useMemo(
+    () =>
+      getTitleFilterConfig<TWorkItemFilterProperty>("name")({
+        isEnabled: isFilterEnabled("name"),
+        filterIcon: TextCursorInput,
+        ...operatorConfigs,
+      }),
+    [isFilterEnabled, operatorConfigs]
   );
 
   // state group filter config
@@ -660,6 +672,7 @@ export const useWorkItemFiltersConfig = (props: TUseWorkItemFiltersConfigProps):
     areAllConfigsInitialized,
     canValidateSubStateFilters,
     configs: [
+      titleFilterConfig,
       stateFilterConfig,
       subStateFilterConfig,
       stateGroupFilterConfig,
@@ -680,6 +693,7 @@ export const useWorkItemFiltersConfig = (props: TUseWorkItemFiltersConfigProps):
       ...moduleCustomPropertyFilterConfigs,
     ],
     configMap: {
+      name: titleFilterConfig,
       project_id: projectFilterConfig,
       state_group: stateGroupFilterConfig,
       state_id: stateFilterConfig,
